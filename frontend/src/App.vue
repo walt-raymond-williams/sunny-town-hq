@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import StudentPet from './components/StudentPet.vue'
 
 const categories = ['MATH', 'SCIENCE', 'READING']
 const passFailOptions = [
@@ -8,8 +9,9 @@ const passFailOptions = [
 ]
 
 const view = ref('splash')
-const teacherTab = ref('grading')
 const studentTab = ref('answer')
+const teacherFilter = ref('needs-review')
+const isCreatingQuestion = ref(false)
 const password = ref('')
 const loginError = ref('')
 const assignmentMessage = ref('')
@@ -17,7 +19,6 @@ const assignmentError = ref('')
 const gradingMessage = ref('')
 const gradingError = ref('')
 const assignments = ref([])
-const answeredAssignments = ref([])
 const gradingForms = reactive({})
 const studentGradedAssignments = ref([])
 const studentAssignment = ref(null)
@@ -26,38 +27,75 @@ const studentMessage = ref('')
 const studentError = ref('')
 const studentGradesError = ref('')
 const isLoadingAssignments = ref(false)
-const isLoadingAnsweredAssignments = ref(false)
 const isLoadingStudentAssignment = ref(false)
 const isLoadingStudentGrades = ref(false)
 const isSaving = ref(false)
 const isSavingGrade = ref(false)
 const isResettingAssignment = ref(false)
 const isSubmittingStudentAnswer = ref(false)
+const isLoggingOut = ref(false)
 
 const form = ref({
   category: 'MATH',
   prompt: '',
   expected_answer: '',
 })
+const teacherFilters = [
+  { label: 'Needs Review', value: 'needs-review' },
+  { label: 'All', value: 'all' },
+  { label: 'Unanswered', value: 'unanswered' },
+  { label: 'Reset', value: 'reset' },
+  { label: 'Graded', value: 'graded' },
+]
 
 const hasAssignments = computed(() => assignments.value.length > 0)
-const hasAnsweredAssignments = computed(() => answeredAssignments.value.length > 0)
-const hasStudentGradedAssignments = computed(() => studentGradedAssignments.value.length > 0)
+const filteredAssignments = computed(() =>
+  assignments.value.filter((assignment) => {
+    const attempt = currentAttempt(assignment)
+    const hasAttempts = attemptHistory(assignment).length > 0
+
+    if (teacherFilter.value === 'all') {
+      return true
+    }
+
+    if (teacherFilter.value === 'needs-review') {
+      return Boolean(attempt && attempt.passed === null)
+    }
+
+    if (teacherFilter.value === 'unanswered') {
+      return !attempt && !hasAttempts
+    }
+
+    if (teacherFilter.value === 'reset') {
+      return !attempt && hasAttempts
+    }
+
+    if (teacherFilter.value === 'graded') {
+      return Boolean(attempt && attempt.passed !== null)
+    }
+
+    return true
+  }),
+)
+const hasFilteredAssignments = computed(() => filteredAssignments.value.length > 0)
+const hasStudentGradedAssignments = computed(() =>
+  studentGradedAssignments.value.some((assignment) => gradedAttempts(assignment).length > 0),
+)
 const gradeSummaries = computed(() =>
   categories.map((category) => {
-    const assignmentsForCategory = studentGradedAssignments.value.filter(
-      (assignment) => assignment.category === category,
-    )
-    const passedCount = assignmentsForCategory.filter((assignment) => assignment.passed).length
+    const attemptsForCategory = studentGradedAssignments.value
+      .filter((assignment) => assignment.category === category)
+      .flatMap((assignment) => gradedAttempts(assignment))
+    const passedCount = attemptsForCategory.filter((attempt) => attempt.passed).length
     const percent =
-      assignmentsForCategory.length === 0
+      attemptsForCategory.length === 0
         ? null
-        : Math.round((passedCount / assignmentsForCategory.length) * 100)
+        : Math.round((passedCount / attemptsForCategory.length) * 100)
 
     return {
       category,
       passedCount,
-      total: assignmentsForCategory.length,
+      total: attemptsForCategory.length,
       percent,
     }
   }),
@@ -66,14 +104,10 @@ const gradedAssignmentsByCategory = computed(() =>
   categories.map((category) => ({
     category,
     assignments: studentGradedAssignments.value.filter(
-      (assignment) => assignment.category === category,
+      (assignment) => assignment.category === category && gradedAttempts(assignment).length > 0,
     ),
   })),
 )
-
-onMounted(() => {
-  teacherTab.value = 'grading'
-})
 
 function showSplash() {
   view.value = 'splash'
@@ -123,26 +157,51 @@ async function loginTeacher() {
 
     password.value = ''
     view.value = 'teacher'
-    teacherTab.value = 'grading'
-    await loadAnsweredAssignments()
+    teacherFilter.value = 'needs-review'
+    await loadAssignments()
   } catch (error) {
     loginError.value = error.message
   }
 }
 
-async function handleTeacherTabChange(tabName) {
-  if (tabName === 'grading') {
-    await loadAnsweredAssignments()
-  }
+async function logoutTeacher() {
+  isLoggingOut.value = true
+  gradingMessage.value = ''
+  gradingError.value = ''
+  assignmentMessage.value = ''
+  assignmentError.value = ''
 
-  if (tabName === 'create') {
-    await loadAssignments()
+  try {
+    const response = await fetch('/api/teacher/logout', {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      let message = `API returned ${response.status}`
+      try {
+        const body = await response.json()
+        message = body.error || message
+      } catch {
+        // Keep the status-code fallback.
+      }
+      throw new Error(message)
+    }
+
+    password.value = ''
+    teacherFilter.value = 'needs-review'
+    assignments.value = []
+    view.value = 'splash'
+  } catch (error) {
+    gradingError.value = error.message
+  } finally {
+    isLoggingOut.value = false
   }
 }
 
 async function loadAssignments() {
   isLoadingAssignments.value = true
   assignmentError.value = ''
+  gradingError.value = ''
 
   try {
     const response = await fetch('/api/assignments')
@@ -153,37 +212,14 @@ async function loadAssignments() {
     }
 
     assignments.value = body
-  } catch (error) {
-    assignmentError.value = error.message
-  } finally {
-    isLoadingAssignments.value = false
-  }
-}
-
-async function loadAnsweredAssignments() {
-  isLoadingAnsweredAssignments.value = true
-  gradingMessage.value = ''
-  gradingError.value = ''
-
-  try {
-    const response = await fetch('/api/assignments/answered')
-    const body = await response.json()
-
-    if (!response.ok) {
-      throw new Error(body.error || `API returned ${response.status}`)
-    }
-
-    answeredAssignments.value = body
-    answeredAssignments.value.forEach((assignment) => {
-      gradingForms[assignment.id] = {
-        passed: assignment.passed,
-        feedback: assignment.feedback || '',
-      }
+    assignments.value.forEach((assignment) => {
+      syncGradingForm(assignment)
     })
   } catch (error) {
+    assignmentError.value = error.message
     gradingError.value = error.message
   } finally {
-    isLoadingAnsweredAssignments.value = false
+    isLoadingAssignments.value = false
   }
 }
 
@@ -218,6 +254,7 @@ async function saveAssignment() {
       prompt: '',
       expected_answer: '',
     }
+    isCreatingQuestion.value = false
     await loadAssignments()
   } catch (error) {
     assignmentError.value = error.message
@@ -248,6 +285,7 @@ async function deleteAssignment(assignment) {
 
     assignments.value = assignments.value.filter((item) => item.id !== assignment.id)
     assignmentMessage.value = 'Assignment deleted.'
+    gradingMessage.value = ''
   } catch (error) {
     assignmentError.value = error.message
   }
@@ -281,7 +319,7 @@ async function saveGrade(assignment) {
     }
 
     gradingMessage.value = 'Result saved.'
-    await loadAnsweredAssignments()
+    await loadAssignments()
   } catch (error) {
     gradingError.value = error.message
   } finally {
@@ -290,6 +328,7 @@ async function saveGrade(assignment) {
 }
 
 async function resetAssignment(assignment) {
+  const gradeForm = gradingForms[assignment.id]
   isResettingAssignment.value = true
   gradingMessage.value = ''
   gradingError.value = ''
@@ -297,6 +336,12 @@ async function resetAssignment(assignment) {
   try {
     const response = await fetch(`/api/assignments/${assignment.id}/reset`, {
       method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        feedback: gradeForm?.feedback?.trim() || '',
+      }),
     })
     const body = await response.json()
 
@@ -304,8 +349,8 @@ async function resetAssignment(assignment) {
       throw new Error(body.error || `API returned ${response.status}`)
     }
 
-    gradingMessage.value = 'Assignment reset. Feedback was kept for the student.'
-    await loadAnsweredAssignments()
+    gradingMessage.value = 'Assignment reset. Previous attempts were kept.'
+    await loadAssignments()
   } catch (error) {
     gradingError.value = error.message
   } finally {
@@ -313,16 +358,50 @@ async function resetAssignment(assignment) {
   }
 }
 
-function hasFeedback(assignment) {
-  return Boolean(assignment?.feedback)
+function syncGradingForm(assignment) {
+  const attempt = currentAttempt(assignment)
+  gradingForms[assignment.id] = {
+    passed: attempt?.passed ?? null,
+    feedback: attempt?.feedback || '',
+  }
+}
+
+function currentAttempt(assignment) {
+  return assignment?.current_attempt || null
+}
+
+function attemptHistory(assignment) {
+  return assignment?.attempts || []
+}
+
+function previousAttempts(assignment) {
+  return attemptHistory(assignment)
+}
+
+function gradedAttempts(assignment) {
+  return attemptHistory(assignment).filter((attempt) => attempt.passed !== null)
+}
+
+function latestGradedAttempt(assignment) {
+  const attempts = gradedAttempts(assignment)
+  return attempts.length > 0 ? attempts[attempts.length - 1] : null
+}
+
+function hasPreviousAttempts(assignment) {
+  return previousAttempts(assignment).length > 0
 }
 
 function statusLabel(assignment) {
-  if (assignment.passed === true) {
+  const attempt = currentAttempt(assignment)
+  if (!attempt) {
+    return attemptHistory(assignment).length > 0 ? 'Reset' : 'Unanswered'
+  }
+
+  if (attempt.passed === true) {
     return 'Passed'
   }
 
-  if (assignment.passed === false) {
+  if (attempt.passed === false) {
     return 'Failed'
   }
 
@@ -330,11 +409,16 @@ function statusLabel(assignment) {
 }
 
 function statusColor(assignment) {
-  if (assignment.passed === true) {
+  const attempt = currentAttempt(assignment)
+  if (!attempt) {
+    return attemptHistory(assignment).length > 0 ? 'warning' : 'info'
+  }
+
+  if (attempt.passed === true) {
     return 'success'
   }
 
-  if (assignment.passed === false) {
+  if (attempt.passed === false) {
     return 'error'
   }
 
@@ -351,6 +435,38 @@ function passFailLabel(passed) {
 
 function passFailColor(passed) {
   return passed ? 'success' : 'error'
+}
+
+function attemptStatusLabel(attempt) {
+  if (attempt.reset_at) {
+    return 'Reset'
+  }
+
+  if (attempt.passed === true) {
+    return 'Passed'
+  }
+
+  if (attempt.passed === false) {
+    return 'Failed'
+  }
+
+  return 'Needs Review'
+}
+
+function attemptStatusColor(attempt) {
+  if (attempt.reset_at) {
+    return 'warning'
+  }
+
+  if (attempt.passed === true) {
+    return 'success'
+  }
+
+  if (attempt.passed === false) {
+    return 'error'
+  }
+
+  return 'warning'
 }
 
 function answerPreview(answer) {
@@ -542,11 +658,6 @@ async function submitStudentAnswer() {
                     <p>{{ studentAssignment.prompt }}</p>
                   </div>
 
-                  <section v-if="hasFeedback(studentAssignment)" class="feedback-callout">
-                    <h3>Feedback</h3>
-                    <p>{{ studentAssignment.feedback }}</p>
-                  </section>
-
                   <v-textarea
                     v-model="studentAnswer"
                     label="Your answer"
@@ -563,6 +674,46 @@ async function submitStudentAnswer() {
                     Submit Answer
                   </v-btn>
                 </v-form>
+
+                <section
+                  v-if="studentAssignment && hasPreviousAttempts(studentAssignment)"
+                  class="attempt-history"
+                >
+                  <h2>Previous Attempts</h2>
+                  <v-expansion-panels class="mt-3" variant="accordion">
+                    <v-expansion-panel
+                      v-for="attempt in previousAttempts(studentAssignment)"
+                      :key="attempt.id"
+                    >
+                      <v-expansion-panel-title>
+                        <div class="question-title">
+                          <v-chip size="small" variant="tonal">
+                            Attempt {{ attempt.attempt_number }}
+                          </v-chip>
+                          <v-chip
+                            :color="attemptStatusColor(attempt)"
+                            size="small"
+                            variant="tonal"
+                          >
+                            {{ attemptStatusLabel(attempt) }}
+                          </v-chip>
+                        </div>
+                      </v-expansion-panel-title>
+                      <v-expansion-panel-text>
+                        <div class="review-grid">
+                          <section class="review-box">
+                            <h3>Your Answer</h3>
+                            <p>{{ attempt.submitted_answer }}</p>
+                          </section>
+                          <section class="review-box submitted">
+                            <h3>Feedback</h3>
+                            <p>{{ attempt.feedback || 'No feedback yet.' }}</p>
+                          </section>
+                        </div>
+                      </v-expansion-panel-text>
+                    </v-expansion-panel>
+                  </v-expansion-panels>
+                </section>
 
                 <v-alert v-if="studentMessage" class="mt-5" type="success" variant="tonal">
                   {{ studentMessage }}
@@ -647,29 +798,54 @@ async function submitStudentAnswer() {
                       <v-expansion-panel-title>
                         <div class="question-title">
                           <v-chip
-                            :color="passFailColor(assignment.passed)"
+                            :color="passFailColor(latestGradedAttempt(assignment)?.passed)"
                             size="small"
                             variant="tonal"
                           >
-                            {{ passFailLabel(assignment.passed) }}
+                            {{ assignment.category }}
+                          </v-chip>
+                          <v-chip
+                            :color="passFailColor(latestGradedAttempt(assignment)?.passed)"
+                            size="small"
+                            variant="tonal"
+                          >
+                            {{ passFailLabel(latestGradedAttempt(assignment)?.passed) }}
                           </v-chip>
                           <span>{{ assignment.prompt }}</span>
                         </div>
                       </v-expansion-panel-title>
                       <v-expansion-panel-text>
-                        <div class="review-grid">
-                          <section class="review-box">
-                            <h3>Your Answer</h3>
-                            <p>{{ assignment.submitted_answer }}</p>
-                          </section>
-                          <section class="review-box">
-                            <h3>Expected Answer</h3>
-                            <p>{{ assignment.expected_answer }}</p>
-                          </section>
-                          <section class="review-box submitted">
-                            <h3>Feedback</h3>
-                            <p>{{ assignment.feedback || 'No feedback yet.' }}</p>
-                          </section>
+                        <div
+                          v-for="attempt in gradedAttempts(assignment)"
+                          :key="attempt.id"
+                          class="attempt-card"
+                        >
+                          <div class="question-title">
+                            <v-chip size="small" variant="tonal">
+                              Attempt {{ attempt.attempt_number }}
+                            </v-chip>
+                            <v-chip
+                              :color="passFailColor(attempt.passed)"
+                              size="small"
+                              variant="tonal"
+                            >
+                              {{ passFailLabel(attempt.passed) }}
+                            </v-chip>
+                          </div>
+                          <div class="review-grid mt-3">
+                            <section class="review-box">
+                              <h3>Your Answer</h3>
+                              <p>{{ attempt.submitted_answer }}</p>
+                            </section>
+                            <section class="review-box">
+                              <h3>Expected Answer</h3>
+                              <p>{{ assignment.expected_answer }}</p>
+                            </section>
+                            <section class="review-box submitted">
+                              <h3>Feedback</h3>
+                              <p>{{ attempt.feedback || 'No feedback yet.' }}</p>
+                            </section>
+                          </div>
                         </div>
                       </v-expansion-panel-text>
                     </v-expansion-panel>
@@ -682,145 +858,38 @@ async function submitStudentAnswer() {
 
         <v-card v-else class="panel teacher-panel" elevation="8">
           <v-card-text>
-            <p class="eyebrow">Teacher</p>
-            <h1>Teacher Desk</h1>
+            <div class="desk-header">
+              <div>
+                <p class="eyebrow">Teacher</p>
+                <h1>Teacher Desk</h1>
+              </div>
+              <v-btn
+                :loading="isLoggingOut"
+                color="primary"
+                prepend-icon="mdi-logout"
+                variant="tonal"
+                @click="logoutTeacher"
+              >
+                Logout
+              </v-btn>
+            </div>
 
-            <v-tabs
-              v-model="teacherTab"
-              class="mt-6"
-              color="primary"
-              @update:model-value="handleTeacherTabChange"
-            >
-              <v-tab value="grading">Grading Assignments</v-tab>
-              <v-tab value="create">Creating Assignments</v-tab>
-            </v-tabs>
+            <section class="teacher-workspace">
+              <v-btn
+                :prepend-icon="isCreatingQuestion ? 'mdi-chevron-up' : 'mdi-plus'"
+                color="secondary"
+                variant="flat"
+                @click="isCreatingQuestion = !isCreatingQuestion"
+              >
+                New Question
+              </v-btn>
 
-            <v-window v-model="teacherTab" class="mt-6">
-              <v-window-item value="grading">
-                <div class="list-header">
-                  <h2>Answered Questions</h2>
-                  <v-btn
-                    :loading="isLoadingAnsweredAssignments"
-                    color="primary"
-                    prepend-icon="mdi-refresh"
-                    variant="tonal"
-                    @click="loadAnsweredAssignments"
-                  >
-                    Refresh
-                  </v-btn>
-                </div>
-
-                <v-alert v-if="gradingMessage" class="mt-5" type="success" variant="tonal">
-                  {{ gradingMessage }}
-                </v-alert>
-                <v-alert v-if="gradingError" class="mt-5" type="error" variant="tonal">
-                  {{ gradingError }}
-                </v-alert>
-
-                <v-progress-linear
-                  v-if="isLoadingAnsweredAssignments"
-                  class="mt-3"
-                  color="primary"
-                  indeterminate
-                />
-
-                <v-alert
-                  v-else-if="!hasAnsweredAssignments"
-                  class="mt-4"
-                  type="info"
-                  variant="tonal"
+              <v-expand-transition>
+                <v-form
+                  v-if="isCreatingQuestion"
+                  class="form-grid create-question-form"
+                  @submit.prevent="saveAssignment"
                 >
-                  No submitted assignments to grade yet.
-                </v-alert>
-
-                <v-expansion-panels v-else class="mt-4" variant="accordion">
-                  <v-expansion-panel
-                    v-for="assignment in answeredAssignments"
-                    :key="assignment.id"
-                  >
-                    <v-expansion-panel-title>
-                      <div class="grading-title">
-                        <div class="question-title">
-                          <v-chip color="primary" size="small" variant="tonal">
-                            {{ assignment.category }}
-                          </v-chip>
-                          <v-chip :color="statusColor(assignment)" size="small" variant="tonal">
-                            {{ statusLabel(assignment) }}
-                          </v-chip>
-                          <span>{{ assignment.prompt }}</span>
-                        </div>
-                        <p class="answer-preview">
-                          {{ answerPreview(assignment.submitted_answer) }}
-                        </p>
-                      </div>
-                    </v-expansion-panel-title>
-                    <v-expansion-panel-text>
-                      <div class="review-grid">
-                        <section class="review-box">
-                          <h3>Prompt</h3>
-                          <p>{{ assignment.prompt }}</p>
-                        </section>
-                        <section class="review-box">
-                          <h3>Expected Answer</h3>
-                          <p>{{ assignment.expected_answer }}</p>
-                        </section>
-                        <section class="review-box submitted">
-                          <h3>Student Answer</h3>
-                          <p>{{ assignment.submitted_answer }}</p>
-                        </section>
-                      </div>
-
-                      <v-form class="form-grid" @submit.prevent="saveGrade(assignment)">
-                        <v-btn-toggle
-                          v-model="gradingForms[assignment.id].passed"
-                          class="pass-fail-toggle"
-                          color="primary"
-                          mandatory
-                          variant="outlined"
-                        >
-                          <v-btn
-                            v-for="option in passFailOptions"
-                            :key="option.value"
-                            :color="option.value ? 'success' : 'error'"
-                            :value="option.value"
-                          >
-                            {{ option.label }}
-                          </v-btn>
-                        </v-btn-toggle>
-                        <v-textarea
-                          v-model="gradingForms[assignment.id].feedback"
-                          label="Feedback"
-                          placeholder="Good explanation."
-                          rows="3"
-                          variant="outlined"
-                        />
-                        <v-btn
-                          :loading="isSavingGrade"
-                          color="secondary"
-                          prepend-icon="mdi-content-save"
-                          size="large"
-                          type="submit"
-                        >
-                          Save Result
-                        </v-btn>
-                        <v-btn
-                          :loading="isResettingAssignment"
-                          color="warning"
-                          prepend-icon="mdi-restore"
-                          size="large"
-                          variant="flat"
-                          @click="resetAssignment(assignment)"
-                        >
-                          Reset Problem
-                        </v-btn>
-                      </v-form>
-                    </v-expansion-panel-text>
-                  </v-expansion-panel>
-                </v-expansion-panels>
-              </v-window-item>
-
-              <v-window-item value="create">
-                <v-form class="form-grid" @submit.prevent="saveAssignment">
                   <v-select
                     v-model="form.category"
                     :items="categories"
@@ -844,80 +913,227 @@ async function submitStudentAnswer() {
                   <v-btn
                     :loading="isSaving"
                     color="secondary"
+                    prepend-icon="mdi-content-save"
                     size="large"
                     type="submit"
                   >
                     Save Assignment
                   </v-btn>
                 </v-form>
+              </v-expand-transition>
 
-                <v-alert v-if="assignmentMessage" class="mt-5" type="success" variant="tonal">
-                  {{ assignmentMessage }}
-                </v-alert>
-                <v-alert v-if="assignmentError" class="mt-5" type="error" variant="tonal">
-                  {{ assignmentError }}
-                </v-alert>
+              <v-alert v-if="assignmentMessage" class="mt-5" type="success" variant="tonal">
+                {{ assignmentMessage }}
+              </v-alert>
+              <v-alert v-if="assignmentError" class="mt-5" type="error" variant="tonal">
+                {{ assignmentError }}
+              </v-alert>
+              <v-alert v-if="gradingMessage" class="mt-5" type="success" variant="tonal">
+                {{ gradingMessage }}
+              </v-alert>
+              <v-alert v-if="gradingError" class="mt-5" type="error" variant="tonal">
+                {{ gradingError }}
+              </v-alert>
 
-                <div class="list-header">
-                  <h2>Questions</h2>
-                  <v-btn
-                    :loading="isLoadingAssignments"
-                    color="primary"
-                    prepend-icon="mdi-refresh"
-                    variant="tonal"
-                    @click="loadAssignments"
-                  >
-                    Refresh
-                  </v-btn>
-                </div>
-
-                <v-progress-linear
-                  v-if="isLoadingAssignments"
-                  class="mt-3"
+              <div class="list-header">
+                <h2>Questions</h2>
+                <v-btn
+                  :loading="isLoadingAssignments"
                   color="primary"
-                  indeterminate
-                />
-
-                <v-alert
-                  v-else-if="!hasAssignments"
-                  class="mt-4"
-                  type="info"
+                  prepend-icon="mdi-refresh"
                   variant="tonal"
+                  @click="loadAssignments"
                 >
-                  No questions yet.
-                </v-alert>
+                  Refresh
+                </v-btn>
+              </div>
 
-                <v-expansion-panels v-else class="mt-4" variant="accordion">
-                  <v-expansion-panel
-                    v-for="assignment in assignments"
-                    :key="assignment.id"
-                  >
-                    <v-expansion-panel-title>
+              <v-btn-toggle
+                v-model="teacherFilter"
+                class="filter-toggle"
+                color="primary"
+                divided
+                mandatory
+                variant="outlined"
+              >
+                <v-btn
+                  v-for="filter in teacherFilters"
+                  :key="filter.value"
+                  :value="filter.value"
+                >
+                  {{ filter.label }}
+                </v-btn>
+              </v-btn-toggle>
+
+              <v-progress-linear
+                v-if="isLoadingAssignments"
+                class="mt-3"
+                color="primary"
+                indeterminate
+              />
+
+              <v-alert
+                v-else-if="!hasAssignments"
+                class="mt-4"
+                type="info"
+                variant="tonal"
+              >
+                No questions yet.
+              </v-alert>
+
+              <v-alert
+                v-else-if="!hasFilteredAssignments"
+                class="mt-4"
+                type="info"
+                variant="tonal"
+              >
+                No questions match this filter.
+              </v-alert>
+
+              <v-expansion-panels v-else class="mt-4" variant="accordion">
+                <v-expansion-panel
+                  v-for="assignment in filteredAssignments"
+                  :key="assignment.id"
+                >
+                  <v-expansion-panel-title>
+                    <div class="grading-title">
                       <div class="question-title">
                         <v-chip color="primary" size="small" variant="tonal">
                           {{ assignment.category }}
                         </v-chip>
+                        <v-chip :color="statusColor(assignment)" size="small" variant="tonal">
+                          {{ statusLabel(assignment) }}
+                        </v-chip>
+                        <v-chip v-if="currentAttempt(assignment)" size="small" variant="tonal">
+                          Attempt {{ currentAttempt(assignment).attempt_number }}
+                        </v-chip>
                         <span>{{ assignment.prompt }}</span>
                       </div>
-                    </v-expansion-panel-title>
-                    <v-expansion-panel-text>
-                      <div class="answer-box">{{ assignment.expected_answer }}</div>
-                      <v-btn
-                        class="mt-4"
-                        color="error"
-                        prepend-icon="mdi-delete"
-                        variant="flat"
-                        @click="deleteAssignment(assignment)"
+                      <p v-if="currentAttempt(assignment)" class="answer-preview">
+                        {{ answerPreview(currentAttempt(assignment).submitted_answer) }}
+                      </p>
+                    </div>
+                  </v-expansion-panel-title>
+                  <v-expansion-panel-text>
+                    <div class="review-grid">
+                      <section class="review-box">
+                        <h3>Expected Answer</h3>
+                        <p>{{ assignment.expected_answer }}</p>
+                      </section>
+                      <section v-if="currentAttempt(assignment)" class="review-box submitted">
+                        <h3>Student Answer</h3>
+                        <p>{{ currentAttempt(assignment).submitted_answer }}</p>
+                      </section>
+                    </div>
+
+                    <v-form
+                      v-if="currentAttempt(assignment)"
+                      class="form-grid"
+                      @submit.prevent="saveGrade(assignment)"
+                    >
+                      <v-btn-toggle
+                        v-model="gradingForms[assignment.id].passed"
+                        class="pass-fail-toggle"
+                        color="primary"
+                        mandatory
+                        variant="outlined"
                       >
-                        Delete
-                      </v-btn>
-                    </v-expansion-panel-text>
-                  </v-expansion-panel>
-                </v-expansion-panels>
-              </v-window-item>
-            </v-window>
+                        <v-btn
+                          v-for="option in passFailOptions"
+                          :key="option.value"
+                          :color="option.value ? 'success' : 'error'"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </v-btn>
+                      </v-btn-toggle>
+                      <v-textarea
+                        v-model="gradingForms[assignment.id].feedback"
+                        label="Feedback"
+                        placeholder="Good explanation."
+                        rows="3"
+                        variant="outlined"
+                      />
+                      <div class="actions">
+                        <v-btn
+                          :loading="isSavingGrade"
+                          color="secondary"
+                          prepend-icon="mdi-content-save"
+                          size="large"
+                          type="submit"
+                        >
+                          Save Result
+                        </v-btn>
+                        <v-btn
+                          :loading="isResettingAssignment"
+                          color="warning"
+                          prepend-icon="mdi-restore"
+                          size="large"
+                          variant="flat"
+                          @click="resetAssignment(assignment)"
+                        >
+                          Reset Problem
+                        </v-btn>
+                      </div>
+                    </v-form>
+
+                    <section class="attempt-history">
+                      <h2>Attempt History</h2>
+                      <v-alert
+                        v-if="attemptHistory(assignment).length === 0"
+                        class="mt-3"
+                        type="info"
+                        variant="tonal"
+                      >
+                        No attempts yet.
+                      </v-alert>
+                      <div
+                        v-for="attempt in attemptHistory(assignment)"
+                        v-else
+                        :key="attempt.id"
+                        class="attempt-card"
+                      >
+                        <div class="question-title">
+                          <v-chip size="small" variant="tonal">
+                            Attempt {{ attempt.attempt_number }}
+                          </v-chip>
+                          <v-chip
+                            :color="attemptStatusColor(attempt)"
+                            size="small"
+                            variant="tonal"
+                          >
+                            {{ attemptStatusLabel(attempt) }}
+                          </v-chip>
+                        </div>
+                        <div class="review-grid mt-3">
+                          <section class="review-box">
+                            <h3>Student Answer</h3>
+                            <p>{{ attempt.submitted_answer }}</p>
+                          </section>
+                          <section class="review-box submitted">
+                            <h3>Feedback</h3>
+                            <p>{{ attempt.feedback || 'No feedback yet.' }}</p>
+                          </section>
+                        </div>
+                      </div>
+                    </section>
+
+                    <v-btn
+                      class="mt-4"
+                      color="error"
+                      prepend-icon="mdi-delete"
+                      variant="flat"
+                      @click="deleteAssignment(assignment)"
+                    >
+                      Delete
+                    </v-btn>
+                  </v-expansion-panel-text>
+                </v-expansion-panel>
+              </v-expansion-panels>
+            </section>
           </v-card-text>
         </v-card>
+        <StudentPet v-if="view === 'student'" mood="idle" />
       </v-container>
     </v-main>
   </v-app>

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -41,16 +42,30 @@ type gradeAssignmentRequest struct {
 	Feedback string `json:"feedback"`
 }
 
-type assignmentResponse struct {
+type resetAssignmentRequest struct {
+	Feedback string `json:"feedback"`
+}
+
+type assignmentAttemptResponse struct {
 	ID              int64      `json:"id"`
-	Category        string     `json:"category"`
-	Prompt          string     `json:"prompt"`
-	ExpectedAnswer  string     `json:"expected_answer"`
-	SubmittedAnswer *string    `json:"submitted_answer"`
+	AssignmentID    int64      `json:"assignment_id"`
+	AttemptNumber   int        `json:"attempt_number"`
+	SubmittedAnswer string     `json:"submitted_answer"`
 	DateSubmitted   time.Time  `json:"date_submitted"`
 	Passed          *bool      `json:"passed"`
 	Feedback        *string    `json:"feedback"`
 	DateGraded      *time.Time `json:"date_graded"`
+	ResetAt         *time.Time `json:"reset_at"`
+}
+
+type assignmentResponse struct {
+	ID             int64                       `json:"id"`
+	Category       string                      `json:"category"`
+	Prompt         string                      `json:"prompt"`
+	ExpectedAnswer string                      `json:"expected_answer"`
+	CreatedAt      time.Time                   `json:"created_at"`
+	CurrentAttempt *assignmentAttemptResponse  `json:"current_attempt"`
+	Attempts       []assignmentAttemptResponse `json:"attempts"`
 }
 
 func main() {
@@ -84,6 +99,7 @@ func main() {
 	})
 
 	mux.HandleFunc("/api/teacher/login", app.handleTeacherLogin)
+	mux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	mux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
 	mux.HandleFunc("/api/student/assignments/graded", app.handleStudentGradedAssignments)
 	mux.HandleFunc("/api/assignments/answered", app.handleAnsweredAssignments)
@@ -142,6 +158,26 @@ func (app *app) handleTeacherLogin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (app *app) handleTeacherLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "hq_teacher",
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status": "logged out",
+	})
+}
+
 func (app *app) handleAssignments(w http.ResponseWriter, r *http.Request) {
 	if !isTeacher(r) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{
@@ -188,11 +224,8 @@ func (app *app) handleAssignmentByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := strings.TrimPrefix(r.URL.Path, "/api/assignments/")
-	if id == "" || strings.Contains(id, "/") {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "assignment not found",
-		})
+	id, ok := parseAssignmentID(w, r.URL.Path, "")
+	if !ok {
 		return
 	}
 
@@ -221,35 +254,20 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var assignment assignmentResponse
-	err := app.db.QueryRow(
+	assignments, err := app.loadAssignments(
 		r.Context(),
 		`
-			select id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
-			from assignment
-			where submitted_answer is null
-			order by id asc
+			where not exists (
+				select 1
+				from assignment_attempt aa
+				where aa.assignment_id = a.id
+					and aa.reset_at is null
+			)
+			order by a.id asc
 			limit 1
 		`,
-	).Scan(
-		&assignment.ID,
-		&assignment.Category,
-		&assignment.Prompt,
-		&assignment.ExpectedAnswer,
-		&assignment.SubmittedAnswer,
-		&assignment.DateSubmitted,
-		&assignment.Passed,
-		&assignment.Feedback,
-		&assignment.DateGraded,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeJSON(w, http.StatusOK, map[string]any{
-				"assignment": nil,
-			})
-			return
-		}
-
 		log.Printf("load next student assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "assignment could not be loaded",
@@ -257,8 +275,15 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if len(assignments) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"assignment": nil,
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]assignmentResponse{
-		"assignment": assignment,
+		"assignment": assignments[0],
 	})
 }
 
@@ -268,14 +293,16 @@ func (app *app) handleStudentGradedAssignments(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	rows, err := app.db.Query(
+	assignments, err := app.loadAssignments(
 		r.Context(),
 		`
-			select id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
-			from assignment
-			where submitted_answer is not null
-				and passed is not null
-			order by category asc, date_graded desc, id desc
+			where exists (
+				select 1
+				from assignment_attempt aa
+				where aa.assignment_id = a.id
+					and aa.passed is not null
+			)
+			order by a.category asc, a.id desc
 		`,
 	)
 	if err != nil {
@@ -285,15 +312,10 @@ func (app *app) handleStudentGradedAssignments(w http.ResponseWriter, r *http.Re
 		})
 		return
 	}
-	defer rows.Close()
 
-	assignments, err := scanAssignments(rows)
-	if err != nil {
-		log.Printf("scan student graded assignments: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "graded assignments could not be loaded",
-		})
-		return
+	for index := range assignments {
+		assignments[index].Attempts = gradedAttempts(assignments[index].Attempts)
+		assignments[index].CurrentAttempt = currentAttempt(assignments[index].Attempts)
 	}
 
 	writeJSON(w, http.StatusOK, assignments)
@@ -305,20 +327,8 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idText := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/assignments/"), "/submit")
-	idText = strings.Trim(idText, "/")
-	if idText == "" || strings.Contains(idText, "/") {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "assignment not found",
-		})
-		return
-	}
-
-	id, err := strconv.ParseInt(idText, 10, 64)
-	if err != nil || id < 1 {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "assignment not found",
-		})
+	id, ok := parseAssignmentID(w, r.URL.Path, "/submit")
+	if !ok {
 		return
 	}
 
@@ -338,28 +348,29 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var assignment assignmentResponse
-	err = app.db.QueryRow(
+	var attemptID int64
+	err := app.db.QueryRow(
 		r.Context(),
 		`
-			update assignment
-			set submitted_answer = $1
-			where id = $2 and submitted_answer is null
-			returning id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
+			insert into assignment_attempt (assignment_id, attempt_number, submitted_answer)
+			select a.id,
+				coalesce(max(aa.attempt_number), 0) + 1,
+				$1
+			from assignment a
+			left join assignment_attempt aa on aa.assignment_id = a.id
+			where a.id = $2
+				and not exists (
+					select 1
+					from assignment_attempt active_attempt
+					where active_attempt.assignment_id = a.id
+						and active_attempt.reset_at is null
+				)
+			group by a.id
+			returning id
 		`,
 		request.SubmittedAnswer,
 		id,
-	).Scan(
-		&assignment.ID,
-		&assignment.Category,
-		&assignment.Prompt,
-		&assignment.ExpectedAnswer,
-		&assignment.SubmittedAnswer,
-		&assignment.DateSubmitted,
-		&assignment.Passed,
-		&assignment.Feedback,
-		&assignment.DateGraded,
-	)
+	).Scan(&attemptID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, map[string]string{
@@ -371,6 +382,15 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 		log.Printf("submit assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "answer could not be submitted",
+		})
+		return
+	}
+
+	assignment, err := app.loadAssignmentByID(r.Context(), id)
+	if err != nil {
+		log.Printf("load submitted assignment %d after attempt %d: %v", id, attemptID, err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "answer was saved but could not be loaded",
 		})
 		return
 	}
@@ -391,30 +411,34 @@ func (app *app) handleAnsweredAssignments(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	rows, err := app.db.Query(
+	assignments, err := app.loadAssignments(
 		r.Context(),
 		`
-			select id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
-			from assignment
-			where submitted_answer is not null
-			order by
-				case when passed is null then 0 else 1 end,
-				date_submitted desc,
-				id desc
+			where exists (
+				select 1
+				from assignment_attempt aa
+				where aa.assignment_id = a.id
+					and aa.reset_at is null
+			)
+			order by (
+				select case when aa.passed is null then 0 else 1 end
+				from assignment_attempt aa
+				where aa.assignment_id = a.id
+					and aa.reset_at is null
+				order by aa.attempt_number desc
+				limit 1
+			), (
+				select aa.date_submitted
+				from assignment_attempt aa
+				where aa.assignment_id = a.id
+					and aa.reset_at is null
+				order by aa.attempt_number desc
+				limit 1
+			) desc, a.id desc
 		`,
 	)
 	if err != nil {
 		log.Printf("list answered assignments: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "answered assignments could not be loaded",
-		})
-		return
-	}
-	defer rows.Close()
-
-	assignments, err := scanAssignments(rows)
-	if err != nil {
-		log.Printf("scan answered assignments: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "answered assignments could not be loaded",
 		})
@@ -437,20 +461,8 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idText := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/assignments/"), "/grade")
-	idText = strings.Trim(idText, "/")
-	if idText == "" || strings.Contains(idText, "/") {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "assignment not found",
-		})
-		return
-	}
-
-	id, err := strconv.ParseInt(idText, 10, 64)
-	if err != nil || id < 1 {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "assignment not found",
-		})
+	id, ok := parseAssignmentID(w, r.URL.Path, "/grade")
+	if !ok {
 		return
 	}
 
@@ -470,42 +482,46 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var assignment assignmentResponse
-	err = app.db.QueryRow(
+	result, err := app.db.Exec(
 		r.Context(),
 		`
-			update assignment
+			update assignment_attempt
 			set passed = $1,
 				feedback = nullif($2, ''),
 				date_graded = now()
-			where id = $3 and submitted_answer is not null
-			returning id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
+			where id = (
+				select aa.id
+				from assignment_attempt aa
+				where aa.assignment_id = $3
+					and aa.reset_at is null
+				order by aa.attempt_number desc
+				limit 1
+			)
 		`,
 		*request.Passed,
 		request.Feedback,
 		id,
-	).Scan(
-		&assignment.ID,
-		&assignment.Category,
-		&assignment.Prompt,
-		&assignment.ExpectedAnswer,
-		&assignment.SubmittedAnswer,
-		&assignment.DateSubmitted,
-		&assignment.Passed,
-		&assignment.Feedback,
-		&assignment.DateGraded,
 	)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{
-				"error": "answered assignment not found",
-			})
-			return
-		}
-
 		log.Printf("grade assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "result could not be saved",
+		})
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "answered assignment not found",
+		})
+		return
+	}
+
+	assignment, err := app.loadAssignmentByID(r.Context(), id)
+	if err != nil {
+		log.Printf("load graded assignment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "result was saved but could not be loaded",
 		})
 		return
 	}
@@ -526,57 +542,60 @@ func (app *app) resetAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idText := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/assignments/"), "/reset")
-	idText = strings.Trim(idText, "/")
-	if idText == "" || strings.Contains(idText, "/") {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "assignment not found",
-		})
+	id, ok := parseAssignmentID(w, r.URL.Path, "/reset")
+	if !ok {
 		return
 	}
 
-	id, err := strconv.ParseInt(idText, 10, 64)
-	if err != nil || id < 1 {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "assignment not found",
-		})
-		return
-	}
-
-	var assignment assignmentResponse
-	err = app.db.QueryRow(
-		r.Context(),
-		`
-			update assignment
-			set submitted_answer = null,
-				passed = null,
-				date_graded = null
-			where id = $1
-			returning id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
-		`,
-		id,
-	).Scan(
-		&assignment.ID,
-		&assignment.Category,
-		&assignment.Prompt,
-		&assignment.ExpectedAnswer,
-		&assignment.SubmittedAnswer,
-		&assignment.DateSubmitted,
-		&assignment.Passed,
-		&assignment.Feedback,
-		&assignment.DateGraded,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeJSON(w, http.StatusNotFound, map[string]string{
-				"error": "assignment not found",
+	var request resetAssignmentRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "request body must be valid JSON",
 			})
 			return
 		}
+	}
+	request.Feedback = strings.TrimSpace(request.Feedback)
 
+	result, err := app.db.Exec(
+		r.Context(),
+		`
+			update assignment_attempt
+			set feedback = nullif($1, ''),
+				reset_at = now()
+			where id = (
+				select aa.id
+				from assignment_attempt aa
+				where aa.assignment_id = $2
+					and aa.reset_at is null
+				order by aa.attempt_number desc
+				limit 1
+			)
+		`,
+		request.Feedback,
+		id,
+	)
+	if err != nil {
 		log.Printf("reset assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "assignment could not be reset",
+		})
+		return
+	}
+
+	if result.RowsAffected() == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "answered assignment not found",
+		})
+		return
+	}
+
+	assignment, err := app.loadAssignmentByID(r.Context(), id)
+	if err != nil {
+		log.Printf("load reset assignment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "assignment was reset but could not be loaded",
 		})
 		return
 	}
@@ -585,26 +604,9 @@ func (app *app) resetAssignment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) listAssignments(w http.ResponseWriter, r *http.Request) {
-	rows, err := app.db.Query(
-		r.Context(),
-		`
-			select id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
-			from assignment
-			order by id desc
-		`,
-	)
+	assignments, err := app.loadAssignments(r.Context(), "order by a.id desc")
 	if err != nil {
 		log.Printf("list assignments: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "assignments could not be loaded",
-		})
-		return
-	}
-	defer rows.Close()
-
-	assignments, err := scanAssignments(rows)
-	if err != nil {
-		log.Printf("scan assignments: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "assignments could not be loaded",
 		})
@@ -641,28 +643,18 @@ func (app *app) createAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var assignment assignmentResponse
+	var id int64
 	err := app.db.QueryRow(
 		r.Context(),
 		`
 			insert into assignment (category, prompt, expected_answer)
 			values ($1, $2, $3)
-			returning id, category, prompt, expected_answer, submitted_answer, date_submitted, passed, feedback, date_graded
+			returning id
 		`,
 		request.Category,
 		request.Prompt,
 		request.ExpectedAnswer,
-	).Scan(
-		&assignment.ID,
-		&assignment.Category,
-		&assignment.Prompt,
-		&assignment.ExpectedAnswer,
-		&assignment.SubmittedAnswer,
-		&assignment.DateSubmitted,
-		&assignment.Passed,
-		&assignment.Feedback,
-		&assignment.DateGraded,
-	)
+	).Scan(&id)
 	if err != nil {
 		log.Printf("insert assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -671,11 +663,45 @@ func (app *app) createAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	assignment, err := app.loadAssignmentByID(r.Context(), id)
+	if err != nil {
+		log.Printf("load created assignment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "assignment was saved but could not be loaded",
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusCreated, assignment)
 }
 
-func scanAssignments(rows pgx.Rows) ([]assignmentResponse, error) {
+func (app *app) loadAssignmentByID(ctx context.Context, id int64) (assignmentResponse, error) {
+	assignments, err := app.loadAssignments(ctx, "where a.id = $1", id)
+	if err != nil {
+		return assignmentResponse{}, err
+	}
+
+	if len(assignments) == 0 {
+		return assignmentResponse{}, pgx.ErrNoRows
+	}
+
+	return assignments[0], nil
+}
+
+func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any) ([]assignmentResponse, error) {
+	query := `
+		select a.id, a.category, a.prompt, a.expected_answer, a.created_at
+		from assignment a
+		` + suffix
+
+	rows, err := app.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
 	assignments := []assignmentResponse{}
+	assignmentIndexes := map[int64]int{}
 	for rows.Next() {
 		var assignment assignmentResponse
 		if err := rows.Scan(
@@ -683,14 +709,13 @@ func scanAssignments(rows pgx.Rows) ([]assignmentResponse, error) {
 			&assignment.Category,
 			&assignment.Prompt,
 			&assignment.ExpectedAnswer,
-			&assignment.SubmittedAnswer,
-			&assignment.DateSubmitted,
-			&assignment.Passed,
-			&assignment.Feedback,
-			&assignment.DateGraded,
+			&assignment.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
+
+		assignment.Attempts = []assignmentAttemptResponse{}
+		assignmentIndexes[assignment.ID] = len(assignments)
 		assignments = append(assignments, assignment)
 	}
 
@@ -698,7 +723,107 @@ func scanAssignments(rows pgx.Rows) ([]assignmentResponse, error) {
 		return nil, err
 	}
 
+	if len(assignments) == 0 {
+		return assignments, nil
+	}
+
+	ids := make([]int64, 0, len(assignments))
+	for _, assignment := range assignments {
+		ids = append(ids, assignment.ID)
+	}
+
+	attemptRows, err := app.db.Query(
+		ctx,
+		`
+			select id, assignment_id, attempt_number, submitted_answer, date_submitted, passed, feedback, date_graded, reset_at
+			from assignment_attempt
+			where assignment_id = any($1)
+			order by assignment_id asc, attempt_number asc
+		`,
+		ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer attemptRows.Close()
+
+	for attemptRows.Next() {
+		var attempt assignmentAttemptResponse
+		if err := attemptRows.Scan(
+			&attempt.ID,
+			&attempt.AssignmentID,
+			&attempt.AttemptNumber,
+			&attempt.SubmittedAnswer,
+			&attempt.DateSubmitted,
+			&attempt.Passed,
+			&attempt.Feedback,
+			&attempt.DateGraded,
+			&attempt.ResetAt,
+		); err != nil {
+			return nil, err
+		}
+
+		index, ok := assignmentIndexes[attempt.AssignmentID]
+		if !ok {
+			continue
+		}
+		assignments[index].Attempts = append(assignments[index].Attempts, attempt)
+	}
+
+	if err := attemptRows.Err(); err != nil {
+		return nil, err
+	}
+
+	for index := range assignments {
+		assignments[index].CurrentAttempt = currentAttempt(assignments[index].Attempts)
+	}
+
 	return assignments, nil
+}
+
+func currentAttempt(attempts []assignmentAttemptResponse) *assignmentAttemptResponse {
+	for index := len(attempts) - 1; index >= 0; index-- {
+		if attempts[index].ResetAt == nil {
+			return &attempts[index]
+		}
+	}
+
+	return nil
+}
+
+func gradedAttempts(attempts []assignmentAttemptResponse) []assignmentAttemptResponse {
+	graded := []assignmentAttemptResponse{}
+	for _, attempt := range attempts {
+		if attempt.Passed != nil {
+			graded = append(graded, attempt)
+		}
+	}
+
+	return graded
+}
+
+func parseAssignmentID(w http.ResponseWriter, path string, suffix string) (int64, bool) {
+	idText := strings.TrimPrefix(path, "/api/assignments/")
+	if suffix != "" {
+		idText = strings.TrimSuffix(idText, suffix)
+	}
+	idText = strings.Trim(idText, "/")
+	if idText == "" || strings.Contains(idText, "/") {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "assignment not found",
+		})
+		return 0, false
+	}
+
+	id, err := strconv.ParseInt(idText, 10, 64)
+	if err != nil || id < 1 {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "assignment not found",
+		})
+		return 0, false
+	}
+
+	return id, true
 }
 
 func isTeacher(r *http.Request) bool {

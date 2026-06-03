@@ -70,11 +70,16 @@ h2 {
 }
 
 .actions,
+.desk-header,
 .list-header {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.desk-header {
+  justify-content: space-between;
 }
 
 .form-grid {
@@ -83,9 +88,24 @@ h2 {
   margin-top: 24px;
 }
 
+.teacher-workspace {
+  margin-top: 28px;
+}
+
+.create-question-form {
+  border: 1px solid #d9e1e4;
+  border-radius: 8px;
+  padding: 16px;
+}
+
 .list-header {
   justify-content: space-between;
   margin-top: 32px;
+}
+
+.filter-toggle {
+  flex-wrap: wrap;
+  margin-top: 16px;
 }
 
 .question-title {
@@ -150,6 +170,19 @@ h2 {
   color: #17212b;
   line-height: 1.5;
   padding: 12px;
+}
+
+.attempt-history {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.attempt-card {
+  background: #ffffff;
+  border: 1px solid #d9e1e4;
+  border-radius: 8px;
+  padding: 14px;
 }
 
 .student-question {
