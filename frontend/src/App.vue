@@ -1,15 +1,31 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import StudentPet from './components/StudentPet.vue'
+import { useStudentPetStore } from './stores/studentPet'
 
 const categories = ['MATH', 'SCIENCE', 'READING']
+const studentCategoryOptions = [
+  { title: 'All Subjects', value: 'ALL' },
+  { title: 'Math', value: 'MATH' },
+  { title: 'Science', value: 'SCIENCE' },
+  { title: 'Reading', value: 'READING' },
+]
 const passFailOptions = [
   { label: 'Pass', value: true },
   { label: 'Fail', value: false },
 ]
+const petStats = [
+  { label: 'Hunger', key: 'hunger', color: 'warning', icon: 'mdi-food-apple' },
+  { label: 'Happiness', key: 'happiness', color: 'success', icon: 'mdi-emoticon-happy' },
+  { label: 'Energy', key: 'energy', color: 'primary', icon: 'mdi-lightning-bolt' },
+]
+const studentPetStore = useStudentPetStore()
+const route = useRoute()
+const router = useRouter()
 
-const view = ref('splash')
 const studentTab = ref('answer')
+const studentCategoryFilter = ref('ALL')
 const teacherFilter = ref('needs-review')
 const isCreatingQuestion = ref(false)
 const password = ref('')
@@ -23,6 +39,7 @@ const gradingForms = reactive({})
 const studentGradedAssignments = ref([])
 const studentAssignment = ref(null)
 const studentAnswer = ref('')
+const studentPetMood = ref('idle')
 const studentMessage = ref('')
 const studentError = ref('')
 const studentGradesError = ref('')
@@ -34,6 +51,7 @@ const isSavingGrade = ref(false)
 const isResettingAssignment = ref(false)
 const isSubmittingStudentAnswer = ref(false)
 const isLoggingOut = ref(false)
+let studentPetMoodTimer
 
 const form = ref({
   category: 'MATH',
@@ -49,6 +67,7 @@ const teacherFilters = [
 ]
 
 const hasAssignments = computed(() => assignments.value.length > 0)
+const routeName = computed(() => route.name || 'splash')
 const filteredAssignments = computed(() =>
   assignments.value.filter((assignment) => {
     const attempt = currentAttempt(assignment)
@@ -81,6 +100,15 @@ const hasFilteredAssignments = computed(() => filteredAssignments.value.length >
 const hasStudentGradedAssignments = computed(() =>
   studentGradedAssignments.value.some((assignment) => gradedAttempts(assignment).length > 0),
 )
+const canFeedPet = computed(() => studentPetStore.cookies > 0 && studentPetStore.hunger < 100)
+const canPlayWithPet = computed(
+  () => !studentPetStore.sleeping && studentPetStore.happiness < 100 && studentPetStore.energy >= 10,
+)
+const canPutPetToSleep = computed(() => !studentPetStore.sleeping)
+const canWakePet = computed(() => studentPetStore.sleeping)
+const petAvatarMood = computed(() =>
+  studentPetMood.value === 'idle' ? studentPetStore.mood : studentPetMood.value,
+)
 const gradeSummaries = computed(() =>
   categories.map((category) => {
     const attemptsForCategory = studentGradedAssignments.value
@@ -109,16 +137,66 @@ const gradedAssignmentsByCategory = computed(() =>
   })),
 )
 
-function showSplash() {
-  view.value = 'splash'
-  loginError.value = ''
+async function showSplash() {
+  await router.push({ name: 'splash' })
 }
 
 async function showStudent() {
-  view.value = 'student'
   studentTab.value = 'answer'
-  await loadNextStudentAssignment()
+  studentCategoryFilter.value = 'ALL'
+  await router.push({ name: 'student' })
 }
+
+async function showTeacherLogin() {
+  await router.push({ name: 'teacher-login' })
+}
+
+async function handleRouteChange(name, oldName) {
+  studentPetStore.stopWatching()
+  resetStudentPetMood()
+
+  if (name === 'splash') {
+    loginError.value = ''
+    return
+  }
+
+  if (name === 'student') {
+    if (oldName !== 'student') {
+      studentTab.value = 'answer'
+      studentCategoryFilter.value = 'ALL'
+    }
+    await studentPetStore.loadProfile()
+    studentPetStore.startWatching()
+    if (studentTab.value === 'grades') {
+      await loadStudentGrades()
+    } else {
+      await loadNextStudentAssignment()
+    }
+    return
+  }
+
+  if (name === 'teacher-login') {
+    password.value = ''
+    loginError.value = ''
+    return
+  }
+
+  if (name === 'teacher') {
+    teacherFilter.value = 'needs-review'
+    await loadAssignments()
+    if (assignmentError.value === 'teacher login required') {
+      await router.replace({ name: 'teacher-login' })
+    }
+  }
+}
+
+watch(
+  () => route.name,
+  (name, oldName) => {
+    handleRouteChange(name || 'splash', oldName)
+  },
+  { immediate: true },
+)
 
 async function handleStudentTabChange(tabName) {
   if (tabName === 'answer') {
@@ -126,14 +204,60 @@ async function handleStudentTabChange(tabName) {
   }
 
   if (tabName === 'grades') {
+    await studentPetStore.loadProfile()
     await loadStudentGrades()
+  }
+
+  if (tabName === 'pet') {
+    await studentPetStore.loadProfile()
   }
 }
 
-function showTeacherLogin() {
-  view.value = 'teacher-login'
-  password.value = ''
-  loginError.value = ''
+async function handleStudentCategoryChange() {
+  await loadNextStudentAssignment()
+}
+
+function resetStudentPetMood() {
+  window.clearTimeout(studentPetMoodTimer)
+  studentPetMood.value = 'idle'
+}
+
+function celebrateStudentAnswer() {
+  window.clearTimeout(studentPetMoodTimer)
+  studentPetMood.value = 'happy'
+  studentPetMoodTimer = window.setTimeout(() => {
+    studentPetMood.value = 'idle'
+  }, 2600)
+}
+
+function playPetEatingAnimation() {
+  window.clearTimeout(studentPetMoodTimer)
+  studentPetMood.value = 'eating'
+  studentPetMoodTimer = window.setTimeout(() => {
+    studentPetMood.value = 'idle'
+  }, 2600)
+}
+
+async function feedStudentPet() {
+  const wasFed = await studentPetStore.feedPet()
+  if (wasFed) {
+    playPetEatingAnimation()
+  }
+}
+
+async function playWithStudentPet() {
+  const didPlay = await studentPetStore.playWithPet()
+  if (didPlay) {
+    celebrateStudentAnswer()
+  }
+}
+
+async function putStudentPetToSleep() {
+  await studentPetStore.putToSleep()
+}
+
+async function wakeStudentPet() {
+  await studentPetStore.wakePet()
 }
 
 async function loginTeacher() {
@@ -156,9 +280,8 @@ async function loginTeacher() {
     }
 
     password.value = ''
-    view.value = 'teacher'
     teacherFilter.value = 'needs-review'
-    await loadAssignments()
+    await router.push({ name: 'teacher' })
   } catch (error) {
     loginError.value = error.message
   }
@@ -190,7 +313,7 @@ async function logoutTeacher() {
     password.value = ''
     teacherFilter.value = 'needs-review'
     assignments.value = []
-    view.value = 'splash'
+    await router.push({ name: 'splash' })
   } catch (error) {
     gradingError.value = error.message
   } finally {
@@ -485,7 +608,15 @@ async function loadNextStudentAssignment() {
   studentError.value = ''
 
   try {
-    const response = await fetch('/api/student/assignments/next')
+    const query = new URLSearchParams()
+    if (studentCategoryFilter.value !== 'ALL') {
+      query.set('category', studentCategoryFilter.value)
+    }
+
+    const endpoint = query.toString()
+      ? `/api/student/assignments/next?${query.toString()}`
+      : '/api/student/assignments/next'
+    const response = await fetch(endpoint)
     const body = await response.json()
 
     if (!response.ok) {
@@ -545,8 +676,9 @@ async function submitStudentAnswer() {
       throw new Error(body.error || `API returned ${response.status}`)
     }
 
-    studentMessage.value = 'Answer submitted.'
     await loadNextStudentAssignment()
+    studentMessage.value = 'Answer submitted.'
+    celebrateStudentAnswer()
   } catch (error) {
     studentError.value = error.message
   } finally {
@@ -559,7 +691,7 @@ async function submitStudentAnswer() {
   <v-app>
     <v-main>
       <v-container class="app-container" fluid>
-        <v-card v-if="view === 'splash'" class="panel" elevation="8">
+        <v-card v-if="routeName === 'splash'" class="panel" elevation="8">
           <v-card-text>
             <p class="eyebrow">HQ</p>
             <h1>Headquarters</h1>
@@ -575,7 +707,7 @@ async function submitStudentAnswer() {
           </v-card-text>
         </v-card>
 
-        <v-card v-else-if="view === 'teacher-login'" class="panel" elevation="8">
+        <v-card v-else-if="routeName === 'teacher-login'" class="panel" elevation="8">
           <v-card-text>
             <v-btn
               class="mb-4"
@@ -604,7 +736,7 @@ async function submitStudentAnswer() {
           </v-card-text>
         </v-card>
 
-        <v-card v-else-if="view === 'student'" class="panel student-panel" elevation="8">
+        <v-card v-else-if="routeName === 'student'" class="panel student-panel" elevation="8">
           <v-card-text>
             <v-btn
               class="mb-4"
@@ -626,10 +758,24 @@ async function submitStudentAnswer() {
             >
               <v-tab value="answer">Answer Questions</v-tab>
               <v-tab value="grades">View Grades</v-tab>
+              <v-tab value="pet">Pet</v-tab>
             </v-tabs>
 
             <v-window v-model="studentTab" class="mt-6">
               <v-window-item value="answer">
+                <v-select
+                  v-model="studentCategoryFilter"
+                  class="student-category-filter"
+                  density="comfortable"
+                  hide-details
+                  item-title="title"
+                  item-value="value"
+                  :items="studentCategoryOptions"
+                  label="Question category"
+                  variant="outlined"
+                  @update:model-value="handleStudentCategoryChange"
+                />
+
                 <v-progress-linear
                   v-if="isLoadingStudentAssignment"
                   class="mt-6"
@@ -850,6 +996,117 @@ async function submitStudentAnswer() {
                       </v-expansion-panel-text>
                     </v-expansion-panel>
                   </v-expansion-panels>
+                </section>
+              </v-window-item>
+
+              <v-window-item value="pet">
+                <div class="list-header">
+                  <h2>Pet</h2>
+                  <v-btn
+                    :loading="studentPetStore.isLoading"
+                    color="primary"
+                    prepend-icon="mdi-refresh"
+                    variant="tonal"
+                    @click="studentPetStore.loadProfile"
+                  >
+                    Refresh
+                  </v-btn>
+                </div>
+
+                <v-alert v-if="studentPetStore.error" class="mt-5" type="error" variant="tonal">
+                  {{ studentPetStore.error }}
+                </v-alert>
+
+                <section class="pet-dashboard">
+                  <div class="cookie-display">
+                    <span class="cookie-display__icon" aria-hidden="true" />
+                    <div>
+                      <p class="summary-category">Cookies</p>
+                      <p class="cookie-display__count">{{ studentPetStore.cookies }}</p>
+                    </div>
+                    <div class="pet-actions">
+                      <v-chip
+                        :color="studentPetStore.sleeping ? 'primary' : 'success'"
+                        size="small"
+                        variant="tonal"
+                      >
+                        {{ studentPetStore.sleeping ? 'Sleeping' : 'Awake' }}
+                      </v-chip>
+                      <v-btn
+                        :disabled="!canFeedPet"
+                        :loading="studentPetStore.isLoading"
+                        color="secondary"
+                        prepend-icon="mdi-cookie"
+                        variant="flat"
+                        @click="feedStudentPet"
+                      >
+                        Feed Pet
+                      </v-btn>
+                      <v-btn
+                        :disabled="!canPlayWithPet"
+                        :loading="studentPetStore.isLoading"
+                        color="success"
+                        prepend-icon="mdi-controller"
+                        variant="tonal"
+                        @click="playWithStudentPet"
+                      >
+                        Play
+                      </v-btn>
+                      <v-btn
+                        :disabled="!canPutPetToSleep"
+                        :loading="studentPetStore.isLoading"
+                        color="primary"
+                        prepend-icon="mdi-sleep"
+                        variant="tonal"
+                        @click="putStudentPetToSleep"
+                      >
+                        Sleep
+                      </v-btn>
+                      <v-btn
+                        :disabled="!canWakePet"
+                        :loading="studentPetStore.isLoading"
+                        color="warning"
+                        prepend-icon="mdi-weather-sunny"
+                        variant="tonal"
+                        @click="wakeStudentPet"
+                      >
+                        Wake
+                      </v-btn>
+                    </div>
+                  </div>
+
+                  <v-alert
+                    v-if="studentPetStore.cookies === 0"
+                    type="info"
+                    variant="tonal"
+                  >
+                    Earn cookies by passing assignments.
+                  </v-alert>
+                  <v-alert
+                    v-else-if="studentPetStore.hunger >= 100"
+                    type="success"
+                    variant="tonal"
+                  >
+                    Your pet is full.
+                  </v-alert>
+
+                  <div class="pet-stat-list">
+                    <div v-for="stat in petStats" :key="stat.key" class="pet-stat-row">
+                      <div class="pet-stat-row__header">
+                        <div class="question-title">
+                          <v-icon :color="stat.color" :icon="stat.icon" size="small" />
+                          <span>{{ stat.label }}</span>
+                        </div>
+                        <strong>{{ studentPetStore[stat.key] }}</strong>
+                      </div>
+                      <v-progress-linear
+                        :color="stat.color"
+                        :model-value="studentPetStore[stat.key]"
+                        height="12"
+                        rounded
+                      />
+                    </div>
+                  </div>
                 </section>
               </v-window-item>
             </v-window>
@@ -1133,7 +1390,7 @@ async function submitStudentAnswer() {
             </section>
           </v-card-text>
         </v-card>
-        <StudentPet v-if="view === 'student'" mood="idle" />
+        <StudentPet v-if="routeName === 'student'" :mood="petAvatarMood" />
       </v-container>
     </v-main>
   </v-app>

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	petv1connect "hq/proto/hq/pet/v1/petv1connect"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -22,6 +24,8 @@ import (
 type app struct {
 	db *pgxpool.Pool
 }
+
+var errNoCookies = errors.New("no cookies available")
 
 type createAssignmentRequest struct {
 	Category       string `json:"category"`
@@ -46,6 +50,23 @@ type resetAssignmentRequest struct {
 	Feedback string `json:"feedback"`
 }
 
+type petStateResponse struct {
+	Hunger      int       `json:"hunger"`
+	Happiness   int       `json:"happiness"`
+	Energy      int       `json:"energy"`
+	Sleeping    bool      `json:"sleeping"`
+	Mood        string    `json:"mood"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	LastDecayAt time.Time `json:"last_decay_at"`
+}
+
+type studentProfileResponse struct {
+	ID          int64            `json:"id"`
+	DisplayName string           `json:"display_name"`
+	Cookies     int              `json:"cookies"`
+	PetState    petStateResponse `json:"pet_state"`
+}
+
 type assignmentAttemptResponse struct {
 	ID              int64      `json:"id"`
 	AssignmentID    int64      `json:"assignment_id"`
@@ -55,6 +76,7 @@ type assignmentAttemptResponse struct {
 	Passed          *bool      `json:"passed"`
 	Feedback        *string    `json:"feedback"`
 	DateGraded      *time.Time `json:"date_graded"`
+	CookieAwarded   bool       `json:"cookie_awarded"`
 	ResetAt         *time.Time `json:"reset_at"`
 }
 
@@ -89,6 +111,7 @@ func main() {
 	}
 
 	app := &app{db: db}
+	app.startPetDecayTicker(ctx)
 
 	webRoot := filepath.Join(".", "web")
 	mux := http.NewServeMux()
@@ -100,11 +123,16 @@ func main() {
 
 	mux.HandleFunc("/api/teacher/login", app.handleTeacherLogin)
 	mux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
+	mux.HandleFunc("/api/student/profile", app.handleStudentProfile)
+	mux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
 	mux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
 	mux.HandleFunc("/api/student/assignments/graded", app.handleStudentGradedAssignments)
 	mux.HandleFunc("/api/assignments/answered", app.handleAnsweredAssignments)
 	mux.HandleFunc("/api/assignments", app.handleAssignments)
 	mux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
+
+	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
+	mux.Handle(petServicePath, petServiceHandler)
 
 	mux.HandleFunc("/", staticHandler(webRoot))
 
@@ -248,10 +276,67 @@ func (app *app) handleAssignmentByID(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (app *app) handleStudentProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	profile, err := app.loadStudentProfile(r.Context())
+	if err != nil {
+		log.Printf("load student profile: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "student profile could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, profile)
+}
+
+func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	profile, err := app.feedStudentPet(r.Context())
+	if errors.Is(err, errNoCookies) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "no cookies available",
+		})
+		return
+	}
+	if err != nil {
+		log.Printf("feed student pet: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "pet could not be fed",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, profile)
+}
+
 func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
+	}
+
+	category := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("category")))
+	suffixArgs := []any{}
+	categoryClause := ""
+	if category != "" {
+		if !isValidCategory(category) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "category must be MATH, SCIENCE, or READING",
+			})
+			return
+		}
+
+		categoryClause = "and a.category = $1"
+		suffixArgs = append(suffixArgs, category)
 	}
 
 	assignments, err := app.loadAssignments(
@@ -263,9 +348,11 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 				where aa.assignment_id = a.id
 					and aa.reset_at is null
 			)
+			`+categoryClause+`
 			order by a.id asc
 			limit 1
 		`,
+		suffixArgs...,
 	)
 	if err != nil {
 		log.Printf("load next student assignment: %v", err)
@@ -482,25 +569,63 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := app.db.Exec(
+	tx, err := app.db.Begin(r.Context())
+	if err != nil {
+		log.Printf("begin grade assignment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "result could not be saved",
+		})
+		return
+	}
+	defer func() {
+		_ = tx.Rollback(r.Context())
+	}()
+
+	var attemptID int64
+	var cookieAwarded bool
+	err = tx.QueryRow(
+		r.Context(),
+		`
+			select aa.id, aa.cookie_awarded
+			from assignment_attempt aa
+			where aa.assignment_id = $1
+				and aa.reset_at is null
+			order by aa.attempt_number desc
+			limit 1
+		`,
+		id,
+	).Scan(&attemptID, &cookieAwarded)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeJSON(w, http.StatusNotFound, map[string]string{
+			"error": "answered assignment not found",
+		})
+		return
+	}
+	if err != nil {
+		log.Printf("load attempt for grading: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "result could not be saved",
+		})
+		return
+	}
+
+	awardCookie := *request.Passed && !cookieAwarded
+	result, err := tx.Exec(
 		r.Context(),
 		`
 			update assignment_attempt
 			set passed = $1,
 				feedback = nullif($2, ''),
-				date_graded = now()
-			where id = (
-				select aa.id
-				from assignment_attempt aa
-				where aa.assignment_id = $3
-					and aa.reset_at is null
-				order by aa.attempt_number desc
-				limit 1
-			)
+				date_graded = now(),
+				cookie_awarded = case
+					when $1 and not cookie_awarded then true
+					else cookie_awarded
+				end
+			where id = $3
 		`,
 		*request.Passed,
 		request.Feedback,
-		id,
+		attemptID,
 	)
 	if err != nil {
 		log.Printf("grade assignment: %v", err)
@@ -513,6 +638,27 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 	if result.RowsAffected() == 0 {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "answered assignment not found",
+		})
+		return
+	}
+
+	if awardCookie {
+		if _, err := tx.Exec(
+			r.Context(),
+			"update app_user set cookies = cookies + 1 where id = 1",
+		); err != nil {
+			log.Printf("award cookie: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "cookie could not be awarded",
+			})
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		log.Printf("commit grade assignment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "result could not be saved",
 		})
 		return
 	}
@@ -688,6 +834,104 @@ func (app *app) loadAssignmentByID(ctx context.Context, id int64) (assignmentRes
 	return assignments[0], nil
 }
 
+func (app *app) loadStudentProfile(ctx context.Context) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx); err != nil {
+		return studentProfileResponse{}, err
+	}
+
+	return app.loadStudentProfileWithoutDecay(ctx)
+}
+
+func (app *app) loadStudentProfileWithoutDecay(ctx context.Context) (studentProfileResponse, error) {
+	var profile studentProfileResponse
+	err := app.db.QueryRow(
+		ctx,
+		`
+			select u.id,
+				u.display_name,
+				u.cookies,
+				ps.hunger,
+				ps.happiness,
+				ps.energy,
+				ps.sleeping,
+				ps.updated_at,
+				ps.last_decay_at,
+				case
+					when ps.sleeping then 'sleeping'
+					when ps.hunger = 0 then 'hungry'
+					when ps.happiness = 0 then 'sad'
+					else 'idle'
+				end as mood
+			from app_user u
+			join pet_state ps on ps.user_id = u.id
+			where u.id = $1
+		`,
+		petUserID,
+	).Scan(
+		&profile.ID,
+		&profile.DisplayName,
+		&profile.Cookies,
+		&profile.PetState.Hunger,
+		&profile.PetState.Happiness,
+		&profile.PetState.Energy,
+		&profile.PetState.Sleeping,
+		&profile.PetState.UpdatedAt,
+		&profile.PetState.LastDecayAt,
+		&profile.PetState.Mood,
+	)
+	return profile, err
+}
+
+func (app *app) feedStudentPet(ctx context.Context) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx); err != nil {
+		return studentProfileResponse{}, err
+	}
+
+	tx, err := app.db.Begin(ctx)
+	if err != nil {
+		return studentProfileResponse{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	result, err := tx.Exec(
+		ctx,
+		`
+			update app_user
+			set cookies = cookies - 1
+			where id = $1
+				and cookies > 0
+		`,
+		petUserID,
+	)
+	if err != nil {
+		return studentProfileResponse{}, err
+	}
+	if result.RowsAffected() == 0 {
+		return studentProfileResponse{}, errNoCookies
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`
+			update pet_state
+			set hunger = least(hunger + 10, 100),
+				updated_at = now()
+			where user_id = $1
+		`,
+		petUserID,
+	); err != nil {
+		return studentProfileResponse{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return studentProfileResponse{}, err
+	}
+
+	return app.loadStudentProfile(ctx)
+}
+
 func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any) ([]assignmentResponse, error) {
 	query := `
 		select a.id, a.category, a.prompt, a.expected_answer, a.created_at
@@ -735,7 +979,7 @@ func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any)
 	attemptRows, err := app.db.Query(
 		ctx,
 		`
-			select id, assignment_id, attempt_number, submitted_answer, date_submitted, passed, feedback, date_graded, reset_at
+			select id, assignment_id, attempt_number, submitted_answer, date_submitted, passed, feedback, date_graded, cookie_awarded, reset_at
 			from assignment_attempt
 			where assignment_id = any($1)
 			order by assignment_id asc, attempt_number asc
@@ -758,6 +1002,7 @@ func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any)
 			&attempt.Passed,
 			&attempt.Feedback,
 			&attempt.DateGraded,
+			&attempt.CookieAwarded,
 			&attempt.ResetAt,
 		); err != nil {
 			return nil, err

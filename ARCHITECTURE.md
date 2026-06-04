@@ -31,7 +31,7 @@ The first version should stay intentionally small:
 
 - Backend: Go
 - Frontend: Vue 3, Vuetify, Vite
-- API style: JSON over HTTP
+- API style: JSON over HTTP for homework workflows, Connect RPC for the pet workflow
 - Database: PostgreSQL
 - Optional database REST layer: PostgREST
 - Local development database: PostgreSQL container managed by Docker Compose
@@ -43,6 +43,7 @@ The first version should stay intentionally small:
 Phone / Laptop Browser
   Vue 3 frontend
   JSON API client
+  Connect RPC pet client
 
         |
         v
@@ -50,6 +51,7 @@ Phone / Laptop Browser
 Go Backend
   static file server for built Vue app
   HTTP API
+  Connect RPC PetService
   authentication/session handling
   role checks
   assignment/submission business logic
@@ -58,6 +60,8 @@ Go Backend
         v
 
 PostgreSQL
+  app_user
+  pet_state
   assignment
   assignment_attempt
 
@@ -66,10 +70,16 @@ PostgREST
   REST access to selected database tables/views for learning and admin exploration
 ```
 
-The core application path should be:
+The core homework application path should be:
 
 ```text
 Vue/Vuetify -> Go -> PostgreSQL
+```
+
+The pet feature uses:
+
+```text
+Vue/Pinia generated Connect client -> Go Connect PetService -> PostgreSQL
 ```
 
 PostgREST can run beside the Go app, but it should not be the main API for the student and teacher workflows in version 1. That keeps the Go server meaningful and lets it enforce the rules of the application.
@@ -138,6 +148,7 @@ The Go server should expose:
 /              built Vue/Vuetify app
 /assets/...    Vue static assets
 /api/...       JSON API
+/hq.pet.v1.PetService/... Connect RPC pet API
 /healthz       health check
 ```
 
@@ -148,19 +159,23 @@ The current demo has already moved from plain HTML to a Vue 3 frontend with Vuet
 Current pieces:
 
 - `frontend/` contains the Vue 3 + Vuetify source app.
+- `frontend/src/router.js` defines Vue Router routes so browser back/forward works between app pages.
 - `frontend/vite.config.js` builds the frontend into `web/`.
 - `web/` contains generated production assets served by Go.
-- Go serves the frontend and exposes `/api/...`.
+- Go serves the frontend and exposes `/api/...` plus `/hq.pet.v1.PetService/...`.
 - PostgreSQL runs from Docker Compose on `localhost:55432`.
 
 Current implemented screens:
 
 - Splash page with Student and Teacher choices.
-- Student page that shows one unanswered assignment at a time.
+- Student page that shows one unanswered assignment at a time, with an optional subject filter for All, Math, Science, or Reading.
 - Student answering page displays previous attempts below the answer form as an expandable list.
 - Student answer submission that advances to the next unanswered assignment.
 - Student completion message when all assignments have submitted answers.
 - Student grades tab with category pass percentages and graded-question lists grouped by question, with top-level pass/fail indicators.
+- Student Pet tab with cookie count, hunger, happiness, and energy.
+- Student feed action that spends one cookie and increases hunger by 10.
+- Student virtual pet avatar that animates on the Student page.
 - Teacher password gate using the hard-coded password `local-demo-password`.
 - Teacher logout that clears the teacher cookie and returns to the splash page.
 - Unified Teacher Desk questions workspace with creation, filters, grading, reset, history, and delete.
@@ -169,6 +184,15 @@ Current implemented screens:
 - Inline pass/fail, feedback, reset, attempt history, and delete actions from each expanded question.
 - Teacher reset action that saves feedback, marks the active attempt reset, and preserves attempt history.
 
+Current frontend routes:
+
+```text
+/                Splash page
+/student         Student workspace
+/teacher/login   Teacher password page
+/teacher         Teacher Desk
+```
+
 Current implemented API:
 
 ```text
@@ -176,6 +200,14 @@ POST   /api/teacher/login
 POST   /api/teacher/logout
 GET    /api/student/assignments/next
 GET    /api/student/assignments/graded
+GET    /api/student/profile
+POST   /api/student/pet/feed
+POST   /hq.pet.v1.PetService/GetPetState
+POST   /hq.pet.v1.PetService/FeedPet
+POST   /hq.pet.v1.PetService/PlayWithPet
+POST   /hq.pet.v1.PetService/PutPetToSleep
+POST   /hq.pet.v1.PetService/WakePet
+POST   /hq.pet.v1.PetService/WatchPetState
 GET    /api/assignments
 GET    /api/assignments/answered
 POST   /api/assignments
@@ -205,7 +237,25 @@ assignment_attempt
   passed
   feedback
   date_graded
+  cookie_awarded
   reset_at
+
+app_user
+  id
+  display_name
+  cookies
+
+pet_state
+  id
+  user_id
+  hunger
+  happiness
+  energy
+  sleeping
+  sleep_started_at
+  sleep_started_energy
+  updated_at
+  last_decay_at
 ```
 
 ## Current Users and Roles
@@ -223,6 +273,8 @@ The student can:
 - See previous attempts when a reset assignment is shown again.
 - View graded attempts grouped by category and question.
 - See category pass percentages for Math, Science, and Reading.
+- See the current cookie count and pet stats on the Pet tab.
+- Feed the pet one cookie at a time.
 
 ### Teacher
 
@@ -279,7 +331,7 @@ These two flows are the first real product slice. If they work, the app is usefu
 
 ## API Design
 
-The first version uses a simple JSON-over-HTTP API. This keeps the app easy to build, test, and understand while still giving the Go backend full ownership of authentication, authorization, validation, and business rules.
+The first version uses JSON-over-HTTP for homework workflows and Connect RPC for the virtual pet workflow. Connect keeps the pet API protobuf-first and gives the Vue frontend generated TypeScript client types while still working cleanly in the browser.
 
 Implemented endpoints:
 
@@ -288,6 +340,14 @@ POST   /api/teacher/login
 POST   /api/teacher/logout
 GET    /api/student/assignments/next
 GET    /api/student/assignments/graded
+GET    /api/student/profile
+POST   /api/student/pet/feed
+POST   /hq.pet.v1.PetService/GetPetState
+POST   /hq.pet.v1.PetService/FeedPet
+POST   /hq.pet.v1.PetService/PlayWithPet
+POST   /hq.pet.v1.PetService/PutPetToSleep
+POST   /hq.pet.v1.PetService/WakePet
+POST   /hq.pet.v1.PetService/WatchPetState
 GET    /api/assignments
 GET    /api/assignments/answered
 POST   /api/assignments
@@ -309,10 +369,29 @@ POST /api/teacher/logout
   Clears the teacher cookie.
 
 GET /api/student/assignments/next
-  Returns the next unanswered assignment.
+  Returns the next unanswered assignment. Optional query: category=MATH, SCIENCE, or READING.
 
 GET /api/student/assignments/graded
   Returns graded assignments for the student grade view.
+
+GET /api/student/profile
+  Returns the demo student profile, cookie count, and pet stats.
+
+POST /api/student/pet/feed
+  Legacy JSON endpoint.
+  Spends one cookie and increases pet hunger by 10, capped at 100.
+
+The current Vue pet UI uses the generated Connect client in `frontend/src/stores/studentPet.js`.
+The JSON profile and feed endpoints still exist on the Go server, but they are no longer the main frontend pet path.
+
+PetService Connect RPC
+  Protobuf-backed pet state and interactions.
+  GetPetState returns cookies, hunger, happiness, energy, sleeping, mood, updated_at, and last_decay_at.
+  FeedPet spends one cookie and increases hunger.
+  PlayWithPet increases happiness and spends 10 energy.
+  PutPetToSleep starts a ten-minute energy recovery.
+  WakePet wakes the pet early, stops energy recovery, and subtracts 30 happiness.
+  WatchPetState streams current pet state about once per second while the Student page is open.
 
 GET /api/assignments
   Teacher-only.
@@ -366,7 +445,25 @@ assignment_attempt
   passed
   feedback
   date_graded
+  cookie_awarded
   reset_at
+
+app_user
+  id
+  display_name
+  cookies
+
+pet_state
+  id
+  user_id
+  hunger
+  happiness
+  energy
+  sleeping
+  sleep_started_at
+  sleep_started_energy
+  updated_at
+  last_decay_at
 ```
 
 Category is constrained to:
@@ -378,6 +475,14 @@ READING
 ```
 
 `assignment` stores the stable question. `assignment_attempt` stores each submitted answer cycle. `passed` is nullable on attempts: `null` means the attempt has not been reviewed yet, `true` means passed, and `false` means failed. `reset_at` marks an attempt as historical and makes the assignment answerable again.
+
+The demo seed file at `deploy/postgres/seed/002_second_grade_questions.sql` clears existing assignment records and inserts 20 Math, 20 Science, and 20 Reading questions for a second-grade student.
+
+`app_user` stores the single demo student profile. Its `cookies` value is the future virtual-pet feeding currency. When a teacher grades an attempt as passed, the backend awards one cookie to the student and marks that attempt's `cookie_awarded` flag so saving the same passing result again does not duplicate the reward.
+
+`pet_state` stores the single demo pet's care stats. Hunger, happiness, and energy are integer values from `0` to `100` and start at `50`. The pet also tracks whether it is sleeping, when sleep started, the energy value at sleep start, and when decay was last applied. The Vue frontend loads this data through a Pinia store backed by generated Connect clients.
+
+Pet decay runs two ways: a background ticker applies decay about every five minutes, and each pet RPC lazily catches up from `last_decay_at`. Hunger, happiness, and awake energy decay at about `144` points per day. Sleeping restores energy linearly from `sleep_started_energy` to `100` over ten minutes, then the pet wakes automatically and gains 10 happiness. If the student wakes the pet early, energy recovery stops and happiness drops by 30. If awake energy reaches `0`, the pet falls asleep. The Student page opens the `WatchPetState` stream so the floating avatar and Pet tab stats can update live without polling.
 
 ## Authentication and Authorization
 
@@ -441,14 +546,34 @@ For reliable use:
   cmd/
     hq/
       main.go
+      pet_service.go
 
   frontend/
     src/
+      components/
+        StudentPet.vue
+      gen/
+        hq/
+          pet/
+            v1/
+              pet_pb.ts
+      stores/
+        studentPet.js
       App.vue
       main.js
+      router.js
       style.css
     package.json
     vite.config.js
+
+  proto/
+    hq/
+      pet/
+        v1/
+          pet.proto
+          pet.pb.go
+          petv1connect/
+            pet.connect.go
 
   deploy/
     docker-compose.yml
@@ -501,9 +626,9 @@ For reliable use:
 
 ### Milestone 6: Home-Network Mode
 
-- Build the Vue frontend.
-- Serve the built frontend from Go.
-- Bind Go server to `0.0.0.0:8080`.
+- Build the Vue frontend. Done.
+- Serve the built frontend from Go. Done.
+- Bind Go server to `0.0.0.0:8080`. Done.
 - Test from laptop browser and phone browser.
 
 ### Milestone 7: PostgREST Add-On
@@ -520,7 +645,7 @@ Recommended decisions for version 1:
 - Use one Git repository.
 - Use Go as the main backend and final static file server.
 - Use Vue 3 with Vuetify for the frontend.
-- Use JSON over HTTP for the app API.
+- Use JSON over HTTP for homework workflows and Connect RPC for protobuf-backed pet workflows.
 - Use PostgreSQL directly from Go.
 - Use Docker Compose for the default PostgreSQL development database.
 - Run Go locally during early development.

@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package hq.pet.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "hq/proto/hq/pet/v1;petv1";
+
+service PetService {
+  rpc GetPetState(GetPetStateRequest) returns (PetStateResponse);
+  rpc FeedPet(FeedPetRequest) returns (PetStateResponse);
+  rpc PlayWithPet(PlayWithPetRequest) returns (PetStateResponse);
+  rpc PutPetToSleep(PutPetToSleepRequest) returns (PetStateResponse);
+  rpc WakePet(WakePetRequest) returns (PetStateResponse);
+  rpc WatchPetState(WatchPetStateRequest) returns (stream PetStateResponse);
+}
+
+enum PetMood {
+  PET_MOOD_UNSPECIFIED = 0;
+  PET_MOOD_IDLE = 1;
+  PET_MOOD_HAPPY = 2;
+  PET_MOOD_HUNGRY = 3;
+  PET_MOOD_SAD = 4;
+  PET_MOOD_SLEEPING = 5;
+}
+
+message PetState {
+  int32 hunger = 1;
+  int32 happiness = 2;
+  int32 energy = 3;
+  bool sleeping = 4;
+  PetMood mood = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  google.protobuf.Timestamp last_decay_at = 7;
+}
+
+message PetStateResponse {
+  int64 user_id = 1;
+  string display_name = 2;
+  int32 cookies = 3;
+  PetState pet_state = 4;
+}
+
+message GetPetStateRequest {}
+
+message FeedPetRequest {}
+
+message PlayWithPetRequest {}
+
+message PutPetToSleepRequest {}
+
+message WakePetRequest {}
+
+message WatchPetStateRequest {}

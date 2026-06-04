@@ -8,7 +8,7 @@ defineProps({
 </script>
 
 <template>
-  <aside class="student-pet" :data-mood="mood" aria-hidden="true">
+  <aside class="student-pet" aria-label="Student pet" :data-mood="mood" role="img">
     <div class="student-pet__shadow" />
     <div class="student-pet__body">
       <div class="student-pet__ear student-pet__ear--left" />
@@ -21,6 +21,15 @@ defineProps({
       <div class="student-pet__belly">
         <span class="student-pet__sparkle" />
       </div>
+      <span class="student-pet__cheer student-pet__cheer--left" />
+      <span class="student-pet__cheer student-pet__cheer--right" />
+      <span class="student-pet__snack" />
+      <span class="student-pet__tear student-pet__tear--left" />
+      <span class="student-pet__tear student-pet__tear--right" />
+      <span class="student-pet__growl student-pet__growl--left" />
+      <span class="student-pet__growl student-pet__growl--right" />
+      <span class="student-pet__sleep student-pet__sleep--one">Z</span>
+      <span class="student-pet__sleep student-pet__sleep--two">Z</span>
     </div>
   </aside>
 </template>
@@ -40,6 +49,36 @@ defineProps({
   z-index: 20;
 }
 
+.student-pet[data-mood='happy'] {
+  --pet-body: #8ae36f;
+  --pet-body-dark: #49b868;
+  --pet-belly: #fff2a8;
+}
+
+.student-pet[data-mood='eating'] {
+  --pet-body: #7ad7b7;
+  --pet-body-dark: #3fa488;
+  --pet-belly: #ffe0a6;
+}
+
+.student-pet[data-mood='hungry'] {
+  --pet-body: #e2c66f;
+  --pet-body-dark: #b89638;
+  --pet-belly: #fff4c1;
+}
+
+.student-pet[data-mood='sad'] {
+  --pet-body: #8bc3df;
+  --pet-body-dark: #4e8fb0;
+  --pet-belly: #d9f2ff;
+}
+
+.student-pet[data-mood='sleeping'] {
+  --pet-body: #a8a9d9;
+  --pet-body-dark: #7175b6;
+  --pet-belly: #eeebff;
+}
+
 .student-pet__body {
   animation: pet-idle-bob 2.8s ease-in-out infinite;
   background:
@@ -54,6 +93,22 @@ defineProps({
   top: 6%;
   transform-origin: center bottom;
   width: 78%;
+}
+
+.student-pet[data-mood='happy'] .student-pet__body {
+  animation: pet-happy-hop 0.72s ease-in-out infinite;
+}
+
+.student-pet[data-mood='eating'] .student-pet__body {
+  animation: pet-munch-bob 0.52s ease-in-out infinite;
+}
+
+.student-pet[data-mood='hungry'] .student-pet__body {
+  animation: pet-hungry-wobble 1s ease-in-out infinite;
+}
+
+.student-pet[data-mood='sleeping'] .student-pet__body {
+  animation: pet-sleep-breathe 2.4s ease-in-out infinite;
 }
 
 .student-pet__ear {
@@ -97,6 +152,12 @@ defineProps({
   width: 16%;
 }
 
+.student-pet[data-mood='happy'] .student-pet__eye {
+  animation: none;
+  height: 20%;
+  top: 18%;
+}
+
 .student-pet__eye--left {
   left: 14%;
 }
@@ -116,6 +177,35 @@ defineProps({
   left: 31%;
   position: absolute;
   width: 38%;
+}
+
+.student-pet[data-mood='happy'] .student-pet__smile {
+  bottom: 1%;
+  height: 40%;
+  left: 25%;
+  width: 50%;
+}
+
+.student-pet[data-mood='eating'] .student-pet__smile {
+  animation: pet-mouth-munch 0.52s ease-in-out infinite;
+  border-radius: 50%;
+  bottom: 4%;
+  height: 24%;
+  left: 37%;
+  width: 26%;
+}
+
+.student-pet[data-mood='sad'] .student-pet__smile {
+  border-bottom: 0;
+  border-top: 3px solid var(--pet-face);
+  border-radius: 999px 999px 0 0;
+  bottom: -4%;
+}
+
+.student-pet[data-mood='sleeping'] .student-pet__eye {
+  animation: none;
+  height: 4%;
+  top: 24%;
 }
 
 .student-pet__belly {
@@ -140,6 +230,134 @@ defineProps({
   width: 38%;
 }
 
+.student-pet[data-mood='happy'] .student-pet__sparkle {
+  animation: pet-sparkle-spin 0.9s linear infinite;
+}
+
+.student-pet__cheer {
+  background: #f0b22b;
+  border-radius: 999px;
+  height: 18%;
+  opacity: 0;
+  position: absolute;
+  top: -2%;
+  width: 5%;
+}
+
+.student-pet__cheer--left {
+  left: -4%;
+  transform: rotate(-28deg);
+}
+
+.student-pet__cheer--right {
+  right: -4%;
+  transform: rotate(28deg);
+}
+
+.student-pet[data-mood='happy'] .student-pet__cheer {
+  animation: pet-cheer-pop 0.72s ease-in-out infinite;
+  opacity: 1;
+}
+
+.student-pet__snack {
+  background:
+    radial-gradient(circle at 34% 34%, #7b4b24 0 8%, transparent 9%),
+    radial-gradient(circle at 66% 42%, #7b4b24 0 8%, transparent 9%),
+    radial-gradient(circle at 48% 68%, #7b4b24 0 7%, transparent 8%),
+    #d99a45;
+  border: 2px solid #7b4b24;
+  border-radius: 50%;
+  height: 22%;
+  opacity: 0;
+  position: absolute;
+  right: -10%;
+  top: 42%;
+  width: 22%;
+}
+
+.student-pet[data-mood='eating'] .student-pet__snack {
+  animation: pet-cookie-bite 1.3s ease-in-out infinite;
+  opacity: 1;
+}
+
+.student-pet__tear {
+  background: #d9f2ff;
+  border: 2px solid #27746f;
+  border-radius: 70% 70% 70% 10%;
+  height: 15%;
+  opacity: 0;
+  position: absolute;
+  top: 42%;
+  width: 8%;
+}
+
+.student-pet__tear--left {
+  left: 28%;
+  transform: rotate(-18deg);
+}
+
+.student-pet__tear--right {
+  right: 28%;
+  transform: rotate(18deg);
+}
+
+.student-pet[data-mood='sad'] .student-pet__tear {
+  animation: pet-tear-drop 1.4s ease-in-out infinite;
+  opacity: 1;
+}
+
+.student-pet__growl {
+  border: 2px solid #7b4b24;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0 0 999px 999px;
+  bottom: 22%;
+  height: 9%;
+  opacity: 0;
+  position: absolute;
+  width: 18%;
+}
+
+.student-pet__growl--left {
+  left: 13%;
+}
+
+.student-pet__growl--right {
+  right: 13%;
+}
+
+.student-pet[data-mood='hungry'] .student-pet__growl {
+  animation: pet-tummy-growl 0.8s ease-in-out infinite;
+  opacity: 1;
+}
+
+.student-pet__sleep {
+  color: #17212b;
+  font-size: 18px;
+  font-weight: 900;
+  opacity: 0;
+  position: absolute;
+  right: -12%;
+}
+
+.student-pet__sleep--one {
+  top: -8%;
+}
+
+.student-pet__sleep--two {
+  top: -24%;
+}
+
+.student-pet[data-mood='sleeping'] .student-pet__sleep {
+  animation: pet-sleep-float 1.9s ease-in-out infinite;
+  opacity: 1;
+}
+
+.student-pet[data-mood='sleeping'] .student-pet__sleep--two {
+  animation-delay: 0.5s;
+}
+
 .student-pet__shadow {
   animation: pet-shadow-pulse 2.8s ease-in-out infinite;
   background: rgba(23, 33, 43, 0.2);
@@ -152,6 +370,10 @@ defineProps({
   width: 62%;
 }
 
+.student-pet[data-mood='happy'] .student-pet__shadow {
+  animation: pet-happy-shadow 0.72s ease-in-out infinite;
+}
+
 @keyframes pet-idle-bob {
   0%,
   100% {
@@ -160,6 +382,50 @@ defineProps({
 
   50% {
     transform: translateY(-9px) rotate(1deg);
+  }
+}
+
+@keyframes pet-happy-hop {
+  0%,
+  100% {
+    transform: translateY(0) scaleX(1.04) scaleY(0.96) rotate(-3deg);
+  }
+
+  50% {
+    transform: translateY(-17px) scaleX(0.96) scaleY(1.05) rotate(3deg);
+  }
+}
+
+@keyframes pet-munch-bob {
+  0%,
+  100% {
+    transform: translateY(0) scaleX(1.02) rotate(-1deg);
+  }
+
+  50% {
+    transform: translateY(-5px) scaleX(0.98) rotate(1deg);
+  }
+}
+
+@keyframes pet-hungry-wobble {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+
+  50% {
+    transform: translateY(-3px) rotate(2deg);
+  }
+}
+
+@keyframes pet-sleep-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(0.97);
+  }
+
+  50% {
+    transform: translateY(-2px) scaleY(1.02);
   }
 }
 
@@ -176,6 +442,19 @@ defineProps({
   }
 }
 
+@keyframes pet-happy-shadow {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scaleX(1.08);
+  }
+
+  50% {
+    opacity: 0.24;
+    transform: scaleX(0.68);
+  }
+}
+
 @keyframes pet-blink {
   0%,
   88%,
@@ -186,6 +465,93 @@ defineProps({
 
   91% {
     transform: scaleY(0.12);
+  }
+}
+
+@keyframes pet-mouth-munch {
+  0%,
+  100% {
+    transform: scaleY(0.7);
+  }
+
+  50% {
+    transform: scaleY(1.15);
+  }
+}
+
+@keyframes pet-sparkle-spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pet-cookie-bite {
+  0% {
+    opacity: 0;
+    transform: translate(12px, 4px) scale(0.82);
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  72% {
+    opacity: 1;
+    transform: translate(-38px, -16px) scale(0.72);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-42px, -18px) scale(0.18);
+  }
+}
+
+@keyframes pet-cheer-pop {
+  0%,
+  100% {
+    transform: translateY(3px) scaleY(0.75);
+  }
+
+  50% {
+    transform: translateY(-8px) scaleY(1.15);
+  }
+}
+
+@keyframes pet-tear-drop {
+  0%,
+  100% {
+    transform: translateY(0) scale(0.7);
+  }
+
+  50% {
+    transform: translateY(10px) scale(1);
+  }
+}
+
+@keyframes pet-tummy-growl {
+  0%,
+  100% {
+    transform: scaleX(0.7);
+  }
+
+  50% {
+    transform: scaleX(1.15);
+  }
+}
+
+@keyframes pet-sleep-float {
+  0% {
+    opacity: 0;
+    transform: translate(0, 8px) scale(0.8);
+  }
+
+  35% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(8px, -10px) scale(1.1);
   }
 }
 
@@ -200,7 +566,13 @@ defineProps({
 
 @media (prefers-reduced-motion: reduce) {
   .student-pet__body,
+  .student-pet__cheer,
   .student-pet__eye,
+  .student-pet__growl,
+  .student-pet__snack,
+  .student-pet__sleep,
+  .student-pet__sparkle,
+  .student-pet__tear,
   .student-pet__shadow {
     animation: none;
   }
