@@ -1,25 +1,29 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import StudentPage from './features/student/StudentPage.vue'
+import TeacherPage from './features/teacher/TeacherPage.vue'
+import SplashPage from './pages/SplashPage.vue'
+import TeacherLoginPage from './pages/TeacherLoginPage.vue'
 
 export const routes = [
   {
     path: '/',
     name: 'splash',
-    component: {},
+    component: SplashPage,
   },
   {
     path: '/student',
     name: 'student',
-    component: {},
+    component: StudentPage,
   },
   {
     path: '/teacher/login',
     name: 'teacher-login',
-    component: {},
+    component: TeacherLoginPage,
   },
   {
     path: '/teacher',
     name: 'teacher',
-    component: {},
+    component: TeacherPage,
   },
   {
     path: '/:pathMatch(.*)*',
