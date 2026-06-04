@@ -328,6 +328,17 @@ h2 {
   justify-content: space-between;
 }
 
+.game-overlay {
+  align-items: center;
+  background: rgba(23, 33, 43, 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: fixed;
+  z-index: 100;
+}
+
 @media (max-width: 640px) {
   .app-container {
     padding: 12px;
@@ -344,5 +355,9 @@ h2 {
   .pet-actions {
     margin-left: 0;
     width: 100%;
+  }
+
+  .game-overlay {
+    padding: 10px;
   }
 }

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import FallingStarsGame from './components/pet/FallingStarsGame.vue'
 import StudentPet from './components/StudentPet.vue'
 import { useStudentPetStore } from './stores/studentPet'
 
@@ -40,6 +41,8 @@ const studentGradedAssignments = ref([])
 const studentAssignment = ref(null)
 const studentAnswer = ref('')
 const studentPetMood = ref('idle')
+const isFallingStarsVisible = ref(false)
+const lastFallingStarsResult = ref(null)
 const studentMessage = ref('')
 const studentError = ref('')
 const studentGradesError = ref('')
@@ -101,9 +104,7 @@ const hasStudentGradedAssignments = computed(() =>
   studentGradedAssignments.value.some((assignment) => gradedAttempts(assignment).length > 0),
 )
 const canFeedPet = computed(() => studentPetStore.cookies > 0 && studentPetStore.hunger < 100)
-const canPlayWithPet = computed(
-  () => !studentPetStore.sleeping && studentPetStore.happiness < 100 && studentPetStore.energy >= 10,
-)
+const canPlayWithPet = computed(() => !studentPetStore.sleeping && studentPetStore.energy >= 10)
 const canPutPetToSleep = computed(() => !studentPetStore.sleeping)
 const canWakePet = computed(() => studentPetStore.sleeping)
 const petAvatarMood = computed(() =>
@@ -245,11 +246,27 @@ async function feedStudentPet() {
   }
 }
 
-async function playWithStudentPet() {
-  const didPlay = await studentPetStore.playWithPet()
-  if (didPlay) {
+function playWithStudentPet() {
+  lastFallingStarsResult.value = null
+  isFallingStarsVisible.value = true
+}
+
+async function handleFallingStarsComplete(result) {
+  isFallingStarsVisible.value = false
+  const wasApplied = await studentPetStore.applyGameResult(result)
+  if (!wasApplied) {
+    return
+  }
+
+  lastFallingStarsResult.value = result
+
+  if (result.won) {
     celebrateStudentAnswer()
   }
+}
+
+function handleFallingStarsQuit() {
+  isFallingStarsVisible.value = false
 }
 
 async function putStudentPetToSleep() {
@@ -1044,7 +1061,6 @@ async function submitStudentAnswer() {
                       </v-btn>
                       <v-btn
                         :disabled="!canPlayWithPet"
-                        :loading="studentPetStore.isLoading"
                         color="success"
                         prepend-icon="mdi-controller"
                         variant="tonal"
@@ -1088,6 +1104,21 @@ async function submitStudentAnswer() {
                     variant="tonal"
                   >
                     Your pet is full.
+                  </v-alert>
+
+                  <v-alert
+                    v-if="lastFallingStarsResult"
+                    :type="lastFallingStarsResult.won ? 'success' : 'info'"
+                    variant="tonal"
+                  >
+                    {{
+                      lastFallingStarsResult.won
+                        ? 'Great job! Your pet loved playing with the falling stars.'
+                        : 'Almost! Catch more stars next time to make your pet happier.'
+                    }}
+                    Final score: {{ lastFallingStarsResult.score }} / 10.
+                    Happiness gained: +{{ lastFallingStarsResult.happinessDelta }}.
+                    Energy spent: {{ lastFallingStarsResult.energyDelta }}.
                   </v-alert>
 
                   <div class="pet-stat-list">
@@ -1390,6 +1421,14 @@ async function submitStudentAnswer() {
             </section>
           </v-card-text>
         </v-card>
+
+        <div v-if="isFallingStarsVisible" class="game-overlay" role="dialog" aria-modal="true">
+          <FallingStarsGame
+            @complete="handleFallingStarsComplete"
+            @quit="handleFallingStarsQuit"
+          />
+        </div>
+
         <StudentPet v-if="routeName === 'student'" :mood="petAvatarMood" />
       </v-container>
     </v-main>

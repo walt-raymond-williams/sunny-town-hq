@@ -16,6 +16,8 @@ const (
 	petDailyDecayPoints            = 144.0
 	petSleepRecoveryDuration       = 10 * time.Minute
 	petDecayTickInterval           = 5 * time.Minute
+	petGameTargetScore             = 10
+	petGameEnergyCost              = 5
 )
 
 type petService struct {
@@ -45,6 +47,15 @@ func (service *petService) FeedPet(ctx context.Context, _ *connect.Request[petv1
 
 func (service *petService) PlayWithPet(ctx context.Context, _ *connect.Request[petv1.PlayWithPetRequest]) (*connect.Response[petv1.PetStateResponse], error) {
 	profile, err := service.app.playWithStudentPet(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	return connect.NewResponse(profile.toProto()), nil
+}
+
+func (service *petService) ApplyGameResult(ctx context.Context, request *connect.Request[petv1.ApplyGameResultRequest]) (*connect.Response[petv1.PetStateResponse], error) {
+	profile, err := service.app.applyGameResult(ctx, int(request.Msg.GetScore()))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -283,6 +294,50 @@ func (app *app) playWithStudentPet(ctx context.Context) (studentProfileResponse,
 				and not sleeping
 				and energy >= 10
 		`,
+		petUserID,
+	)
+	if err != nil {
+		return studentProfileResponse{}, err
+	}
+
+	return app.loadStudentProfile(ctx)
+}
+
+func (app *app) applyGameResult(ctx context.Context, score int) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx); err != nil {
+		return studentProfileResponse{}, err
+	}
+
+	if score < 0 {
+		score = 0
+	}
+
+	won := score >= petGameTargetScore
+	happinessDelta := score
+	if won {
+		happinessDelta = score * 2
+		if happinessDelta > 20 {
+			happinessDelta = 20
+		}
+	} else if happinessDelta > 8 {
+		happinessDelta = 8
+	}
+
+	_, err := app.db.Exec(
+		ctx,
+		`
+			update pet_state
+			set happiness = least(happiness + $1, 100),
+				energy = greatest(energy - $2, 0),
+				sleeping = case when energy <= $2 then true else false end,
+				sleep_started_at = case when energy <= $2 then now() else null end,
+				sleep_started_energy = case when energy <= $2 then 0 else null end,
+				updated_at = now()
+			where user_id = $3
+				and not sleeping
+		`,
+		happinessDelta,
+		petGameEnergyCost,
 		petUserID,
 	)
 	if err != nil {

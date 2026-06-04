@@ -39,6 +39,9 @@ const (
 	PetServiceFeedPetProcedure = "/hq.pet.v1.PetService/FeedPet"
 	// PetServicePlayWithPetProcedure is the fully-qualified name of the PetService's PlayWithPet RPC.
 	PetServicePlayWithPetProcedure = "/hq.pet.v1.PetService/PlayWithPet"
+	// PetServiceApplyGameResultProcedure is the fully-qualified name of the PetService's
+	// ApplyGameResult RPC.
+	PetServiceApplyGameResultProcedure = "/hq.pet.v1.PetService/ApplyGameResult"
 	// PetServicePutPetToSleepProcedure is the fully-qualified name of the PetService's PutPetToSleep
 	// RPC.
 	PetServicePutPetToSleepProcedure = "/hq.pet.v1.PetService/PutPetToSleep"
@@ -54,6 +57,7 @@ type PetServiceClient interface {
 	GetPetState(context.Context, *connect.Request[v1.GetPetStateRequest]) (*connect.Response[v1.PetStateResponse], error)
 	FeedPet(context.Context, *connect.Request[v1.FeedPetRequest]) (*connect.Response[v1.PetStateResponse], error)
 	PlayWithPet(context.Context, *connect.Request[v1.PlayWithPetRequest]) (*connect.Response[v1.PetStateResponse], error)
+	ApplyGameResult(context.Context, *connect.Request[v1.ApplyGameResultRequest]) (*connect.Response[v1.PetStateResponse], error)
 	PutPetToSleep(context.Context, *connect.Request[v1.PutPetToSleepRequest]) (*connect.Response[v1.PetStateResponse], error)
 	WakePet(context.Context, *connect.Request[v1.WakePetRequest]) (*connect.Response[v1.PetStateResponse], error)
 	WatchPetState(context.Context, *connect.Request[v1.WatchPetStateRequest]) (*connect.ServerStreamForClient[v1.PetStateResponse], error)
@@ -88,6 +92,12 @@ func NewPetServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(petServiceMethods.ByName("PlayWithPet")),
 			connect.WithClientOptions(opts...),
 		),
+		applyGameResult: connect.NewClient[v1.ApplyGameResultRequest, v1.PetStateResponse](
+			httpClient,
+			baseURL+PetServiceApplyGameResultProcedure,
+			connect.WithSchema(petServiceMethods.ByName("ApplyGameResult")),
+			connect.WithClientOptions(opts...),
+		),
 		putPetToSleep: connect.NewClient[v1.PutPetToSleepRequest, v1.PetStateResponse](
 			httpClient,
 			baseURL+PetServicePutPetToSleepProcedure,
@@ -111,12 +121,13 @@ func NewPetServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 
 // petServiceClient implements PetServiceClient.
 type petServiceClient struct {
-	getPetState   *connect.Client[v1.GetPetStateRequest, v1.PetStateResponse]
-	feedPet       *connect.Client[v1.FeedPetRequest, v1.PetStateResponse]
-	playWithPet   *connect.Client[v1.PlayWithPetRequest, v1.PetStateResponse]
-	putPetToSleep *connect.Client[v1.PutPetToSleepRequest, v1.PetStateResponse]
-	wakePet       *connect.Client[v1.WakePetRequest, v1.PetStateResponse]
-	watchPetState *connect.Client[v1.WatchPetStateRequest, v1.PetStateResponse]
+	getPetState     *connect.Client[v1.GetPetStateRequest, v1.PetStateResponse]
+	feedPet         *connect.Client[v1.FeedPetRequest, v1.PetStateResponse]
+	playWithPet     *connect.Client[v1.PlayWithPetRequest, v1.PetStateResponse]
+	applyGameResult *connect.Client[v1.ApplyGameResultRequest, v1.PetStateResponse]
+	putPetToSleep   *connect.Client[v1.PutPetToSleepRequest, v1.PetStateResponse]
+	wakePet         *connect.Client[v1.WakePetRequest, v1.PetStateResponse]
+	watchPetState   *connect.Client[v1.WatchPetStateRequest, v1.PetStateResponse]
 }
 
 // GetPetState calls hq.pet.v1.PetService.GetPetState.
@@ -132,6 +143,11 @@ func (c *petServiceClient) FeedPet(ctx context.Context, req *connect.Request[v1.
 // PlayWithPet calls hq.pet.v1.PetService.PlayWithPet.
 func (c *petServiceClient) PlayWithPet(ctx context.Context, req *connect.Request[v1.PlayWithPetRequest]) (*connect.Response[v1.PetStateResponse], error) {
 	return c.playWithPet.CallUnary(ctx, req)
+}
+
+// ApplyGameResult calls hq.pet.v1.PetService.ApplyGameResult.
+func (c *petServiceClient) ApplyGameResult(ctx context.Context, req *connect.Request[v1.ApplyGameResultRequest]) (*connect.Response[v1.PetStateResponse], error) {
+	return c.applyGameResult.CallUnary(ctx, req)
 }
 
 // PutPetToSleep calls hq.pet.v1.PetService.PutPetToSleep.
@@ -154,6 +170,7 @@ type PetServiceHandler interface {
 	GetPetState(context.Context, *connect.Request[v1.GetPetStateRequest]) (*connect.Response[v1.PetStateResponse], error)
 	FeedPet(context.Context, *connect.Request[v1.FeedPetRequest]) (*connect.Response[v1.PetStateResponse], error)
 	PlayWithPet(context.Context, *connect.Request[v1.PlayWithPetRequest]) (*connect.Response[v1.PetStateResponse], error)
+	ApplyGameResult(context.Context, *connect.Request[v1.ApplyGameResultRequest]) (*connect.Response[v1.PetStateResponse], error)
 	PutPetToSleep(context.Context, *connect.Request[v1.PutPetToSleepRequest]) (*connect.Response[v1.PetStateResponse], error)
 	WakePet(context.Context, *connect.Request[v1.WakePetRequest]) (*connect.Response[v1.PetStateResponse], error)
 	WatchPetState(context.Context, *connect.Request[v1.WatchPetStateRequest], *connect.ServerStream[v1.PetStateResponse]) error
@@ -184,6 +201,12 @@ func NewPetServiceHandler(svc PetServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(petServiceMethods.ByName("PlayWithPet")),
 		connect.WithHandlerOptions(opts...),
 	)
+	petServiceApplyGameResultHandler := connect.NewUnaryHandler(
+		PetServiceApplyGameResultProcedure,
+		svc.ApplyGameResult,
+		connect.WithSchema(petServiceMethods.ByName("ApplyGameResult")),
+		connect.WithHandlerOptions(opts...),
+	)
 	petServicePutPetToSleepHandler := connect.NewUnaryHandler(
 		PetServicePutPetToSleepProcedure,
 		svc.PutPetToSleep,
@@ -210,6 +233,8 @@ func NewPetServiceHandler(svc PetServiceHandler, opts ...connect.HandlerOption) 
 			petServiceFeedPetHandler.ServeHTTP(w, r)
 		case PetServicePlayWithPetProcedure:
 			petServicePlayWithPetHandler.ServeHTTP(w, r)
+		case PetServiceApplyGameResultProcedure:
+			petServiceApplyGameResultHandler.ServeHTTP(w, r)
 		case PetServicePutPetToSleepProcedure:
 			petServicePutPetToSleepHandler.ServeHTTP(w, r)
 		case PetServiceWakePetProcedure:
@@ -235,6 +260,10 @@ func (UnimplementedPetServiceHandler) FeedPet(context.Context, *connect.Request[
 
 func (UnimplementedPetServiceHandler) PlayWithPet(context.Context, *connect.Request[v1.PlayWithPetRequest]) (*connect.Response[v1.PetStateResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hq.pet.v1.PetService.PlayWithPet is not implemented"))
+}
+
+func (UnimplementedPetServiceHandler) ApplyGameResult(context.Context, *connect.Request[v1.ApplyGameResultRequest]) (*connect.Response[v1.PetStateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("hq.pet.v1.PetService.ApplyGameResult is not implemented"))
 }
 
 func (UnimplementedPetServiceHandler) PutPetToSleep(context.Context, *connect.Request[v1.PutPetToSleepRequest]) (*connect.Response[v1.PetStateResponse], error) {

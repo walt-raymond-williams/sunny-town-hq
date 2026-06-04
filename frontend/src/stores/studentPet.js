@@ -3,6 +3,7 @@ import { create } from '@bufbuild/protobuf'
 import { createClient } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import {
+  ApplyGameResultRequestSchema,
   FeedPetRequestSchema,
   GetPetStateRequestSchema,
   PetMood,
@@ -130,6 +131,25 @@ export const useStudentPetStore = defineStore('studentPet', {
 
       try {
         const body = await petClient.playWithPet(create(PlayWithPetRequestSchema))
+        this.applyProfile(body)
+        return true
+      } catch (error) {
+        this.error = error.message
+        return false
+      } finally {
+        this.isLoading = false
+      }
+    },
+    async applyGameResult(result) {
+      this.isLoading = true
+      this.error = ''
+
+      try {
+        const body = await petClient.applyGameResult(
+          create(ApplyGameResultRequestSchema, {
+            score: result.score,
+          }),
+        )
         this.applyProfile(body)
         return true
       } catch (error) {

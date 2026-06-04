@@ -10,6 +10,7 @@ service PetService {
   rpc GetPetState(GetPetStateRequest) returns (PetStateResponse);
   rpc FeedPet(FeedPetRequest) returns (PetStateResponse);
   rpc PlayWithPet(PlayWithPetRequest) returns (PetStateResponse);
+  rpc ApplyGameResult(ApplyGameResultRequest) returns (PetStateResponse);
   rpc PutPetToSleep(PutPetToSleepRequest) returns (PetStateResponse);
   rpc WakePet(WakePetRequest) returns (PetStateResponse);
   rpc WatchPetState(WatchPetStateRequest) returns (stream PetStateResponse);
@@ -46,6 +47,10 @@ message GetPetStateRequest {}
 message FeedPetRequest {}
 
 message PlayWithPetRequest {}
+
+message ApplyGameResultRequest {
+  int32 score = 1;
+}
 
 message PutPetToSleepRequest {}
 

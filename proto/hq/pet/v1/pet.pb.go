@@ -348,6 +348,50 @@ func (*PlayWithPetRequest) Descriptor() ([]byte, []int) {
 	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{4}
 }
 
+type ApplyGameResultRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Score         int32                  `protobuf:"varint,1,opt,name=score,proto3" json:"score,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApplyGameResultRequest) Reset() {
+	*x = ApplyGameResultRequest{}
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApplyGameResultRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApplyGameResultRequest) ProtoMessage() {}
+
+func (x *ApplyGameResultRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApplyGameResultRequest.ProtoReflect.Descriptor instead.
+func (*ApplyGameResultRequest) Descriptor() ([]byte, []int) {
+	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ApplyGameResultRequest) GetScore() int32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
 type PutPetToSleepRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -356,7 +400,7 @@ type PutPetToSleepRequest struct {
 
 func (x *PutPetToSleepRequest) Reset() {
 	*x = PutPetToSleepRequest{}
-	mi := &file_hq_pet_v1_pet_proto_msgTypes[5]
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -368,7 +412,7 @@ func (x *PutPetToSleepRequest) String() string {
 func (*PutPetToSleepRequest) ProtoMessage() {}
 
 func (x *PutPetToSleepRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hq_pet_v1_pet_proto_msgTypes[5]
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -381,7 +425,7 @@ func (x *PutPetToSleepRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutPetToSleepRequest.ProtoReflect.Descriptor instead.
 func (*PutPetToSleepRequest) Descriptor() ([]byte, []int) {
-	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{5}
+	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{6}
 }
 
 type WakePetRequest struct {
@@ -392,7 +436,7 @@ type WakePetRequest struct {
 
 func (x *WakePetRequest) Reset() {
 	*x = WakePetRequest{}
-	mi := &file_hq_pet_v1_pet_proto_msgTypes[6]
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -404,7 +448,7 @@ func (x *WakePetRequest) String() string {
 func (*WakePetRequest) ProtoMessage() {}
 
 func (x *WakePetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hq_pet_v1_pet_proto_msgTypes[6]
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -417,7 +461,7 @@ func (x *WakePetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WakePetRequest.ProtoReflect.Descriptor instead.
 func (*WakePetRequest) Descriptor() ([]byte, []int) {
-	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{6}
+	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{7}
 }
 
 type WatchPetStateRequest struct {
@@ -428,7 +472,7 @@ type WatchPetStateRequest struct {
 
 func (x *WatchPetStateRequest) Reset() {
 	*x = WatchPetStateRequest{}
-	mi := &file_hq_pet_v1_pet_proto_msgTypes[7]
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -440,7 +484,7 @@ func (x *WatchPetStateRequest) String() string {
 func (*WatchPetStateRequest) ProtoMessage() {}
 
 func (x *WatchPetStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_hq_pet_v1_pet_proto_msgTypes[7]
+	mi := &file_hq_pet_v1_pet_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -453,7 +497,7 @@ func (x *WatchPetStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchPetStateRequest.ProtoReflect.Descriptor instead.
 func (*WatchPetStateRequest) Descriptor() ([]byte, []int) {
-	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{7}
+	return file_hq_pet_v1_pet_proto_rawDescGZIP(), []int{8}
 }
 
 var File_hq_pet_v1_pet_proto protoreflect.FileDescriptor
@@ -477,7 +521,9 @@ const file_hq_pet_v1_pet_proto_rawDesc = "" +
 	"\tpet_state\x18\x04 \x01(\v2\x13.hq.pet.v1.PetStateR\bpetState\"\x14\n" +
 	"\x12GetPetStateRequest\"\x10\n" +
 	"\x0eFeedPetRequest\"\x14\n" +
-	"\x12PlayWithPetRequest\"\x16\n" +
+	"\x12PlayWithPetRequest\".\n" +
+	"\x16ApplyGameResultRequest\x12\x14\n" +
+	"\x05score\x18\x01 \x01(\x05R\x05score\"\x16\n" +
 	"\x14PutPetToSleepRequest\"\x10\n" +
 	"\x0eWakePetRequest\"\x16\n" +
 	"\x14WatchPetStateRequest*\x88\x01\n" +
@@ -487,12 +533,13 @@ const file_hq_pet_v1_pet_proto_rawDesc = "" +
 	"\x0ePET_MOOD_HAPPY\x10\x02\x12\x13\n" +
 	"\x0fPET_MOOD_HUNGRY\x10\x03\x12\x10\n" +
 	"\fPET_MOOD_SAD\x10\x04\x12\x15\n" +
-	"\x11PET_MOOD_SLEEPING\x10\x052\xc8\x03\n" +
+	"\x11PET_MOOD_SLEEPING\x10\x052\x9b\x04\n" +
 	"\n" +
 	"PetService\x12I\n" +
 	"\vGetPetState\x12\x1d.hq.pet.v1.GetPetStateRequest\x1a\x1b.hq.pet.v1.PetStateResponse\x12A\n" +
 	"\aFeedPet\x12\x19.hq.pet.v1.FeedPetRequest\x1a\x1b.hq.pet.v1.PetStateResponse\x12I\n" +
-	"\vPlayWithPet\x12\x1d.hq.pet.v1.PlayWithPetRequest\x1a\x1b.hq.pet.v1.PetStateResponse\x12M\n" +
+	"\vPlayWithPet\x12\x1d.hq.pet.v1.PlayWithPetRequest\x1a\x1b.hq.pet.v1.PetStateResponse\x12Q\n" +
+	"\x0fApplyGameResult\x12!.hq.pet.v1.ApplyGameResultRequest\x1a\x1b.hq.pet.v1.PetStateResponse\x12M\n" +
 	"\rPutPetToSleep\x12\x1f.hq.pet.v1.PutPetToSleepRequest\x1a\x1b.hq.pet.v1.PetStateResponse\x12A\n" +
 	"\aWakePet\x12\x19.hq.pet.v1.WakePetRequest\x1a\x1b.hq.pet.v1.PetStateResponse\x12O\n" +
 	"\rWatchPetState\x12\x1f.hq.pet.v1.WatchPetStateRequest\x1a\x1b.hq.pet.v1.PetStateResponse0\x01B\x1aZ\x18hq/proto/hq/pet/v1;petv1b\x06proto3"
@@ -510,38 +557,41 @@ func file_hq_pet_v1_pet_proto_rawDescGZIP() []byte {
 }
 
 var file_hq_pet_v1_pet_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_hq_pet_v1_pet_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_hq_pet_v1_pet_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_hq_pet_v1_pet_proto_goTypes = []any{
-	(PetMood)(0),                  // 0: hq.pet.v1.PetMood
-	(*PetState)(nil),              // 1: hq.pet.v1.PetState
-	(*PetStateResponse)(nil),      // 2: hq.pet.v1.PetStateResponse
-	(*GetPetStateRequest)(nil),    // 3: hq.pet.v1.GetPetStateRequest
-	(*FeedPetRequest)(nil),        // 4: hq.pet.v1.FeedPetRequest
-	(*PlayWithPetRequest)(nil),    // 5: hq.pet.v1.PlayWithPetRequest
-	(*PutPetToSleepRequest)(nil),  // 6: hq.pet.v1.PutPetToSleepRequest
-	(*WakePetRequest)(nil),        // 7: hq.pet.v1.WakePetRequest
-	(*WatchPetStateRequest)(nil),  // 8: hq.pet.v1.WatchPetStateRequest
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(PetMood)(0),                   // 0: hq.pet.v1.PetMood
+	(*PetState)(nil),               // 1: hq.pet.v1.PetState
+	(*PetStateResponse)(nil),       // 2: hq.pet.v1.PetStateResponse
+	(*GetPetStateRequest)(nil),     // 3: hq.pet.v1.GetPetStateRequest
+	(*FeedPetRequest)(nil),         // 4: hq.pet.v1.FeedPetRequest
+	(*PlayWithPetRequest)(nil),     // 5: hq.pet.v1.PlayWithPetRequest
+	(*ApplyGameResultRequest)(nil), // 6: hq.pet.v1.ApplyGameResultRequest
+	(*PutPetToSleepRequest)(nil),   // 7: hq.pet.v1.PutPetToSleepRequest
+	(*WakePetRequest)(nil),         // 8: hq.pet.v1.WakePetRequest
+	(*WatchPetStateRequest)(nil),   // 9: hq.pet.v1.WatchPetStateRequest
+	(*timestamppb.Timestamp)(nil),  // 10: google.protobuf.Timestamp
 }
 var file_hq_pet_v1_pet_proto_depIdxs = []int32{
 	0,  // 0: hq.pet.v1.PetState.mood:type_name -> hq.pet.v1.PetMood
-	9,  // 1: hq.pet.v1.PetState.updated_at:type_name -> google.protobuf.Timestamp
-	9,  // 2: hq.pet.v1.PetState.last_decay_at:type_name -> google.protobuf.Timestamp
+	10, // 1: hq.pet.v1.PetState.updated_at:type_name -> google.protobuf.Timestamp
+	10, // 2: hq.pet.v1.PetState.last_decay_at:type_name -> google.protobuf.Timestamp
 	1,  // 3: hq.pet.v1.PetStateResponse.pet_state:type_name -> hq.pet.v1.PetState
 	3,  // 4: hq.pet.v1.PetService.GetPetState:input_type -> hq.pet.v1.GetPetStateRequest
 	4,  // 5: hq.pet.v1.PetService.FeedPet:input_type -> hq.pet.v1.FeedPetRequest
 	5,  // 6: hq.pet.v1.PetService.PlayWithPet:input_type -> hq.pet.v1.PlayWithPetRequest
-	6,  // 7: hq.pet.v1.PetService.PutPetToSleep:input_type -> hq.pet.v1.PutPetToSleepRequest
-	7,  // 8: hq.pet.v1.PetService.WakePet:input_type -> hq.pet.v1.WakePetRequest
-	8,  // 9: hq.pet.v1.PetService.WatchPetState:input_type -> hq.pet.v1.WatchPetStateRequest
-	2,  // 10: hq.pet.v1.PetService.GetPetState:output_type -> hq.pet.v1.PetStateResponse
-	2,  // 11: hq.pet.v1.PetService.FeedPet:output_type -> hq.pet.v1.PetStateResponse
-	2,  // 12: hq.pet.v1.PetService.PlayWithPet:output_type -> hq.pet.v1.PetStateResponse
-	2,  // 13: hq.pet.v1.PetService.PutPetToSleep:output_type -> hq.pet.v1.PetStateResponse
-	2,  // 14: hq.pet.v1.PetService.WakePet:output_type -> hq.pet.v1.PetStateResponse
-	2,  // 15: hq.pet.v1.PetService.WatchPetState:output_type -> hq.pet.v1.PetStateResponse
-	10, // [10:16] is the sub-list for method output_type
-	4,  // [4:10] is the sub-list for method input_type
+	6,  // 7: hq.pet.v1.PetService.ApplyGameResult:input_type -> hq.pet.v1.ApplyGameResultRequest
+	7,  // 8: hq.pet.v1.PetService.PutPetToSleep:input_type -> hq.pet.v1.PutPetToSleepRequest
+	8,  // 9: hq.pet.v1.PetService.WakePet:input_type -> hq.pet.v1.WakePetRequest
+	9,  // 10: hq.pet.v1.PetService.WatchPetState:input_type -> hq.pet.v1.WatchPetStateRequest
+	2,  // 11: hq.pet.v1.PetService.GetPetState:output_type -> hq.pet.v1.PetStateResponse
+	2,  // 12: hq.pet.v1.PetService.FeedPet:output_type -> hq.pet.v1.PetStateResponse
+	2,  // 13: hq.pet.v1.PetService.PlayWithPet:output_type -> hq.pet.v1.PetStateResponse
+	2,  // 14: hq.pet.v1.PetService.ApplyGameResult:output_type -> hq.pet.v1.PetStateResponse
+	2,  // 15: hq.pet.v1.PetService.PutPetToSleep:output_type -> hq.pet.v1.PetStateResponse
+	2,  // 16: hq.pet.v1.PetService.WakePet:output_type -> hq.pet.v1.PetStateResponse
+	2,  // 17: hq.pet.v1.PetService.WatchPetState:output_type -> hq.pet.v1.PetStateResponse
+	11, // [11:18] is the sub-list for method output_type
+	4,  // [4:11] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
 	4,  // [4:4] is the sub-list for extension extendee
 	0,  // [0:4] is the sub-list for field type_name
@@ -558,7 +608,7 @@ func file_hq_pet_v1_pet_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_hq_pet_v1_pet_proto_rawDesc), len(file_hq_pet_v1_pet_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

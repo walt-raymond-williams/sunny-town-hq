@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file hq/pet/v1/pet.proto.
  */
 export const file_hq_pet_v1_pet: GenFile = /*@__PURE__*/
-  fileDesc("ChNocS9wZXQvdjEvcGV0LnByb3RvEglocS5wZXQudjEi1AEKCFBldFN0YXRlEg4KBmh1bmdlchgBIAEoBRIRCgloYXBwaW5lc3MYAiABKAUSDgoGZW5lcmd5GAMgASgFEhAKCHNsZWVwaW5nGAQgASgIEiAKBG1vb2QYBSABKA4yEi5ocS5wZXQudjEuUGV0TW9vZBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIxCg1sYXN0X2RlY2F5X2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJyChBQZXRTdGF0ZVJlc3BvbnNlEg8KB3VzZXJfaWQYASABKAMSFAoMZGlzcGxheV9uYW1lGAIgASgJEg8KB2Nvb2tpZXMYAyABKAUSJgoJcGV0X3N0YXRlGAQgASgLMhMuaHEucGV0LnYxLlBldFN0YXRlIhQKEkdldFBldFN0YXRlUmVxdWVzdCIQCg5GZWVkUGV0UmVxdWVzdCIUChJQbGF5V2l0aFBldFJlcXVlc3QiFgoUUHV0UGV0VG9TbGVlcFJlcXVlc3QiEAoOV2FrZVBldFJlcXVlc3QiFgoUV2F0Y2hQZXRTdGF0ZVJlcXVlc3QqiAEKB1BldE1vb2QSGAoUUEVUX01PT0RfVU5TUEVDSUZJRUQQABIRCg1QRVRfTU9PRF9JRExFEAESEgoOUEVUX01PT0RfSEFQUFkQAhITCg9QRVRfTU9PRF9IVU5HUlkQAxIQCgxQRVRfTU9PRF9TQUQQBBIVChFQRVRfTU9PRF9TTEVFUElORxAFMsgDCgpQZXRTZXJ2aWNlEkkKC0dldFBldFN0YXRlEh0uaHEucGV0LnYxLkdldFBldFN0YXRlUmVxdWVzdBobLmhxLnBldC52MS5QZXRTdGF0ZVJlc3BvbnNlEkEKB0ZlZWRQZXQSGS5ocS5wZXQudjEuRmVlZFBldFJlcXVlc3QaGy5ocS5wZXQudjEuUGV0U3RhdGVSZXNwb25zZRJJCgtQbGF5V2l0aFBldBIdLmhxLnBldC52MS5QbGF5V2l0aFBldFJlcXVlc3QaGy5ocS5wZXQudjEuUGV0U3RhdGVSZXNwb25zZRJNCg1QdXRQZXRUb1NsZWVwEh8uaHEucGV0LnYxLlB1dFBldFRvU2xlZXBSZXF1ZXN0GhsuaHEucGV0LnYxLlBldFN0YXRlUmVzcG9uc2USQQoHV2FrZVBldBIZLmhxLnBldC52MS5XYWtlUGV0UmVxdWVzdBobLmhxLnBldC52MS5QZXRTdGF0ZVJlc3BvbnNlEk8KDVdhdGNoUGV0U3RhdGUSHy5ocS5wZXQudjEuV2F0Y2hQZXRTdGF0ZVJlcXVlc3QaGy5ocS5wZXQudjEuUGV0U3RhdGVSZXNwb25zZTABQhpaGGhxL3Byb3RvL2hxL3BldC92MTtwZXR2MWIGcHJvdG8z", [file_google_protobuf_timestamp]);
+  fileDesc("ChNocS9wZXQvdjEvcGV0LnByb3RvEglocS5wZXQudjEi1AEKCFBldFN0YXRlEg4KBmh1bmdlchgBIAEoBRIRCgloYXBwaW5lc3MYAiABKAUSDgoGZW5lcmd5GAMgASgFEhAKCHNsZWVwaW5nGAQgASgIEiAKBG1vb2QYBSABKA4yEi5ocS5wZXQudjEuUGV0TW9vZBIuCgp1cGRhdGVkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIxCg1sYXN0X2RlY2F5X2F0GAcgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJyChBQZXRTdGF0ZVJlc3BvbnNlEg8KB3VzZXJfaWQYASABKAMSFAoMZGlzcGxheV9uYW1lGAIgASgJEg8KB2Nvb2tpZXMYAyABKAUSJgoJcGV0X3N0YXRlGAQgASgLMhMuaHEucGV0LnYxLlBldFN0YXRlIhQKEkdldFBldFN0YXRlUmVxdWVzdCIQCg5GZWVkUGV0UmVxdWVzdCIUChJQbGF5V2l0aFBldFJlcXVlc3QiJwoWQXBwbHlHYW1lUmVzdWx0UmVxdWVzdBINCgVzY29yZRgBIAEoBSIWChRQdXRQZXRUb1NsZWVwUmVxdWVzdCIQCg5XYWtlUGV0UmVxdWVzdCIWChRXYXRjaFBldFN0YXRlUmVxdWVzdCqIAQoHUGV0TW9vZBIYChRQRVRfTU9PRF9VTlNQRUNJRklFRBAAEhEKDVBFVF9NT09EX0lETEUQARISCg5QRVRfTU9PRF9IQVBQWRACEhMKD1BFVF9NT09EX0hVTkdSWRADEhAKDFBFVF9NT09EX1NBRBAEEhUKEVBFVF9NT09EX1NMRUVQSU5HEAUymwQKClBldFNlcnZpY2USSQoLR2V0UGV0U3RhdGUSHS5ocS5wZXQudjEuR2V0UGV0U3RhdGVSZXF1ZXN0GhsuaHEucGV0LnYxLlBldFN0YXRlUmVzcG9uc2USQQoHRmVlZFBldBIZLmhxLnBldC52MS5GZWVkUGV0UmVxdWVzdBobLmhxLnBldC52MS5QZXRTdGF0ZVJlc3BvbnNlEkkKC1BsYXlXaXRoUGV0Eh0uaHEucGV0LnYxLlBsYXlXaXRoUGV0UmVxdWVzdBobLmhxLnBldC52MS5QZXRTdGF0ZVJlc3BvbnNlElEKD0FwcGx5R2FtZVJlc3VsdBIhLmhxLnBldC52MS5BcHBseUdhbWVSZXN1bHRSZXF1ZXN0GhsuaHEucGV0LnYxLlBldFN0YXRlUmVzcG9uc2USTQoNUHV0UGV0VG9TbGVlcBIfLmhxLnBldC52MS5QdXRQZXRUb1NsZWVwUmVxdWVzdBobLmhxLnBldC52MS5QZXRTdGF0ZVJlc3BvbnNlEkEKB1dha2VQZXQSGS5ocS5wZXQudjEuV2FrZVBldFJlcXVlc3QaGy5ocS5wZXQudjEuUGV0U3RhdGVSZXNwb25zZRJPCg1XYXRjaFBldFN0YXRlEh8uaHEucGV0LnYxLldhdGNoUGV0U3RhdGVSZXF1ZXN0GhsuaHEucGV0LnYxLlBldFN0YXRlUmVzcG9uc2UwAUIaWhhocS9wcm90by9ocS9wZXQvdjE7cGV0djFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message hq.pet.v1.PetState
@@ -133,6 +133,23 @@ export const PlayWithPetRequestSchema: GenMessage<PlayWithPetRequest> = /*@__PUR
   messageDesc(file_hq_pet_v1_pet, 4);
 
 /**
+ * @generated from message hq.pet.v1.ApplyGameResultRequest
+ */
+export type ApplyGameResultRequest = Message<"hq.pet.v1.ApplyGameResultRequest"> & {
+  /**
+   * @generated from field: int32 score = 1;
+   */
+  score: number;
+};
+
+/**
+ * Describes the message hq.pet.v1.ApplyGameResultRequest.
+ * Use `create(ApplyGameResultRequestSchema)` to create a new message.
+ */
+export const ApplyGameResultRequestSchema: GenMessage<ApplyGameResultRequest> = /*@__PURE__*/
+  messageDesc(file_hq_pet_v1_pet, 5);
+
+/**
  * @generated from message hq.pet.v1.PutPetToSleepRequest
  */
 export type PutPetToSleepRequest = Message<"hq.pet.v1.PutPetToSleepRequest"> & {
@@ -143,7 +160,7 @@ export type PutPetToSleepRequest = Message<"hq.pet.v1.PutPetToSleepRequest"> & {
  * Use `create(PutPetToSleepRequestSchema)` to create a new message.
  */
 export const PutPetToSleepRequestSchema: GenMessage<PutPetToSleepRequest> = /*@__PURE__*/
-  messageDesc(file_hq_pet_v1_pet, 5);
+  messageDesc(file_hq_pet_v1_pet, 6);
 
 /**
  * @generated from message hq.pet.v1.WakePetRequest
@@ -156,7 +173,7 @@ export type WakePetRequest = Message<"hq.pet.v1.WakePetRequest"> & {
  * Use `create(WakePetRequestSchema)` to create a new message.
  */
 export const WakePetRequestSchema: GenMessage<WakePetRequest> = /*@__PURE__*/
-  messageDesc(file_hq_pet_v1_pet, 6);
+  messageDesc(file_hq_pet_v1_pet, 7);
 
 /**
  * @generated from message hq.pet.v1.WatchPetStateRequest
@@ -169,7 +186,7 @@ export type WatchPetStateRequest = Message<"hq.pet.v1.WatchPetStateRequest"> & {
  * Use `create(WatchPetStateRequestSchema)` to create a new message.
  */
 export const WatchPetStateRequestSchema: GenMessage<WatchPetStateRequest> = /*@__PURE__*/
-  messageDesc(file_hq_pet_v1_pet, 7);
+  messageDesc(file_hq_pet_v1_pet, 8);
 
 /**
  * @generated from enum hq.pet.v1.PetMood
@@ -238,6 +255,14 @@ export const PetService: GenService<{
   playWithPet: {
     methodKind: "unary";
     input: typeof PlayWithPetRequestSchema;
+    output: typeof PetStateResponseSchema;
+  },
+  /**
+   * @generated from rpc hq.pet.v1.PetService.ApplyGameResult
+   */
+  applyGameResult: {
+    methodKind: "unary";
+    input: typeof ApplyGameResultRequestSchema;
     output: typeof PetStateResponseSchema;
   },
   /**
