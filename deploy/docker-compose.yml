@@ -54,6 +54,23 @@ services:
       keycloak-postgres:
         condition: service_healthy
 
+  sunny-town:
+    build:
+      context: ..
+      dockerfile: deploy/sunny-town/Dockerfile
+    container_name: hq-sunny-town
+    environment:
+      SUNNY_TOWN_PORT: "18082"
+      SUNNY_TOWN_JOIN_SECRET: local-dev-secret
+      SUNNY_TOWN_ALLOWED_ORIGINS: "*"
+    ports:
+      - "18082:18082"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   hq-postgres-data:
   hq-keycloak-postgres-data:

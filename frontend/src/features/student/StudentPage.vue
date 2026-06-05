@@ -8,10 +8,12 @@ import { useStudentPetUi } from '../../composables/useStudentPetUi'
 import StudentAnswerTab from './StudentAnswerTab.vue'
 import StudentGradesTab from './StudentGradesTab.vue'
 import StudentPetTab from './StudentPetTab.vue'
+import { useRouter } from 'vue-router'
 
 type StudentTabName = 'answer' | 'grades' | 'pet'
 
 const { ensureStudentAccess } = useRouteAccess()
+const router = useRouter()
 const {
   canFeedPet,
   canPlayWithPet,
@@ -102,6 +104,10 @@ async function logoutStudent() {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
+
+function enterSunnyTown() {
+  router.push('/student/pet/sunny-town')
+}
 </script>
 
 <template>
@@ -168,6 +174,7 @@ function errorMessage(error: unknown): string {
             :can-wake-pet="canWakePet"
             :last-falling-stars-result="lastFallingStarsResult"
             :student-pet-store="studentPetStore"
+            @enter-sunny-town="enterSunnyTown"
             @feed="feedStudentPet"
             @play="playWithStudentPet"
             @sleep="putStudentPetToSleep"

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"hq/internal/sunnytownauth"
 	petv1connect "hq/proto/hq/pet/v1/petv1connect"
 
 	"github.com/jackc/pgx/v5"
@@ -22,8 +23,10 @@ import (
 )
 
 type app struct {
-	db   *pgxpool.Pool
-	auth *authVerifier
+	db                    *pgxpool.Pool
+	auth                  *authVerifier
+	sunnyTownJoinSecret   string
+	sunnyTownWebSocketURL string
 }
 
 var errNoCookies = errors.New("no cookies available")
@@ -64,6 +67,20 @@ type studentProfileResponse struct {
 	DisplayName string           `json:"display_name"`
 	Cookies     int              `json:"cookies"`
 	PetState    petStateResponse `json:"pet_state"`
+}
+
+type sunnyTownSessionResponse struct {
+	RoomID       string                  `json:"roomId"`
+	MapID        string                  `json:"mapId"`
+	WebSocketURL string                  `json:"websocketUrl"`
+	JoinToken    string                  `json:"joinToken"`
+	ExpiresAt    time.Time               `json:"expiresAt"`
+	Avatar       sunnyTownAvatarResponse `json:"avatar"`
+}
+
+type sunnyTownAvatarResponse struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
 }
 
 type assignmentAttemptResponse struct {
@@ -114,8 +131,10 @@ func main() {
 	keycloakIssuer := envOrDefault("KEYCLOAK_ISSUER", "http://localhost:18081/realms/hq")
 	keycloakAudience := envOrDefault("KEYCLOAK_AUDIENCE", "hq-web")
 	app := &app{
-		db:   db,
-		auth: newAuthVerifier(keycloakIssuer, keycloakAudience),
+		db:                    db,
+		auth:                  newAuthVerifier(keycloakIssuer, keycloakAudience),
+		sunnyTownJoinSecret:   envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
+		sunnyTownWebSocketURL: envOrDefault("SUNNY_TOWN_WS_URL", "ws://127.0.0.1:18082/sunny-town/ws"),
 	}
 	if err := app.ensureSchema(ctx); err != nil {
 		log.Fatalf("ensure schema: %v", err)
@@ -137,6 +156,7 @@ func main() {
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
 	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
+	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	apiMux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
 	apiMux.HandleFunc("/api/student/assignments/graded", app.handleStudentGradedAssignments)
 	apiMux.HandleFunc("/api/assignments/answered", app.handleAnsweredAssignments)
@@ -340,6 +360,58 @@ func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, profile)
+}
+
+func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	profile, err := app.loadStudentProfile(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load sunny town student profile: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "sunny town session could not be created",
+		})
+		return
+	}
+
+	expiresAt := time.Now().UTC().Add(time.Minute)
+	avatarID := "pet-default"
+	token, err := sunnytownauth.Sign(sunnytownauth.Claims{
+		AppUserID:       user.ID,
+		KeycloakSubject: user.KeycloakSubject,
+		DisplayName:     profile.DisplayName,
+		Roles:           user.Roles,
+		RoomID:          "sunny-town-main",
+		MapID:           "sunny-town-v1",
+		AvatarID:        avatarID,
+		ExpiresAt:       expiresAt.Unix(),
+	}, app.sunnyTownJoinSecret)
+	if err != nil {
+		log.Printf("sign sunny town token: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "sunny town session could not be created",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, sunnyTownSessionResponse{
+		RoomID:       "sunny-town-main",
+		MapID:        "sunny-town-v1",
+		WebSocketURL: app.sunnyTownWebSocketURL,
+		JoinToken:    token,
+		ExpiresAt:    expiresAt,
+		Avatar: sunnyTownAvatarResponse{
+			ID:          avatarID,
+			DisplayName: profile.DisplayName,
+		},
+	})
 }
 
 func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Request) {

@@ -4,4 +4,5 @@ node_modules/
 .env
 .DS_Store
 hq-server.log
+hq-server.*.log
 *.tsbuildinfo

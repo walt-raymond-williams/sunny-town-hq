@@ -13,6 +13,7 @@ defineProps<{
 }>()
 
 defineEmits({
+  enterSunnyTown: () => true,
   feed: () => true,
   play: () => true,
   sleep: () => true,
@@ -23,15 +24,25 @@ defineEmits({
 <template>
   <div class="list-header">
     <h2>Pet</h2>
-    <v-btn
-      :loading="studentPetStore.isLoading"
-      color="primary"
-      prepend-icon="mdi-refresh"
-      variant="tonal"
-      @click="studentPetStore.loadProfile"
-    >
-      Refresh
-    </v-btn>
+    <div class="actions">
+      <v-btn
+        color="success"
+        prepend-icon="mdi-map"
+        variant="flat"
+        @click="$emit('enterSunnyTown')"
+      >
+        Sunny Town
+      </v-btn>
+      <v-btn
+        :loading="studentPetStore.isLoading"
+        color="primary"
+        prepend-icon="mdi-refresh"
+        variant="tonal"
+        @click="studentPetStore.loadProfile"
+      >
+        Refresh
+      </v-btn>
+    </div>
   </div>
 
   <v-alert v-if="studentPetStore.error" class="mt-5" type="error" variant="tonal">

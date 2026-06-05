@@ -78,9 +78,25 @@ Keycloak data is stored in a separate Postgres service:
 
 Important: Keycloak imports the realm only on first startup for a fresh Keycloak database. If the realm already exists, changing `deploy/keycloak/hq-realm.json` does not automatically update the running realm. Update the client in the Keycloak admin UI/API or reset the Keycloak volume.
 
+### Sunny Town
+
+- Service name: `sunny-town`
+- Container: `hq-sunny-town`
+- Source: `cmd/sunny-town/`
+- Dockerfile: `deploy/sunny-town/Dockerfile`
+- Host port: `18082`
+- Serves:
+  - WebSocket gameplay at `/sunny-town/ws`
+  - health check at `/healthz`
+- Requires:
+  - `SUNNY_TOWN_JOIN_SECRET`
+
+The HQ server must use the same `SUNNY_TOWN_JOIN_SECRET` when issuing join tokens, and should return the browser-reachable WebSocket URL through `SUNNY_TOWN_WS_URL`.
+The Docker Compose service allows any WebSocket origin for local home-network development so the app works from `localhost`, the laptop LAN IP, and phone/tablet browsers.
+
 ## Start The Stack
 
-Start Postgres and Keycloak:
+Start Postgres, Keycloak, and Sunny Town:
 
 ```powershell
 docker compose -f deploy/docker-compose.yml up -d
@@ -100,6 +116,8 @@ $env:DATABASE_URL="postgres://hq:hq@localhost:55432/hq?sslmode=disable"
 $env:HQ_PORT="18080"
 $env:KEYCLOAK_ISSUER="http://<YOUR_LAN_IP>:18081/realms/hq"
 $env:KEYCLOAK_AUDIENCE="hq-web"
+$env:SUNNY_TOWN_JOIN_SECRET="local-dev-secret"
+$env:SUNNY_TOWN_WS_URL="ws://<YOUR_LAN_IP>:18082/sunny-town/ws"
 go run ./cmd/hq
 ```
 
@@ -172,6 +190,13 @@ View Keycloak logs:
 docker logs hq-keycloak --tail 120
 ```
 
+Check Sunny Town:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18082/healthz
+docker logs hq-sunny-town --tail 120
+```
+
 ## Local-Network Auth Notes
 
 - Use one consistent host/IP for HQ and Keycloak. If users open HQ at `http://<YOUR_LAN_IP>:18080`, then `KEYCLOAK_ISSUER` should be `http://<YOUR_LAN_IP>:18081/realms/hq`.
@@ -199,6 +224,7 @@ Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 18080,18081
 - `cmd/hq/schema.go`: runtime schema upgrades and app-user sync
 - `cmd/hq/pet_service.go`: Connect RPC pet service
 - `deploy/docker-compose.yml`: PostgreSQL and Keycloak services
+- `deploy/sunny-town/Dockerfile`: Sunny Town container build
 - `deploy/keycloak/hq-realm.json`: initial Keycloak realm/client/roles
 - `deploy/postgres/init/001_create_assignment.sql`: fresh app database schema
 - `frontend/src/auth.ts`: local-network OIDC login helper

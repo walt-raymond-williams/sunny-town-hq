@@ -1,10 +1,26 @@
 import { authFetch } from '../auth'
 
 export async function readJson<T>(response: Response): Promise<T> {
-  const body = (await response.json()) as T & { error?: string }
+  const text = await response.text()
+  let body: (T & { error?: string }) | null = null
+
+  if (text) {
+    try {
+      body = JSON.parse(text) as T & { error?: string }
+    } catch {
+      if (!response.ok) {
+        throw new Error(text || `API returned ${response.status}`)
+      }
+      throw new Error('API returned invalid JSON')
+    }
+  }
 
   if (!response.ok) {
-    throw new Error(body.error || `API returned ${response.status}`)
+    throw new Error(body?.error || `API returned ${response.status}`)
+  }
+
+  if (!body) {
+    throw new Error('API returned an empty response')
   }
 
   return body

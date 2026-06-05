@@ -1,0 +1,22 @@
+{
+  "id": "sunny-town-v1",
+  "name": "Sunny Town",
+  "tileSize": 32,
+  "width": 40,
+  "height": 30,
+  "spawns": [
+    { "x": 640, "y": 480 },
+    { "x": 608, "y": 480 },
+    { "x": 672, "y": 480 },
+    { "x": 640, "y": 448 }
+  ],
+  "blockedRects": [
+    { "x": 0, "y": 0, "width": 1280, "height": 32 },
+    { "x": 0, "y": 928, "width": 1280, "height": 32 },
+    { "x": 0, "y": 0, "width": 32, "height": 960 },
+    { "x": 1248, "y": 0, "width": 32, "height": 960 },
+    { "x": 160, "y": 128, "width": 224, "height": 160 },
+    { "x": 832, "y": 128, "width": 224, "height": 160 },
+    { "x": 512, "y": 672, "width": 256, "height": 96 }
+  ]
+}

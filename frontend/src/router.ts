@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import StudentPage from './features/student/StudentPage.vue'
 import TeacherPage from './features/teacher/TeacherPage.vue'
 import SplashPage from './pages/SplashPage.vue'
+import SunnyTownPage from './pages/SunnyTownPage.vue'
 import TeacherLoginPage from './pages/TeacherLoginPage.vue'
 
 export const routes = [
@@ -14,6 +15,11 @@ export const routes = [
     path: '/student',
     name: 'student',
     component: StudentPage,
+  },
+  {
+    path: '/student/pet/sunny-town',
+    name: 'sunny-town',
+    component: SunnyTownPage,
   },
   {
     path: '/teacher/login',

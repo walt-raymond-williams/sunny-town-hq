@@ -344,6 +344,65 @@ h2 {
   z-index: 100;
 }
 
+.sunny-town-page {
+  display: grid;
+  gap: 16px;
+  margin: 0 auto;
+  max-width: 1180px;
+  width: 100%;
+}
+
+.sunny-town-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.sunny-town-toolbar h1 {
+  font-size: clamp(34px, 6vw, 56px);
+}
+
+.sunny-town-toolbar__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.sunny-town-stage {
+  background: #17212b;
+  border: 1px solid #d9e1e4;
+  border-radius: 8px;
+  min-height: min(72vh, 760px);
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.sunny-town-stage canvas {
+  display: block;
+  height: min(72vh, 760px);
+  min-height: 420px;
+  width: 100%;
+}
+
+.sunny-town-help {
+  align-items: center;
+  background: rgba(23, 33, 43, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  bottom: 12px;
+  color: #ffffff;
+  display: flex;
+  font-size: 14px;
+  gap: 8px;
+  left: 12px;
+  padding: 8px 10px;
+  position: absolute;
+}
+
 @media (max-width: 640px) {
   .app-container {
     padding: 12px;
@@ -364,5 +423,19 @@ h2 {
 
   .game-overlay {
     padding: 10px;
+  }
+
+  .sunny-town-toolbar {
+    align-items: flex-start;
+    display: grid;
+  }
+
+  .sunny-town-toolbar__actions {
+    justify-content: flex-start;
+  }
+
+  .sunny-town-stage,
+  .sunny-town-stage canvas {
+    min-height: 520px;
   }
 }
