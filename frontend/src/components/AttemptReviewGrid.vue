@@ -1,10 +1,14 @@
-<script setup>
-defineProps({
-  boxes: {
-    type: Array,
-    required: true,
-  },
-})
+<script setup lang="ts">
+export interface AttemptReviewBox {
+  title: string
+  text?: string | null
+  emptyText?: string
+  submitted?: boolean
+}
+
+defineProps<{
+  boxes: AttemptReviewBox[]
+}>()
 </script>
 
 <template>

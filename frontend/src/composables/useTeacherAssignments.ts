@@ -1,4 +1,4 @@
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, type ComponentPublicInstance } from 'vue'
 import { getStudents } from '../api/studentsApi'
 import {
   createAssignment,
@@ -8,31 +8,43 @@ import {
   resetAssignment as resetAssignmentRequest,
 } from '../api/teacherAssignmentsApi'
 import { currentAttempt, attemptHistory } from '../domain/assignmentStatus'
+import type {
+  Assignment,
+  CreateAssignmentPayload,
+  GradingForm,
+  TeacherFilter,
+  TeacherStudentFilter,
+} from '../types/assignment'
+import type { StudentSummary } from '../types/user'
+import type { SelectOption } from '../types/ui'
+
+type AssignmentPanelRef = Element | ComponentPublicInstance
+type AssignmentPanelRefs = Record<number, AssignmentPanelRef>
 
 export function useTeacherAssignments() {
-  const teacherFilter = ref('needs-review')
-  const teacherStudentFilter = ref('ALL')
+  const teacherFilter = ref<TeacherFilter>('needs-review')
+  const teacherStudentFilter = ref<TeacherStudentFilter>('ALL')
   const isCreatingQuestion = ref(false)
   const assignmentMessage = ref('')
   const assignmentError = ref('')
   const gradingMessage = ref('')
   const gradingError = ref('')
-  const assignments = ref([])
-  const students = ref([])
-  const gradingForms = reactive({})
+  const assignments = ref<Assignment[]>([])
+  const students = ref<StudentSummary[]>([])
+  const gradingForms = reactive<Record<number, GradingForm>>({})
   const isLoadingAssignments = ref(false)
   const isSaving = ref(false)
   const isSavingGrade = ref(false)
   const isResettingAssignment = ref(false)
-  const expandedAssignmentId = ref(null)
-  const assignmentPanelRefs = reactive({})
-  const form = ref({
+  const expandedAssignmentId = ref<number | null>(null)
+  const assignmentPanelRefs = reactive<AssignmentPanelRefs>({})
+  const form = ref<CreateAssignmentPayload>({
     category: 'MATH',
     prompt: '',
     expected_answer: '',
   })
 
-  const teacherStudentOptions = computed(() => [
+  const teacherStudentOptions = computed<SelectOption<TeacherStudentFilter>[]>(() => [
     { title: 'All Students', value: 'ALL' },
     ...students.value.map((student) => ({
       title: student.display_name,
@@ -74,7 +86,7 @@ export function useTeacherAssignments() {
     try {
       students.value = await getStudents()
     } catch (error) {
-      assignmentError.value = error.message
+      assignmentError.value = errorMessage(error)
     }
   }
 
@@ -89,14 +101,14 @@ export function useTeacherAssignments() {
         syncGradingForm(assignment)
       })
     } catch (error) {
-      assignmentError.value = error.message
-      gradingError.value = error.message
+      assignmentError.value = errorMessage(error)
+      gradingError.value = errorMessage(error)
     } finally {
       isLoadingAssignments.value = false
     }
   }
 
-  function setAssignmentPanelRef(assignmentID, element) {
+  function setAssignmentPanelRef(assignmentID: number, element: AssignmentPanelRef | null) {
     if (element) {
       assignmentPanelRefs[assignmentID] = element
       return
@@ -105,14 +117,18 @@ export function useTeacherAssignments() {
     delete assignmentPanelRefs[assignmentID]
   }
 
-  async function handleExpandedAssignmentChange(assignmentID) {
+  async function handleExpandedAssignmentChange(assignmentID: number | null) {
     if (!assignmentID) {
       return
     }
 
     await nextTick()
     window.setTimeout(() => {
-      const panel = assignmentPanelRefs[assignmentID]?.$el || assignmentPanelRefs[assignmentID]
+      const panelRef = assignmentPanelRefs[assignmentID]
+      if (!panelRef) {
+        return
+      }
+      const panel = '$el' in panelRef ? panelRef.$el : panelRef
       panel?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
@@ -141,13 +157,13 @@ export function useTeacherAssignments() {
       isCreatingQuestion.value = false
       await loadAssignments()
     } catch (error) {
-      assignmentError.value = error.message
+      assignmentError.value = errorMessage(error)
     } finally {
       isSaving.value = false
     }
   }
 
-  async function deleteAssignment(assignment) {
+  async function deleteAssignment(assignment: Assignment) {
     assignmentMessage.value = ''
     assignmentError.value = ''
 
@@ -157,17 +173,17 @@ export function useTeacherAssignments() {
       assignmentMessage.value = 'Assignment deleted.'
       gradingMessage.value = ''
     } catch (error) {
-      assignmentError.value = error.message
+      assignmentError.value = errorMessage(error)
     }
   }
 
-  async function saveGrade(assignment, passed = gradingForms[assignment.id]?.passed) {
+  async function saveGrade(assignment: Assignment, passed = gradingForms[assignment.id]?.passed) {
     const gradeForm = gradingForms[assignment.id]
     if (!gradeForm) {
       return
     }
 
-    gradeForm.passed = passed
+    gradeForm.passed = passed ?? null
 
     isSavingGrade.value = true
     gradingMessage.value = ''
@@ -183,13 +199,13 @@ export function useTeacherAssignments() {
       gradingMessage.value = 'Result saved.'
       await loadAssignments()
     } catch (error) {
-      gradingError.value = error.message
+      gradingError.value = errorMessage(error)
     } finally {
       isSavingGrade.value = false
     }
   }
 
-  async function resetAssignment(assignment) {
+  async function resetAssignment(assignment: Assignment) {
     const gradeForm = gradingForms[assignment.id]
     isResettingAssignment.value = true
     gradingMessage.value = ''
@@ -204,7 +220,7 @@ export function useTeacherAssignments() {
       gradingMessage.value = 'Assignment reset. Previous attempts were kept.'
       await loadAssignments()
     } catch (error) {
-      gradingError.value = error.message
+      gradingError.value = errorMessage(error)
     } finally {
       isResettingAssignment.value = false
     }
@@ -214,7 +230,7 @@ export function useTeacherAssignments() {
     await loadAssignments()
   }
 
-  function syncGradingForm(assignment) {
+  function syncGradingForm(assignment: Assignment) {
     const attempt = currentAttempt(assignment)
     gradingForms[assignment.id] = {
       passed: attempt?.passed ?? null,
@@ -263,4 +279,8 @@ export function useTeacherAssignments() {
     teacherStudentFilter,
     teacherStudentOptions,
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

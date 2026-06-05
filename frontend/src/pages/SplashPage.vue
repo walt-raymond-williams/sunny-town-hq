@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { hasRole, keycloak } from '../auth'
 import { useRouteAccess } from '../composables/useRouteAccess'
 

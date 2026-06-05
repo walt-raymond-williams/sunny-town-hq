@@ -1,17 +1,12 @@
-<script setup>
+<script setup lang="ts">
 import { categories } from '../../domain/categories'
+import type { CreateAssignmentPayload } from '../../types/assignment'
 
-defineProps({
-  isSaving: {
-    type: Boolean,
-    required: true,
-  },
-})
+defineProps<{
+  isSaving: boolean
+}>()
 
-const form = defineModel('form', {
-  type: Object,
-  required: true,
-})
+const form = defineModel<CreateAssignmentPayload>('form', { required: true })
 
 defineEmits({
   save: () => true,

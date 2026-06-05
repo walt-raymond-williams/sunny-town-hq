@@ -8,6 +8,7 @@ import * as directives from 'vuetify/directives'
 import { aliases, mdi } from 'vuetify/iconsets/mdi'
 import './style.css'
 import App from './App.vue'
+import { initAuth } from './auth'
 import { router } from './router'
 
 const vuetify = createVuetify({
@@ -38,4 +39,6 @@ const vuetify = createVuetify({
   },
 })
 
-createApp(App).use(createPinia()).use(router).use(vuetify).mount('#app')
+initAuth().finally(() => {
+  createApp(App).use(createPinia()).use(router).use(vuetify).mount('#app')
+})

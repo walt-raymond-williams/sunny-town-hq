@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { loginForRole } from '../auth'
@@ -20,8 +20,12 @@ async function loginTeacher() {
     await loginForRole('teacher', `${window.location.origin}/teacher`)
     await router.push({ name: 'teacher' })
   } catch (error) {
-    loginError.value = error.message
+    loginError.value = errorMessage(error)
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 </script>
 

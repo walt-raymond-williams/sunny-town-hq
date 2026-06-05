@@ -1,33 +1,27 @@
-<script setup>
+<script setup lang="ts">
 import AttemptHistory from '../../components/AttemptHistory.vue'
 import { studentCategoryOptions } from '../../domain/categories'
 import { hasPreviousAttempts, previousAttempts } from '../../domain/assignmentStatus'
+import type { Assignment, StudentCategoryFilter } from '../../types/assignment'
 
-defineProps({
-  isLoadingStudentAssignment: {
-    type: Boolean,
-    required: true,
+withDefaults(
+  defineProps<{
+    isLoadingStudentAssignment: boolean
+    isSubmittingStudentAnswer: boolean
+    studentAssignment: Assignment | null
+    studentError?: string
+    studentMessage?: string
+  }>(),
+  {
+    studentError: '',
+    studentMessage: '',
   },
-  isSubmittingStudentAnswer: {
-    type: Boolean,
-    required: true,
-  },
-  studentAssignment: {
-    type: Object,
-    default: null,
-  },
-  studentError: {
-    type: String,
-    default: '',
-  },
-  studentMessage: {
-    type: String,
-    default: '',
-  },
-})
+)
 
 const studentAnswer = defineModel('studentAnswer', { type: String, default: '' })
-const studentCategoryFilter = defineModel('studentCategoryFilter', { type: String, default: 'ALL' })
+const studentCategoryFilter = defineModel<StudentCategoryFilter>('studentCategoryFilter', {
+  default: 'ALL',
+})
 
 defineEmits({
   categoryChange: () => true,

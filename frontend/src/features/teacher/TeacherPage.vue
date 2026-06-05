@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { logout } from '../../auth'
 import { getMe } from '../../api/meApi'
@@ -61,10 +61,14 @@ async function logoutTeacher() {
   try {
     await logout(window.location.origin)
   } catch (error) {
-    gradingError.value = error.message
+    gradingError.value = errorMessage(error)
   } finally {
     isLoggingOut.value = false
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 </script>
 
@@ -172,7 +176,7 @@ async function logoutTeacher() {
           v-model="expandedAssignmentId"
           class="mt-4"
           variant="accordion"
-          @update:model-value="handleExpandedAssignmentChange"
+          @update:model-value="(value) => handleExpandedAssignmentChange(value as number | null)"
         >
           <v-expansion-panel
             v-for="assignment in filteredAssignments"

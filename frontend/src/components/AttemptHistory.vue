@@ -1,29 +1,24 @@
-<script setup>
+<script setup lang="ts">
 import AttemptReviewGrid from './AttemptReviewGrid.vue'
 import { attemptStatusColor, attemptStatusLabel } from '../domain/assignmentStatus'
+import type { AssignmentAttempt } from '../types/assignment'
 
-defineProps({
-  attempts: {
-    type: Array,
-    default: () => [],
+withDefaults(
+  defineProps<{
+    attempts?: AssignmentAttempt[]
+    emptyMessage?: string
+    feedbackTitle?: string
+    showStudentName?: boolean
+    title?: string
+  }>(),
+  {
+    attempts: () => [],
+    emptyMessage: 'No attempts yet.',
+    feedbackTitle: 'Feedback',
+    showStudentName: false,
+    title: 'Attempt History',
   },
-  emptyMessage: {
-    type: String,
-    default: 'No attempts yet.',
-  },
-  feedbackTitle: {
-    type: String,
-    default: 'Feedback',
-  },
-  showStudentName: {
-    type: Boolean,
-    default: false,
-  },
-  title: {
-    type: String,
-    default: 'Attempt History',
-  },
-})
+)
 </script>
 
 <template>

@@ -1,32 +1,16 @@
-<script setup>
+<script setup lang="ts">
 import { petStats } from '../../domain/categories'
+import type { useStudentPetStore } from '../../stores/studentPet'
+import type { FallingStarsResult } from '../../types/pet'
 
-defineProps({
-  canFeedPet: {
-    type: Boolean,
-    required: true,
-  },
-  canPlayWithPet: {
-    type: Boolean,
-    required: true,
-  },
-  canPutPetToSleep: {
-    type: Boolean,
-    required: true,
-  },
-  canWakePet: {
-    type: Boolean,
-    required: true,
-  },
-  lastFallingStarsResult: {
-    type: Object,
-    default: null,
-  },
-  studentPetStore: {
-    type: Object,
-    required: true,
-  },
-})
+defineProps<{
+  canFeedPet: boolean
+  canPlayWithPet: boolean
+  canPutPetToSleep: boolean
+  canWakePet: boolean
+  lastFallingStarsResult: FallingStarsResult | null
+  studentPetStore: ReturnType<typeof useStudentPetStore>
+}>()
 
 defineEmits({
   feed: () => true,

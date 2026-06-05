@@ -1,25 +1,22 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import type { FallingObject, FallingStarsResult } from '../../types/pet'
 
-const emit = defineEmits({
-  complete: (result) =>
-    typeof result.score === 'number' &&
-    typeof result.won === 'boolean' &&
-    typeof result.happinessDelta === 'number' &&
-    typeof result.energyDelta === 'number',
-  quit: () => true,
-})
+const emit = defineEmits<{
+  complete: [result: FallingStarsResult]
+  quit: []
+}>()
 
 const targetScore = 10
 const roundLength = 30
-const playAreaRef = ref(null)
-const gameState = ref('idle')
+const playAreaRef = ref<HTMLElement | null>(null)
+const gameState = ref<'idle' | 'countdown' | 'playing' | 'complete'>('idle')
 const score = ref(0)
 const timeRemaining = ref(roundLength)
 const petX = ref(50)
-const fallingObjects = ref([])
+const fallingObjects = ref<FallingObject[]>([])
 const countdownValue = ref(3)
-const result = ref(null)
+const result = ref<FallingStarsResult | null>(null)
 const feedback = ref('')
 
 let animationFrame = 0
@@ -55,7 +52,7 @@ function startGame() {
   animationFrame = window.requestAnimationFrame(tick)
 }
 
-function tick(timestamp) {
+function tick(timestamp: number) {
   const deltaSeconds = Math.min((timestamp - lastFrameTime) / 1000, 0.05)
   lastFrameTime = timestamp
 
@@ -77,7 +74,7 @@ function tick(timestamp) {
   }
 }
 
-function updatePlaying(deltaSeconds) {
+function updatePlaying(deltaSeconds: number) {
   timeRemaining.value = Math.max(0, timeRemaining.value - deltaSeconds)
   petX.value = clamp(petX.value + movementDirection * 58 * deltaSeconds, 6, 94)
 
@@ -125,16 +122,15 @@ function spawnObject() {
     x: randomBetween(7, 93),
     y: -8,
     speed: randomBetween(18, 31),
-    caught: false,
   })
 }
 
-function isCaught(object) {
+function isCaught(object: FallingObject): boolean {
   const nearPetX = Math.abs(object.x - petX.value) <= 9
   return nearPetX && object.y >= 76 && object.y <= 92
 }
 
-function applyCatch(object) {
+function applyCatch(object: FallingObject) {
   if (object.type === 'star') {
     score.value += 1
     feedback.value = 'sparkle'
@@ -178,7 +174,7 @@ function quitGame() {
   }
 }
 
-function handleKeyDown(event) {
+function handleKeyDown(event: KeyboardEvent) {
   if (!hasActiveRound.value) {
     return
   }
@@ -194,7 +190,7 @@ function handleKeyDown(event) {
   }
 }
 
-function handleKeyUp(event) {
+function handleKeyUp(event: KeyboardEvent) {
   if (
     event.key === 'ArrowLeft' ||
     event.key === 'ArrowRight' ||
@@ -205,7 +201,7 @@ function handleKeyUp(event) {
   }
 }
 
-function handlePointerDown(event) {
+function handlePointerDown(event: PointerEvent) {
   if (!hasActiveRound.value || !playAreaRef.value) {
     return
   }
@@ -214,7 +210,7 @@ function handlePointerDown(event) {
   movementDirection = event.clientX < bounds.left + bounds.width / 2 ? -1 : 1
 }
 
-function handlePointerMove(event) {
+function handlePointerMove(event: PointerEvent) {
   if (movementDirection === 0 || !hasActiveRound.value || !playAreaRef.value) {
     return
   }
@@ -236,11 +232,11 @@ function stopLoop() {
   window.removeEventListener('keyup', handleKeyUp)
 }
 
-function randomBetween(min, max) {
+function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min)
 }
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 

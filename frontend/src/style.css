@@ -112,6 +112,11 @@ h2 {
   margin-top: 10px;
 }
 
+.student-filter {
+  margin-top: 16px;
+  max-width: 360px;
+}
+
 .question-title {
   align-items: center;
   display: flex;

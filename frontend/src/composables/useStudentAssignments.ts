@@ -6,12 +6,22 @@ import {
 } from '../api/studentAssignmentsApi'
 import { categories } from '../domain/categories'
 import { gradedAttempts } from '../domain/assignmentStatus'
+import type {
+  Assignment,
+  GradeSummary,
+  GradedAssignmentGroup,
+  StudentCategoryFilter,
+} from '../types/assignment'
 
-export function useStudentAssignments({ onAnswerSubmitted } = {}) {
+interface UseStudentAssignmentsOptions {
+  onAnswerSubmitted?: () => void
+}
+
+export function useStudentAssignments({ onAnswerSubmitted }: UseStudentAssignmentsOptions = {}) {
   const studentTab = ref('answer')
-  const studentCategoryFilter = ref('ALL')
-  const studentGradedAssignments = ref([])
-  const studentAssignment = ref(null)
+  const studentCategoryFilter = ref<StudentCategoryFilter>('ALL')
+  const studentGradedAssignments = ref<Assignment[]>([])
+  const studentAssignment = ref<Assignment | null>(null)
   const studentAnswer = ref('')
   const studentMessage = ref('')
   const studentError = ref('')
@@ -23,7 +33,7 @@ export function useStudentAssignments({ onAnswerSubmitted } = {}) {
   const hasStudentGradedAssignments = computed(() =>
     studentGradedAssignments.value.some((assignment) => gradedAttempts(assignment).length > 0),
   )
-  const gradeSummaries = computed(() =>
+  const gradeSummaries = computed<GradeSummary[]>(() =>
     categories.map((category) => {
       const attemptsForCategory = studentGradedAssignments.value
         .filter((assignment) => assignment.category === category)
@@ -42,7 +52,7 @@ export function useStudentAssignments({ onAnswerSubmitted } = {}) {
       }
     }),
   )
-  const gradedAssignmentsByCategory = computed(() =>
+  const gradedAssignmentsByCategory = computed<GradedAssignmentGroup[]>(() =>
     categories.map((category) => ({
       category,
       assignments: studentGradedAssignments.value.filter(
@@ -61,7 +71,7 @@ export function useStudentAssignments({ onAnswerSubmitted } = {}) {
     try {
       studentAssignment.value = await getNextStudentAssignment(studentCategoryFilter.value)
     } catch (error) {
-      studentError.value = error.message
+      studentError.value = errorMessage(error)
     } finally {
       isLoadingStudentAssignment.value = false
     }
@@ -74,7 +84,7 @@ export function useStudentAssignments({ onAnswerSubmitted } = {}) {
     try {
       studentGradedAssignments.value = await getStudentGradedAssignments()
     } catch (error) {
-      studentGradesError.value = error.message
+      studentGradesError.value = errorMessage(error)
     } finally {
       isLoadingStudentGrades.value = false
     }
@@ -95,7 +105,7 @@ export function useStudentAssignments({ onAnswerSubmitted } = {}) {
       studentMessage.value = 'Answer submitted.'
       onAnswerSubmitted?.()
     } catch (error) {
-      studentError.value = error.message
+      studentError.value = errorMessage(error)
     } finally {
       isSubmittingStudentAnswer.value = false
     }
@@ -135,4 +145,8 @@ export function useStudentAssignments({ onAnswerSubmitted } = {}) {
     studentTab,
     submitStudentAnswer,
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

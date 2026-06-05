@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { logout } from '../../auth'
 import { getMe } from '../../api/meApi'
@@ -8,6 +8,8 @@ import { useStudentPetUi } from '../../composables/useStudentPetUi'
 import StudentAnswerTab from './StudentAnswerTab.vue'
 import StudentGradesTab from './StudentGradesTab.vue'
 import StudentPetTab from './StudentPetTab.vue'
+
+type StudentTabName = 'answer' | 'grades' | 'pet'
 
 const { ensureStudentAccess } = useRouteAccess()
 const {
@@ -67,7 +69,7 @@ onBeforeUnmount(() => {
   resetStudentPetMood()
 })
 
-async function handleStudentTabChange(tabName) {
+async function handleStudentTabChange(tabName: StudentTabName) {
   if (tabName === 'answer') {
     await loadNextStudentAssignment()
   }
@@ -91,10 +93,14 @@ async function logoutStudent() {
     resetStudentPetMood()
     await logout(window.location.origin)
   } catch (error) {
-    studentError.value = error.message
+    studentError.value = errorMessage(error)
   } finally {
     isLoggingOut.value = false
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 </script>
 
@@ -121,7 +127,7 @@ async function logoutStudent() {
         v-model="studentTab"
         class="mt-6"
         color="primary"
-        @update:model-value="handleStudentTabChange"
+        @update:model-value="(value) => handleStudentTabChange(value as StudentTabName)"
       >
         <v-tab value="answer">Answer Questions</v-tab>
         <v-tab value="grades">View Grades</v-tab>

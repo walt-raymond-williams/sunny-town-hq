@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import AttemptReviewGrid from '../../components/AttemptReviewGrid.vue'
 import {
   categoryPercentLabel,
@@ -7,29 +7,20 @@ import {
   passFailColor,
   passFailLabel,
 } from '../../domain/assignmentStatus'
+import type { GradeSummary, GradedAssignmentGroup } from '../../types/assignment'
 
-defineProps({
-  gradeSummaries: {
-    type: Array,
-    required: true,
+withDefaults(
+  defineProps<{
+    gradeSummaries: GradeSummary[]
+    gradedAssignmentsByCategory: GradedAssignmentGroup[]
+    hasStudentGradedAssignments: boolean
+    isLoadingStudentGrades: boolean
+    studentGradesError?: string
+  }>(),
+  {
+    studentGradesError: '',
   },
-  gradedAssignmentsByCategory: {
-    type: Array,
-    required: true,
-  },
-  hasStudentGradedAssignments: {
-    type: Boolean,
-    required: true,
-  },
-  isLoadingStudentGrades: {
-    type: Boolean,
-    required: true,
-  },
-  studentGradesError: {
-    type: String,
-    default: '',
-  },
-})
+)
 
 defineEmits({
   refresh: () => true,

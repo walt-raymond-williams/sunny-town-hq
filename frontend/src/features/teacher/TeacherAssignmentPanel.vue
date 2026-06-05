@@ -1,4 +1,5 @@
-<script setup>
+<script setup lang="ts">
+import { computed } from 'vue'
 import AttemptHistory from '../../components/AttemptHistory.vue'
 import AttemptReviewGrid from '../../components/AttemptReviewGrid.vue'
 import { passFailOptions } from '../../domain/categories'
@@ -9,30 +10,37 @@ import {
   statusColor,
   statusLabel,
 } from '../../domain/assignmentStatus'
+import type { AttemptReviewBox } from '../../components/AttemptReviewGrid.vue'
+import type { Assignment, GradingForm } from '../../types/assignment'
 
-defineProps({
-  assignment: {
-    type: Object,
-    required: true,
-  },
-  gradingForm: {
-    type: Object,
-    default: null,
-  },
-  isResettingAssignment: {
-    type: Boolean,
-    required: true,
-  },
-  isSavingGrade: {
-    type: Boolean,
-    required: true,
-  },
-})
+const props = defineProps<{
+  assignment: Assignment
+  gradingForm: GradingForm | undefined
+  isResettingAssignment: boolean
+  isSavingGrade: boolean
+}>()
 
-defineEmits({
-  delete: () => true,
-  reset: () => true,
-  saveGrade: (_passed) => true,
+defineEmits<{
+  delete: []
+  reset: []
+  saveGrade: [passed: boolean]
+}>()
+
+const activeAttempt = computed(() => currentAttempt(props.assignment))
+const reviewBoxes = computed<AttemptReviewBox[]>(() => {
+  const boxes: AttemptReviewBox[] = [
+    { title: 'Expected Answer', text: props.assignment.expected_answer },
+  ]
+
+  if (activeAttempt.value) {
+    boxes.push({
+      title: `${activeAttempt.value.student_display_name}'s Answer`,
+      text: activeAttempt.value.submitted_answer,
+      submitted: true,
+    })
+  }
+
+  return boxes
 })
 </script>
 
@@ -46,39 +54,23 @@ defineEmits({
         <v-chip :color="statusColor(assignment)" size="small" variant="tonal">
           {{ statusLabel(assignment) }}
         </v-chip>
-        <v-chip v-if="currentAttempt(assignment)" size="small" variant="tonal">
-          Attempt {{ currentAttempt(assignment).attempt_number }}
+        <v-chip v-if="activeAttempt" size="small" variant="tonal">
+          Attempt {{ activeAttempt.attempt_number }}
         </v-chip>
-        <v-chip
-          v-if="currentAttempt(assignment)"
-          color="secondary"
-          size="small"
-          variant="tonal"
-        >
-          {{ currentAttempt(assignment).student_display_name }}
+        <v-chip v-if="activeAttempt" color="secondary" size="small" variant="tonal">
+          {{ activeAttempt.student_display_name }}
         </v-chip>
         <span>{{ assignment.prompt }}</span>
       </div>
-      <p v-if="currentAttempt(assignment)" class="answer-preview">
-        {{ answerPreview(currentAttempt(assignment).submitted_answer) }}
+      <p v-if="activeAttempt" class="answer-preview">
+        {{ answerPreview(activeAttempt.submitted_answer) }}
       </p>
     </div>
   </v-expansion-panel-title>
   <v-expansion-panel-text>
-    <AttemptReviewGrid
-      :boxes="[
-        { title: 'Expected Answer', text: assignment.expected_answer },
-        currentAttempt(assignment)
-          ? {
-              title: `${currentAttempt(assignment).student_display_name}'s Answer`,
-              text: currentAttempt(assignment).submitted_answer,
-              submitted: true,
-            }
-          : null,
-      ].filter(Boolean)"
-    />
+    <AttemptReviewGrid :boxes="reviewBoxes" />
 
-    <v-form v-if="currentAttempt(assignment) && gradingForm" class="form-grid" @submit.prevent>
+    <v-form v-if="activeAttempt && gradingForm" class="form-grid" @submit.prevent>
       <v-textarea
         v-model="gradingForm.feedback"
         label="Feedback"
@@ -96,7 +88,7 @@ defineEmits({
         >
           <v-btn
             v-for="option in passFailOptions"
-            :key="option.value"
+            :key="option.label"
             :color="option.value ? 'success' : 'error'"
             :loading="isSavingGrade && gradingForm.passed === option.value"
             :value="option.value"

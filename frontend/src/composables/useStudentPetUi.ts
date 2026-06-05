@@ -1,10 +1,11 @@
 import { computed, ref } from 'vue'
 import { useStudentPetStore } from '../stores/studentPet'
+import type { FallingStarsResult, PetUiMood } from '../types/pet'
 
-const studentPetMood = ref('idle')
+const studentPetMood = ref<PetUiMood>('idle')
 const isFallingStarsVisible = ref(false)
-const lastFallingStarsResult = ref(null)
-let studentPetMoodTimer
+const lastFallingStarsResult = ref<FallingStarsResult | null>(null)
+let studentPetMoodTimer: number | undefined
 
 export function useStudentPetUi() {
   const studentPetStore = useStudentPetStore()
@@ -50,7 +51,7 @@ export function useStudentPetUi() {
     isFallingStarsVisible.value = true
   }
 
-  async function handleFallingStarsComplete(result) {
+  async function handleFallingStarsComplete(result: FallingStarsResult) {
     isFallingStarsVisible.value = false
     const wasApplied = await studentPetStore.applyGameResult(result)
     if (!wasApplied) {
