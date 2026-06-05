@@ -50,6 +50,11 @@ export interface SunnyTownNpc {
   spriteKey: string
   dialogue: string[]
   shop?: SunnyTownShop
+  activity?: SunnyTownActivity
+}
+
+export interface SunnyTownActivity {
+  type: 'schoolwork'
 }
 
 export interface SunnyTownShop {

@@ -627,7 +627,30 @@ h2 {
   z-index: 6;
 }
 
+.sunny-town-schoolwork {
+  background: rgba(23, 33, 43, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
+  color: #ffffff;
+  left: 50%;
+  max-width: min(680px, calc(100% - 24px));
+  padding: 14px;
+  position: absolute;
+  top: 54px;
+  transform: translateX(-50%);
+  width: 680px;
+  z-index: 6;
+}
+
 .sunny-town-shop__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sunny-town-schoolwork__header {
   align-items: center;
   display: flex;
   justify-content: space-between;
@@ -639,10 +662,36 @@ h2 {
   gap: 2px;
 }
 
+.sunny-town-schoolwork__header div {
+  display: grid;
+  gap: 2px;
+}
+
 .sunny-town-shop__header span,
+.sunny-town-schoolwork__header span,
 .sunny-town-shop__item small {
   color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
+}
+
+.sunny-town-schoolwork__form {
+  display: grid;
+  gap: 12px;
+}
+
+.sunny-town-schoolwork__question {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.sunny-town-schoolwork__question p {
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .sunny-town-shop__columns {
@@ -756,6 +805,14 @@ h2 {
   }
 
   .sunny-town-shop {
+    max-height: calc(100% - 24px);
+    overflow: auto;
+    top: 12px;
+  }
+
+  .sunny-town-schoolwork {
+    max-height: calc(100% - 24px);
+    overflow: auto;
     top: 12px;
   }
 }

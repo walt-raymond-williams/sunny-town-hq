@@ -370,9 +370,24 @@ func TestLoadMapsRejectsUnknownPortalTarget(t *testing.T) {
 	}
 }
 
+func TestLoadMapsAcceptsCheckedInMaps(t *testing.T) {
+	maps, err := loadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	classroom, ok := maps["sunny-town-classroom"]
+	if !ok {
+		t.Fatal("expected sunny-town-classroom map to load")
+	}
+	if len(classroom.NPCs) != 1 || classroom.NPCs[0].Activity == nil || classroom.NPCs[0].Activity.Type != "schoolwork" {
+		t.Fatalf("classroom npcs = %#v, want teacher schoolwork npc", classroom.NPCs)
+	}
+}
+
 func TestLoadMapsAcceptsNPCDefinitions(t *testing.T) {
 	dir := t.TempDir()
-	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"Guide","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."]}]}`
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"Guide","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."],"activity":{"type":"schoolwork"}}]}`
 	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -383,6 +398,9 @@ func TestLoadMapsAcceptsNPCDefinitions(t *testing.T) {
 	}
 	if len(maps["one"].NPCs) != 1 || maps["one"].NPCs[0].ID != "guide" {
 		t.Fatalf("loaded npcs = %#v, want guide", maps["one"].NPCs)
+	}
+	if maps["one"].NPCs[0].Activity == nil || maps["one"].NPCs[0].Activity.Type != "schoolwork" {
+		t.Fatalf("loaded npc activity = %#v, want schoolwork", maps["one"].NPCs[0].Activity)
 	}
 }
 
@@ -407,6 +425,18 @@ func TestLoadMapsRejectsInvalidNPCs(t *testing.T) {
 
 	if _, err := loadMaps(dir); err == nil {
 		t.Fatal("expected invalid npc to be rejected")
+	}
+}
+
+func TestLoadMapsRejectsInvalidNPCActivity(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"Guide","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."],"activity":{"type":"unknown"}}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected invalid npc activity to be rejected")
 	}
 }
 

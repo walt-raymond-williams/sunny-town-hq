@@ -27,6 +27,17 @@
       "targetX": 320,
       "targetY": 416,
       "targetFacing": "up"
+    },
+    {
+      "id": "classroom-door",
+      "x": 912,
+      "y": 288,
+      "width": 64,
+      "height": 24,
+      "targetMapId": "sunny-town-classroom",
+      "targetX": 320,
+      "targetY": 416,
+      "targetFacing": "up"
     }
   ],
   "npcs": [

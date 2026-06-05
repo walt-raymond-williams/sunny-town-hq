@@ -1,0 +1,55 @@
+{
+  "id": "sunny-town-classroom",
+  "name": "Sunny Town Classroom",
+  "tileSize": 32,
+  "width": 20,
+  "height": 15,
+  "spawns": [
+    { "x": 320, "y": 416 }
+  ],
+  "starSpawns": [],
+  "portals": [
+    {
+      "id": "classroom-exit-door",
+      "x": 304,
+      "y": 448,
+      "width": 64,
+      "height": 32,
+      "targetMapId": "sunny-town-v1",
+      "targetX": 944,
+      "targetY": 336,
+      "targetFacing": "down"
+    }
+  ],
+  "npcs": [
+    {
+      "id": "teacher",
+      "name": "Teacher",
+      "x": 320,
+      "y": 160,
+      "facing": "down",
+      "spriteKey": "teacher",
+      "dialogue": [
+        "Welcome to class.",
+        "Ready to do some school work?"
+      ],
+      "activity": {
+        "type": "schoolwork"
+      }
+    }
+  ],
+  "blockedRects": [
+    { "x": 0, "y": 0, "width": 640, "height": 32 },
+    { "x": 0, "y": 448, "width": 304, "height": 32 },
+    { "x": 368, "y": 448, "width": 272, "height": 32 },
+    { "x": 0, "y": 0, "width": 32, "height": 480 },
+    { "x": 608, "y": 0, "width": 32, "height": 480 },
+    { "x": 96, "y": 224, "width": 96, "height": 48 },
+    { "x": 256, "y": 224, "width": 96, "height": 48 },
+    { "x": 416, "y": 224, "width": 96, "height": 48 },
+    { "x": 96, "y": 320, "width": 96, "height": 48 },
+    { "x": 256, "y": 320, "width": 96, "height": 48 },
+    { "x": 416, "y": 320, "width": 96, "height": 48 },
+    { "x": 224, "y": 96, "width": 192, "height": 32 }
+  ]
+}

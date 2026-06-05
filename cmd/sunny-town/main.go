@@ -87,14 +87,19 @@ type portal struct {
 }
 
 type npc struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	X         float64  `json:"x"`
-	Y         float64  `json:"y"`
-	Facing    string   `json:"facing"`
-	SpriteKey string   `json:"spriteKey"`
-	Dialogue  []string `json:"dialogue"`
-	Shop      *shop    `json:"shop,omitempty"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	X         float64   `json:"x"`
+	Y         float64   `json:"y"`
+	Facing    string    `json:"facing"`
+	SpriteKey string    `json:"spriteKey"`
+	Dialogue  []string  `json:"dialogue"`
+	Shop      *shop     `json:"shop,omitempty"`
+	Activity  *activity `json:"activity,omitempty"`
+}
+
+type activity struct {
+	Type string `json:"type"`
 }
 
 type shop struct {
@@ -1093,6 +1098,9 @@ func loadMap(path string) (gameMap, error) {
 				}
 				shopItemKeys[item.ItemKey] = true
 			}
+		}
+		if loadedNPC.Activity != nil && loadedNPC.Activity.Type != "schoolwork" {
+			return gameMap{}, fmt.Errorf("map %q npc %q has invalid activity type %q", loaded.ID, loadedNPC.ID, loadedNPC.Activity.Type)
 		}
 	}
 	return loaded, nil

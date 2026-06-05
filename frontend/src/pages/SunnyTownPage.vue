@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getNextStudentAssignment, submitStudentAnswer } from '../api/studentAssignmentsApi'
 import { createSunnyTownSession } from '../api/sunnyTownApi'
 import { purchaseShopItem } from '../api/shopApi'
 import { useStudentInventoryStore } from '../stores/studentInventory'
+import type { Assignment } from '../types/assignment'
 import type {
   SunnyTownCollectible,
   SunnyTownEquipmentChangedMessage,
@@ -54,6 +56,14 @@ const shopOpen = ref(false)
 const shopError = ref('')
 const shopNotice = ref('')
 const isPurchasing = ref(false)
+const activeSchoolworkNpc = ref<SunnyTownNpc | null>(null)
+const schoolworkOpen = ref(false)
+const schoolworkAssignment = ref<Assignment | null>(null)
+const schoolworkAnswer = ref('')
+const schoolworkError = ref('')
+const schoolworkNotice = ref('')
+const isLoadingSchoolwork = ref(false)
+const isSubmittingSchoolwork = ref(false)
 
 const pressedDirections = new Set<MovementDirection>()
 const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
@@ -186,17 +196,22 @@ function parseServerMessage(data: unknown): SunnyTownServerMessage | null {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (event.code === 'KeyE' || event.key.toLowerCase() === 'e') {
-    event.preventDefault()
-    toggleInventory()
-    return
-  }
   if (event.code === 'Escape') {
-    if (activeDialogueNpc.value || activeShopNpc.value || inventoryOpen.value) {
+    if (activeDialogueNpc.value || activeShopNpc.value || activeSchoolworkNpc.value || inventoryOpen.value) {
       event.preventDefault()
       closeNpcOverlays()
       inventoryOpen.value = false
     }
+    return
+  }
+
+  if (isEditableKeyboardTarget(event.target)) {
+    return
+  }
+
+  if (event.code === 'KeyE' || event.key.toLowerCase() === 'e') {
+    event.preventDefault()
+    toggleInventory()
     return
   }
   if (event.code === 'KeyF' || event.key.toLowerCase() === 'f') {
@@ -301,6 +316,9 @@ function interactWithNearbyNpc() {
   if (!activeMap.value) {
     return
   }
+  if (activeSchoolworkNpc.value) {
+    return
+  }
   if (activeDialogueNpc.value) {
     if (activeDialogueLineIndex.value < activeDialogueNpc.value.dialogue.length - 1) {
       activeDialogueLineIndex.value++
@@ -318,6 +336,10 @@ function interactWithNearbyNpc() {
     openShopMenu(npc)
     return
   }
+  if (npc.activity?.type === 'schoolwork') {
+    openSchoolworkMenu(npc)
+    return
+  }
   activeDialogueNpc.value = npc
   activeDialogueLineIndex.value = 0
 }
@@ -330,10 +352,46 @@ function closeDialogue() {
 function openShopMenu(npc: SunnyTownNpc) {
   activeDialogueNpc.value = null
   activeDialogueLineIndex.value = 0
+  activeSchoolworkNpc.value = null
+  schoolworkOpen.value = false
   activeShopNpc.value = npc
   shopOpen.value = false
   shopError.value = ''
   shopNotice.value = ''
+}
+
+function openSchoolworkMenu(npc: SunnyTownNpc) {
+  activeDialogueNpc.value = null
+  activeDialogueLineIndex.value = 0
+  activeShopNpc.value = null
+  shopOpen.value = false
+  activeSchoolworkNpc.value = npc
+  schoolworkOpen.value = false
+  schoolworkAssignment.value = null
+  schoolworkAnswer.value = ''
+  schoolworkError.value = ''
+  schoolworkNotice.value = ''
+  handleInputCancel()
+}
+
+async function startSchoolwork() {
+  if (!activeSchoolworkNpc.value || isLoadingSchoolwork.value) {
+    return
+  }
+  schoolworkOpen.value = true
+  schoolworkAssignment.value = null
+  schoolworkAnswer.value = ''
+  schoolworkError.value = ''
+  schoolworkNotice.value = ''
+  isLoadingSchoolwork.value = true
+
+  try {
+    schoolworkAssignment.value = await getNextStudentAssignment()
+  } catch (caught) {
+    schoolworkError.value = errorMessage(caught)
+  } finally {
+    isLoadingSchoolwork.value = false
+  }
 }
 
 async function openTrade() {
@@ -353,6 +411,14 @@ function closeNpcOverlays() {
   shopError.value = ''
   shopNotice.value = ''
   isPurchasing.value = false
+  activeSchoolworkNpc.value = null
+  schoolworkOpen.value = false
+  schoolworkAssignment.value = null
+  schoolworkAnswer.value = ''
+  schoolworkError.value = ''
+  schoolworkNotice.value = ''
+  isLoadingSchoolwork.value = false
+  isSubmittingSchoolwork.value = false
 }
 
 async function buyShopItem(itemKey: string) {
@@ -377,6 +443,27 @@ async function buyShopItem(itemKey: string) {
     shopError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
     isPurchasing.value = false
+  }
+}
+
+async function submitSchoolworkAnswer() {
+  if (!schoolworkAssignment.value || isSubmittingSchoolwork.value) {
+    return
+  }
+
+  isSubmittingSchoolwork.value = true
+  schoolworkError.value = ''
+  schoolworkNotice.value = ''
+
+  try {
+    await submitStudentAnswer(schoolworkAssignment.value.id, schoolworkAnswer.value.trim())
+    schoolworkNotice.value = 'Answer submitted.'
+    schoolworkAnswer.value = ''
+    schoolworkAssignment.value = await getNextStudentAssignment()
+  } catch (caught) {
+    schoolworkError.value = errorMessage(caught)
+  } finally {
+    isSubmittingSchoolwork.value = false
   }
 }
 
@@ -488,6 +575,9 @@ function refreshNpcInteractionState() {
     closeDialogue()
   }
   if (activeShopNpc.value && nextNearbyNpc?.id !== activeShopNpc.value.id) {
+    closeNpcOverlays()
+  }
+  if (activeSchoolworkNpc.value && nextNearbyNpc?.id !== activeSchoolworkNpc.value.id) {
     closeNpcOverlays()
   }
 }
@@ -748,13 +838,20 @@ function drawMap(
   width: number,
   height: number,
 ) {
-  context.fillStyle = map.id === 'sunny-town-v1' ? '#8fcf85' : '#cda66f'
+  context.fillStyle = map.id === 'sunny-town-v1'
+    ? '#8fcf85'
+    : map.id === 'sunny-town-classroom' ? '#b7c6da' : '#cda66f'
   context.fillRect(0, 0, width, height)
 
   if (map.id === 'sunny-town-v1') {
     context.fillStyle = '#d6bd79'
     context.fillRect(0 - cameraX, 420 - cameraY, map.width * map.tileSize, 124)
     context.fillRect(570 - cameraX, 0 - cameraY, 140, map.height * map.tileSize)
+  } else if (map.id === 'sunny-town-classroom') {
+    context.fillStyle = '#e4d4b5'
+    context.fillRect(64 - cameraX, 64 - cameraY, map.width * map.tileSize - 128, map.height * map.tileSize - 128)
+    context.fillStyle = '#3f596f'
+    context.fillRect(224 - cameraX, 82 - cameraY, 192, 44)
   } else {
     context.fillStyle = '#d9bd8d'
     context.fillRect(64 - cameraX, 64 - cameraY, map.width * map.tileSize - 128, map.height * map.tileSize - 128)
@@ -778,7 +875,9 @@ function drawMap(
   for (const blocked of map.blockedRects) {
     context.fillStyle = map.id === 'sunny-town-v1'
       ? blocked.width > 400 || blocked.height > 400 ? '#4f8a5b' : '#7e6b52'
-      : blocked.width > 260 || blocked.height > 260 ? '#6d4f38' : '#8b6748'
+      : map.id === 'sunny-town-classroom'
+        ? blocked.width > 260 || blocked.height > 260 ? '#516070' : '#8a6f4d'
+        : blocked.width > 260 || blocked.height > 260 ? '#6d4f38' : '#8b6748'
     context.fillRect(blocked.x - cameraX, blocked.y - cameraY, blocked.width, blocked.height)
   }
 
@@ -865,7 +964,7 @@ function drawNpc(context: CanvasRenderingContext2D, npc: SunnyTownNpc, cameraX: 
   context.ellipse(x, y + 16, 18, 7, 0, 0, Math.PI * 2)
   context.fill()
 
-  context.fillStyle = npc.spriteKey === 'keeper' ? '#8b4f9f' : '#b96b4f'
+  context.fillStyle = npc.spriteKey === 'keeper' ? '#8b4f9f' : npc.spriteKey === 'teacher' ? '#2f6b8f' : '#b96b4f'
   context.beginPath()
   context.arc(x, y, 16, 0, Math.PI * 2)
   context.fill()
@@ -958,6 +1057,19 @@ function movementDirectionForEvent(event: KeyboardEvent): MovementDirection | nu
   }
 }
 
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  const tagName = target.tagName.toLowerCase()
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
@@ -1003,7 +1115,7 @@ function backToPet() {
         <v-icon icon="mdi-keyboard" size="small" />
         <span>Move with arrow keys or WASD - E inventory - F talk</span>
       </div>
-      <div v-if="nearbyNpc && !activeDialogueNpc && !inventoryOpen" class="sunny-town-talk-hint">
+      <div v-if="nearbyNpc && !activeDialogueNpc && !activeSchoolworkNpc && !inventoryOpen" class="sunny-town-talk-hint">
         <v-icon icon="mdi-chat" size="small" />
         <span>F {{ nearbyNpc.name }}</span>
       </div>
@@ -1029,6 +1141,85 @@ function backToPet() {
             Exit
           </v-btn>
         </div>
+      </div>
+      <div
+        v-if="activeSchoolworkNpc && !schoolworkOpen"
+        class="sunny-town-npc-menu"
+        role="dialog"
+        :aria-label="activeSchoolworkNpc.name"
+      >
+        <strong>{{ activeSchoolworkNpc.name }}</strong>
+        <p>{{ activeSchoolworkNpc.dialogue[0] }}</p>
+        <div class="sunny-town-npc-menu__actions">
+          <v-btn color="primary" prepend-icon="mdi-school" variant="flat" @click="startSchoolwork">
+            Do School Work
+          </v-btn>
+          <v-btn prepend-icon="mdi-close" variant="tonal" @click="closeNpcOverlays">
+            Exit
+          </v-btn>
+        </div>
+      </div>
+      <div
+        v-if="activeSchoolworkNpc && schoolworkOpen"
+        class="sunny-town-schoolwork"
+        role="dialog"
+        :aria-label="`${activeSchoolworkNpc.name} school work`"
+      >
+        <div class="sunny-town-schoolwork__header">
+          <div>
+            <strong>{{ activeSchoolworkNpc.name }}</strong>
+            <span>School Work</span>
+          </div>
+          <v-btn icon="mdi-close" size="x-small" variant="text" @click="closeNpcOverlays" />
+        </div>
+        <v-progress-linear
+          v-if="isLoadingSchoolwork"
+          class="mb-3"
+          color="primary"
+          indeterminate
+        />
+        <v-alert v-if="schoolworkError" class="mb-3" density="compact" type="error" variant="tonal">
+          {{ schoolworkError }}
+        </v-alert>
+        <v-alert v-if="schoolworkNotice" class="mb-3" density="compact" type="success" variant="tonal">
+          {{ schoolworkNotice }}
+        </v-alert>
+        <v-alert
+          v-if="!isLoadingSchoolwork && !schoolworkAssignment && !schoolworkError"
+          density="compact"
+          type="success"
+          variant="tonal"
+        >
+          You have finished all assignments.
+        </v-alert>
+        <v-form
+          v-if="schoolworkAssignment"
+          class="sunny-town-schoolwork__form"
+          @submit.prevent="submitSchoolworkAnswer"
+        >
+          <div class="sunny-town-schoolwork__question">
+            <v-chip color="primary" size="small" variant="tonal">
+              {{ schoolworkAssignment.category }}
+            </v-chip>
+            <p>{{ schoolworkAssignment.prompt }}</p>
+          </div>
+          <v-textarea
+            v-model="schoolworkAnswer"
+            label="Your answer"
+            rows="4"
+            variant="outlined"
+          />
+          <v-btn
+            :disabled="schoolworkAnswer.trim().length === 0"
+            :loading="isSubmittingSchoolwork"
+            color="primary"
+            prepend-icon="mdi-send"
+            type="submit"
+            variant="flat"
+          >
+            Submit Answer
+          </v-btn>
+        </v-form>
       </div>
       <div v-if="activeShopNpc && shopOpen" class="sunny-town-shop" role="dialog" :aria-label="`${activeShopNpc.name} shop`">
         <div class="sunny-town-shop__header">
