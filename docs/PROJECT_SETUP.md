@@ -1,0 +1,208 @@
+# HQ Project Setup
+
+This file is a practical orientation guide for an AI agent or developer working on HQ.
+
+HQ is a local-network homework app. A Go server serves the built Vue app, exposes JSON and Connect RPC APIs, stores app data in PostgreSQL, and validates Keycloak access tokens for teacher/student login.
+
+## Services
+
+### HQ Go Server
+
+- Source: `cmd/hq/`
+- Default port: `8080`
+- Common local-network port: `18080`
+- Serves:
+  - built frontend from `web/`
+  - JSON APIs under `/api/...`
+  - Connect RPC pet APIs under `/hq.pet.v1.PetService/...`
+  - health check at `/healthz`
+- Requires:
+  - `DATABASE_URL`
+  - `KEYCLOAK_ISSUER`
+  - `KEYCLOAK_AUDIENCE`
+
+### Frontend
+
+- Source: `frontend/`
+- Framework: Vue 3 + Vuetify + Pinia
+- Build output: `web/`
+- Build command:
+
+```powershell
+cd frontend
+npm run build
+```
+
+The frontend auth helper is `frontend/src/auth.ts`. It intentionally avoids `keycloak-js` because browsers block Web Crypto on plain LAN HTTP URLs such as `http://<YOUR_LAN_IP>:18080`.
+
+For this local-network setup, frontend login uses Keycloak implicit flow and sends the Keycloak access token as a bearer token to the Go backend.
+
+### App PostgreSQL
+
+- Service name: `postgres`
+- Container: `hq-postgres`
+- Image: `postgres:16-alpine`
+- Host port: `55432`
+- Database/user/password: `hq` / `hq` / `hq`
+- Init SQL: `deploy/postgres/init/001_create_assignment.sql`
+- Persistent volume: `hq-postgres-data`
+
+Main tables:
+
+- `app_user`: local app user profile synced from Keycloak subject
+- `app_user_role`: app copy of Keycloak `student` / `teacher` roles
+- `assignment`: teacher-created questions
+- `assignment_attempt`: per-student answers, grading, feedback, resets
+- `pet_state`: per-student virtual pet state
+
+The Go app also runs schema-safety upgrades at startup in `cmd/hq/schema.go`.
+
+### Keycloak
+
+- Service name: `keycloak`
+- Container: `hq-keycloak`
+- Image: `quay.io/keycloak/keycloak:26.0`
+- Host port: `18081`
+- Realm: `hq`
+- Client: `hq-web`
+- Roles: `teacher`, `student`
+- Realm import: `deploy/keycloak/hq-realm.json`
+- Admin user: `admin`
+- Admin password: `admin`
+
+Keycloak data is stored in a separate Postgres service:
+
+- Service name: `keycloak-postgres`
+- Container: `hq-keycloak-postgres`
+- Persistent volume: `hq-keycloak-postgres-data`
+
+Important: Keycloak imports the realm only on first startup for a fresh Keycloak database. If the realm already exists, changing `deploy/keycloak/hq-realm.json` does not automatically update the running realm. Update the client in the Keycloak admin UI/API or reset the Keycloak volume.
+
+## Start The Stack
+
+Start Postgres and Keycloak:
+
+```powershell
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+Find the laptop LAN IP:
+
+```powershell
+$route = Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1
+Get-NetIPAddress -InterfaceIndex $route.InterfaceIndex -AddressFamily IPv4
+```
+
+Run HQ with the same LAN host that users will open in their browsers. Example:
+
+```powershell
+$env:DATABASE_URL="postgres://hq:hq@localhost:55432/hq?sslmode=disable"
+$env:HQ_PORT="18080"
+$env:KEYCLOAK_ISSUER="http://<YOUR_LAN_IP>:18081/realms/hq"
+$env:KEYCLOAK_AUDIENCE="hq-web"
+go run ./cmd/hq
+```
+
+Open the app:
+
+```text
+http://<YOUR_LAN_IP>:18080
+```
+
+Open Keycloak admin:
+
+```text
+http://<YOUR_LAN_IP>:18081
+```
+
+Use:
+
+```text
+admin / admin
+```
+
+## Create Users
+
+In Keycloak:
+
+1. Open the `hq` realm.
+2. Go to `Users`.
+3. Create one user per person.
+4. Set a non-temporary password in the Credentials tab.
+5. Assign realm role `student`, `teacher`, or both in Role mapping.
+
+HQ determines authorization from Keycloak roles in the access token. The backend validates the token and enforces role checks server-side. On first authenticated request, HQ creates or updates the local `app_user` row and role rows.
+
+## Useful Commands
+
+Health check:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18080/healthz
+```
+
+Verify Keycloak discovery:
+
+```powershell
+Invoke-WebRequest -UseBasicParsing http://<YOUR_LAN_IP>:18081/realms/hq/.well-known/openid-configuration
+```
+
+Run backend checks:
+
+```powershell
+go test ./...
+```
+
+Build frontend:
+
+```powershell
+cd frontend
+npm run build
+```
+
+Inspect containers:
+
+```powershell
+docker ps --filter name=hq --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+View Keycloak logs:
+
+```powershell
+docker logs hq-keycloak --tail 120
+```
+
+## Local-Network Auth Notes
+
+- Use one consistent host/IP for HQ and Keycloak. If users open HQ at `http://<YOUR_LAN_IP>:18080`, then `KEYCLOAK_ISSUER` should be `http://<YOUR_LAN_IP>:18081/realms/hq`.
+- Do not rely on `localhost` from student devices. On a phone/tablet, `localhost` means that device, not the laptop.
+- Plain LAN HTTP is not a secure browser context. Browser Web Crypto APIs are unavailable, so `keycloak-js` and PKCE are not usable here without HTTPS.
+- This project currently uses implicit flow only for local trusted-network development. A future hosted HTTPS setup should switch back to authorization-code flow with PKCE.
+- If Keycloak rejects login with `Invalid parameter: redirect_uri`, add the exact HQ URL to the `hq-web` client's Valid redirect URIs.
+
+## Common Pitfalls
+
+- Rebuilding Vue changes hashed asset names in `web/assets/`. Hard-refresh the browser if it still loads an older bundle.
+- If `127.0.0.1:18081` serves the HQ app instead of Keycloak, a stale Go process is probably listening on that address. Check listeners:
+
+```powershell
+Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 18080,18081 }
+```
+
+- Keycloak realm import is not a live migration. For existing Keycloak data, update the realm/client through the admin UI/API.
+- Existing uncommitted work may include generated frontend assets in `web/`; avoid deleting unrelated user changes.
+
+## Important Files
+
+- `cmd/hq/main.go`: JSON API routing and assignment workflows
+- `cmd/hq/auth.go`: Keycloak JWT/JWKS validation
+- `cmd/hq/schema.go`: runtime schema upgrades and app-user sync
+- `cmd/hq/pet_service.go`: Connect RPC pet service
+- `deploy/docker-compose.yml`: PostgreSQL and Keycloak services
+- `deploy/keycloak/hq-realm.json`: initial Keycloak realm/client/roles
+- `deploy/postgres/init/001_create_assignment.sql`: fresh app database schema
+- `frontend/src/auth.ts`: local-network OIDC login helper
+- `frontend/src/App.vue`: app shell, route outlet, game overlay, and floating pet
+- `frontend/src/features/student/`: student workflow pages and tabs
+- `frontend/src/features/teacher/`: teacher workflow pages and grading panels
+- `frontend/src/stores/studentPet.ts`: pet Pinia store and Connect client

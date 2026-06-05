@@ -9,7 +9,7 @@ This is the Vue 3 + Vuetify frontend for HQ.
 - `src/stores/studentPet.js` is the Pinia store for the virtual pet. It uses the generated Connect client.
 - `src/components/StudentPet.vue` renders the floating animated pet avatar.
 - `src/gen/hq/pet/v1/pet_pb.ts` is generated from `../proto/hq/pet/v1/pet.proto`.
-- `vite.config.js` builds production assets into `../web/` so the Go server can serve them.
+- `vite.config.ts` builds production assets into `../web/` so the Go server can serve them.
 
 ## Development
 

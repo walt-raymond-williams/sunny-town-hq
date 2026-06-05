@@ -22,7 +22,8 @@ import (
 )
 
 type app struct {
-	db *pgxpool.Pool
+	db   *pgxpool.Pool
+	auth *authVerifier
 }
 
 var errNoCookies = errors.New("no cookies available")
@@ -33,21 +34,19 @@ type createAssignmentRequest struct {
 	ExpectedAnswer string `json:"expected_answer"`
 }
 
-type teacherLoginRequest struct {
-	Password string `json:"password"`
-}
-
 type submitAssignmentRequest struct {
 	SubmittedAnswer string `json:"submitted_answer"`
 }
 
 type gradeAssignmentRequest struct {
-	Passed   *bool  `json:"passed"`
-	Feedback string `json:"feedback"`
+	AttemptID int64  `json:"attempt_id"`
+	Passed    *bool  `json:"passed"`
+	Feedback  string `json:"feedback"`
 }
 
 type resetAssignmentRequest struct {
-	Feedback string `json:"feedback"`
+	AttemptID int64  `json:"attempt_id"`
+	Feedback  string `json:"feedback"`
 }
 
 type petStateResponse struct {
@@ -70,6 +69,8 @@ type studentProfileResponse struct {
 type assignmentAttemptResponse struct {
 	ID              int64      `json:"id"`
 	AssignmentID    int64      `json:"assignment_id"`
+	StudentUserID   int64      `json:"student_user_id"`
+	StudentName     string     `json:"student_display_name"`
 	AttemptNumber   int        `json:"attempt_number"`
 	SubmittedAnswer string     `json:"submitted_answer"`
 	DateSubmitted   time.Time  `json:"date_submitted"`
@@ -110,7 +111,15 @@ func main() {
 		log.Fatalf("ping postgres: %v", err)
 	}
 
-	app := &app{db: db}
+	keycloakIssuer := envOrDefault("KEYCLOAK_ISSUER", "http://localhost:18081/realms/hq")
+	keycloakAudience := envOrDefault("KEYCLOAK_AUDIENCE", "hq-web")
+	app := &app{
+		db:   db,
+		auth: newAuthVerifier(keycloakIssuer, keycloakAudience),
+	}
+	if err := app.ensureSchema(ctx); err != nil {
+		log.Fatalf("ensure schema: %v", err)
+	}
 	app.startPetDecayTicker(ctx)
 
 	webRoot := filepath.Join(".", "web")
@@ -121,18 +130,22 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	mux.HandleFunc("/api/teacher/login", app.handleTeacherLogin)
-	mux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
-	mux.HandleFunc("/api/student/profile", app.handleStudentProfile)
-	mux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
-	mux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
-	mux.HandleFunc("/api/student/assignments/graded", app.handleStudentGradedAssignments)
-	mux.HandleFunc("/api/assignments/answered", app.handleAnsweredAssignments)
-	mux.HandleFunc("/api/assignments", app.handleAssignments)
-	mux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
+	apiMux := http.NewServeMux()
+	apiMux.HandleFunc("/api/me", app.handleMe)
+	apiMux.HandleFunc("/api/students", app.handleStudents)
+	apiMux.HandleFunc("/api/teacher/login", app.handleTeacherLogin)
+	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
+	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
+	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
+	apiMux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
+	apiMux.HandleFunc("/api/student/assignments/graded", app.handleStudentGradedAssignments)
+	apiMux.HandleFunc("/api/assignments/answered", app.handleAnsweredAssignments)
+	apiMux.HandleFunc("/api/assignments", app.handleAssignments)
+	apiMux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
+	mux.Handle("/api/", app.authenticated(apiMux))
 
 	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
-	mux.Handle(petServicePath, petServiceHandler)
+	mux.Handle(petServicePath, app.authenticated(petServiceHandler))
 
 	mux.HandleFunc("/", staticHandler(webRoot))
 
@@ -153,34 +166,14 @@ func main() {
 }
 
 func (app *app) handleTeacherLogin(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRole(w, r, "teacher"); !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var request teacherLoginRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "request body must be valid JSON",
-		})
-		return
-	}
-
-	if request.Password != "local-demo-password" {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "incorrect teacher password",
-		})
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     "hq_teacher",
-		Value:    "local-demo-password",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   60 * 60 * 8,
-	})
 	writeJSON(w, http.StatusOK, map[string]string{
 		"role": "teacher",
 	})
@@ -192,25 +185,51 @@ func (app *app) handleTeacherLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     "hq_teacher",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   -1,
-		Expires:  time.Unix(0, 0),
-	})
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status": "logged out",
 	})
 }
 
-func (app *app) handleAssignments(w http.ResponseWriter, r *http.Request) {
-	if !isTeacher(r) {
+func (app *app) handleMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user, ok := userFromContext(r.Context())
+	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "teacher login required",
+			"error": "login required",
 		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, user)
+}
+
+func (app *app) handleStudents(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRole(w, r, "teacher"); !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	students, err := app.loadStudents(r.Context())
+	if err != nil {
+		log.Printf("load students: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "students could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, students)
+}
+
+func (app *app) handleAssignments(w http.ResponseWriter, r *http.Request) {
+	if _, ok := requireRole(w, r, "teacher"); !ok {
 		return
 	}
 
@@ -240,10 +259,7 @@ func (app *app) handleAssignmentByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !isTeacher(r) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "teacher login required",
-		})
+	if _, ok := requireRole(w, r, "teacher"); !ok {
 		return
 	}
 
@@ -277,12 +293,16 @@ func (app *app) handleAssignmentByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) handleStudentProfile(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	profile, err := app.loadStudentProfile(r.Context())
+	profile, err := app.loadStudentProfile(r.Context(), user.ID)
 	if err != nil {
 		log.Printf("load student profile: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -295,12 +315,16 @@ func (app *app) handleStudentProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	profile, err := app.feedStudentPet(r.Context())
+	profile, err := app.feedStudentPet(r.Context(), user.ID)
 	if errors.Is(err, errNoCookies) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "no cookies available",
@@ -319,6 +343,10 @@ func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -335,7 +363,7 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		categoryClause = "and a.category = $1"
+		categoryClause = "and a.category = $2"
 		suffixArgs = append(suffixArgs, category)
 	}
 
@@ -346,13 +374,14 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 				select 1
 				from assignment_attempt aa
 				where aa.assignment_id = a.id
+					and aa.student_user_id = $1
 					and aa.reset_at is null
 			)
 			`+categoryClause+`
 			order by a.id asc
 			limit 1
 		`,
-		suffixArgs...,
+		append([]any{user.ID}, suffixArgs...)...,
 	)
 	if err != nil {
 		log.Printf("load next student assignment: %v", err)
@@ -369,12 +398,17 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	restrictAssignmentsToStudent(assignments, user.ID)
 	writeJSON(w, http.StatusOK, map[string]assignmentResponse{
 		"assignment": assignments[0],
 	})
 }
 
 func (app *app) handleStudentGradedAssignments(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -387,10 +421,12 @@ func (app *app) handleStudentGradedAssignments(w http.ResponseWriter, r *http.Re
 				select 1
 				from assignment_attempt aa
 				where aa.assignment_id = a.id
+					and aa.student_user_id = $1
 					and aa.passed is not null
 			)
 			order by a.category asc, a.id desc
 		`,
+		user.ID,
 	)
 	if err != nil {
 		log.Printf("list student graded assignments: %v", err)
@@ -401,6 +437,7 @@ func (app *app) handleStudentGradedAssignments(w http.ResponseWriter, r *http.Re
 	}
 
 	for index := range assignments {
+		assignments[index].Attempts = attemptsForStudent(assignments[index].Attempts, user.ID)
 		assignments[index].Attempts = gradedAttempts(assignments[index].Attempts)
 		assignments[index].CurrentAttempt = currentAttempt(assignments[index].Attempts)
 	}
@@ -409,6 +446,10 @@ func (app *app) handleStudentGradedAssignments(w http.ResponseWriter, r *http.Re
 }
 
 func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -439,22 +480,26 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 	err := app.db.QueryRow(
 		r.Context(),
 		`
-			insert into assignment_attempt (assignment_id, attempt_number, submitted_answer)
+			insert into assignment_attempt (assignment_id, student_user_id, attempt_number, submitted_answer)
 			select a.id,
+				$1,
 				coalesce(max(aa.attempt_number), 0) + 1,
-				$1
+				$2
 			from assignment a
 			left join assignment_attempt aa on aa.assignment_id = a.id
-			where a.id = $2
+				and aa.student_user_id = $1
+			where a.id = $3
 				and not exists (
 					select 1
 					from assignment_attempt active_attempt
 					where active_attempt.assignment_id = a.id
+						and active_attempt.student_user_id = $1
 						and active_attempt.reset_at is null
 				)
 			group by a.id
 			returning id
 		`,
+		user.ID,
 		request.SubmittedAnswer,
 		id,
 	).Scan(&attemptID)
@@ -481,15 +526,14 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	assignment.Attempts = attemptsForStudent(assignment.Attempts, user.ID)
+	assignment.CurrentAttempt = currentAttempt(assignment.Attempts)
 
 	writeJSON(w, http.StatusOK, assignment)
 }
 
 func (app *app) handleAnsweredAssignments(w http.ResponseWriter, r *http.Request) {
-	if !isTeacher(r) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "teacher login required",
-		})
+	if _, ok := requireRole(w, r, "teacher"); !ok {
 		return
 	}
 
@@ -536,10 +580,7 @@ func (app *app) handleAnsweredAssignments(w http.ResponseWriter, r *http.Request
 }
 
 func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
-	if !isTeacher(r) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "teacher login required",
-		})
+	if _, ok := requireRole(w, r, "teacher"); !ok {
 		return
 	}
 
@@ -568,6 +609,12 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if request.AttemptID < 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "attempt_id is required",
+		})
+		return
+	}
 
 	tx, err := app.db.Begin(r.Context())
 	if err != nil {
@@ -582,19 +629,20 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	var attemptID int64
+	var studentUserID int64
 	var cookieAwarded bool
 	err = tx.QueryRow(
 		r.Context(),
 		`
-			select aa.id, aa.cookie_awarded
+			select aa.id, aa.student_user_id, aa.cookie_awarded
 			from assignment_attempt aa
-			where aa.assignment_id = $1
+			where aa.id = $1
+				and aa.assignment_id = $2
 				and aa.reset_at is null
-			order by aa.attempt_number desc
-			limit 1
 		`,
+		request.AttemptID,
 		id,
-	).Scan(&attemptID, &cookieAwarded)
+	).Scan(&attemptID, &studentUserID, &cookieAwarded)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "answered assignment not found",
@@ -645,7 +693,8 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 	if awardCookie {
 		if _, err := tx.Exec(
 			r.Context(),
-			"update app_user set cookies = cookies + 1 where id = 1",
+			"update app_user set cookies = cookies + 1 where id = $1",
+			studentUserID,
 		); err != nil {
 			log.Printf("award cookie: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -676,10 +725,7 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) resetAssignment(w http.ResponseWriter, r *http.Request) {
-	if !isTeacher(r) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "teacher login required",
-		})
+	if _, ok := requireRole(w, r, "teacher"); !ok {
 		return
 	}
 
@@ -703,6 +749,12 @@ func (app *app) resetAssignment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	request.Feedback = strings.TrimSpace(request.Feedback)
+	if request.AttemptID < 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "attempt_id is required",
+		})
+		return
+	}
 
 	result, err := app.db.Exec(
 		r.Context(),
@@ -710,16 +762,12 @@ func (app *app) resetAssignment(w http.ResponseWriter, r *http.Request) {
 			update assignment_attempt
 			set feedback = nullif($1, ''),
 				reset_at = now()
-			where id = (
-				select aa.id
-				from assignment_attempt aa
-				where aa.assignment_id = $2
-					and aa.reset_at is null
-				order by aa.attempt_number desc
-				limit 1
-			)
+			where id = $2
+				and assignment_id = $3
+				and reset_at is null
 		`,
 		request.Feedback,
+		request.AttemptID,
 		id,
 	)
 	if err != nil {
@@ -750,13 +798,40 @@ func (app *app) resetAssignment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) listAssignments(w http.ResponseWriter, r *http.Request) {
-	assignments, err := app.loadAssignments(r.Context(), "order by a.id desc")
+	category := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("category")))
+	studentIDText := strings.TrimSpace(r.URL.Query().Get("student_id"))
+
+	suffix := "order by a.id desc"
+	args := []any{}
+	if category != "" {
+		if !isValidCategory(category) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "category must be MATH, SCIENCE, or READING",
+			})
+			return
+		}
+		suffix = "where a.category = $1 order by a.id desc"
+		args = append(args, category)
+	}
+
+	assignments, err := app.loadAssignments(r.Context(), suffix, args...)
 	if err != nil {
 		log.Printf("list assignments: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "assignments could not be loaded",
 		})
 		return
+	}
+
+	if studentIDText != "" && studentIDText != "ALL" {
+		studentID, err := strconv.ParseInt(studentIDText, 10, 64)
+		if err != nil || studentID < 1 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "student_id must be a positive integer",
+			})
+			return
+		}
+		restrictAssignmentsToStudent(assignments, studentID)
 	}
 
 	writeJSON(w, http.StatusOK, assignments)
@@ -834,15 +909,15 @@ func (app *app) loadAssignmentByID(ctx context.Context, id int64) (assignmentRes
 	return assignments[0], nil
 }
 
-func (app *app) loadStudentProfile(ctx context.Context) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx); err != nil {
+func (app *app) loadStudentProfile(ctx context.Context, userID int64) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx, userID); err != nil {
 		return studentProfileResponse{}, err
 	}
 
-	return app.loadStudentProfileWithoutDecay(ctx)
+	return app.loadStudentProfileWithoutDecay(ctx, userID)
 }
 
-func (app *app) loadStudentProfileWithoutDecay(ctx context.Context) (studentProfileResponse, error) {
+func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64) (studentProfileResponse, error) {
 	var profile studentProfileResponse
 	err := app.db.QueryRow(
 		ctx,
@@ -866,7 +941,7 @@ func (app *app) loadStudentProfileWithoutDecay(ctx context.Context) (studentProf
 			join pet_state ps on ps.user_id = u.id
 			where u.id = $1
 		`,
-		petUserID,
+		userID,
 	).Scan(
 		&profile.ID,
 		&profile.DisplayName,
@@ -882,8 +957,8 @@ func (app *app) loadStudentProfileWithoutDecay(ctx context.Context) (studentProf
 	return profile, err
 }
 
-func (app *app) feedStudentPet(ctx context.Context) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx); err != nil {
+func (app *app) feedStudentPet(ctx context.Context, userID int64) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx, userID); err != nil {
 		return studentProfileResponse{}, err
 	}
 
@@ -903,7 +978,7 @@ func (app *app) feedStudentPet(ctx context.Context) (studentProfileResponse, err
 			where id = $1
 				and cookies > 0
 		`,
-		petUserID,
+		userID,
 	)
 	if err != nil {
 		return studentProfileResponse{}, err
@@ -920,7 +995,7 @@ func (app *app) feedStudentPet(ctx context.Context) (studentProfileResponse, err
 				updated_at = now()
 			where user_id = $1
 		`,
-		petUserID,
+		userID,
 	); err != nil {
 		return studentProfileResponse{}, err
 	}
@@ -929,7 +1004,7 @@ func (app *app) feedStudentPet(ctx context.Context) (studentProfileResponse, err
 		return studentProfileResponse{}, err
 	}
 
-	return app.loadStudentProfile(ctx)
+	return app.loadStudentProfile(ctx, userID)
 }
 
 func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any) ([]assignmentResponse, error) {
@@ -979,10 +1054,22 @@ func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any)
 	attemptRows, err := app.db.Query(
 		ctx,
 		`
-			select id, assignment_id, attempt_number, submitted_answer, date_submitted, passed, feedback, date_graded, cookie_awarded, reset_at
-			from assignment_attempt
-			where assignment_id = any($1)
-			order by assignment_id asc, attempt_number asc
+			select aa.id,
+				aa.assignment_id,
+				aa.student_user_id,
+				u.display_name,
+				aa.attempt_number,
+				aa.submitted_answer,
+				aa.date_submitted,
+				aa.passed,
+				aa.feedback,
+				aa.date_graded,
+				aa.cookie_awarded,
+				aa.reset_at
+			from assignment_attempt aa
+			join app_user u on u.id = aa.student_user_id
+			where aa.assignment_id = any($1)
+			order by aa.assignment_id asc, u.display_name asc, aa.attempt_number asc
 		`,
 		ids,
 	)
@@ -996,6 +1083,8 @@ func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any)
 		if err := attemptRows.Scan(
 			&attempt.ID,
 			&attempt.AssignmentID,
+			&attempt.StudentUserID,
+			&attempt.StudentName,
 			&attempt.AttemptNumber,
 			&attempt.SubmittedAnswer,
 			&attempt.DateSubmitted,
@@ -1036,6 +1125,23 @@ func currentAttempt(attempts []assignmentAttemptResponse) *assignmentAttemptResp
 	return nil
 }
 
+func restrictAssignmentsToStudent(assignments []assignmentResponse, studentID int64) {
+	for index := range assignments {
+		assignments[index].Attempts = attemptsForStudent(assignments[index].Attempts, studentID)
+		assignments[index].CurrentAttempt = currentAttempt(assignments[index].Attempts)
+	}
+}
+
+func attemptsForStudent(attempts []assignmentAttemptResponse, studentID int64) []assignmentAttemptResponse {
+	filtered := []assignmentAttemptResponse{}
+	for _, attempt := range attempts {
+		if attempt.StudentUserID == studentID {
+			filtered = append(filtered, attempt)
+		}
+	}
+	return filtered
+}
+
 func gradedAttempts(attempts []assignmentAttemptResponse) []assignmentAttemptResponse {
 	graded := []assignmentAttemptResponse{}
 	for _, attempt := range attempts {
@@ -1071,9 +1177,47 @@ func parseAssignmentID(w http.ResponseWriter, path string, suffix string) (int64
 	return id, true
 }
 
-func isTeacher(r *http.Request) bool {
-	cookie, err := r.Cookie("hq_teacher")
-	return err == nil && cookie.Value == "local-demo-password"
+func (app *app) authenticated(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, err := app.auth.authenticateRequest(r.Context(), r)
+		if err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{
+				"error": "login required",
+			})
+			return
+		}
+
+		user, err = app.syncAuthenticatedUser(r.Context(), user)
+		if err != nil {
+			log.Printf("sync authenticated user: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "user could not be synced",
+			})
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), authUserContextKey, user)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func requireRole(w http.ResponseWriter, r *http.Request, role string) (authUser, bool) {
+	user, ok := userFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "login required",
+		})
+		return authUser{}, false
+	}
+
+	if !hasRole(user, role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": role + " role required",
+		})
+		return authUser{}, false
+	}
+
+	return user, true
 }
 
 func isValidCategory(category string) bool {

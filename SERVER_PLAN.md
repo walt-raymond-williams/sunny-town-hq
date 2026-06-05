@@ -21,7 +21,7 @@ For the first version, Go should serve both APIs and the built frontend from one
 http://<YOUR_LAN_IP>:8080
 ```
 
-The frontend source lives in `frontend/`. Vite builds production assets into `web/`, and Go serves those files. The pet UI uses generated protobuf TypeScript in `frontend/src/gen/` through the Pinia store in `frontend/src/stores/studentPet.js`.
+The frontend source lives in `frontend/`. Vite builds production assets into `web/`, and Go serves those files. The pet UI uses generated protobuf TypeScript in `frontend/src/gen/` through the Pinia store in `frontend/src/stores/studentPet.ts`.
 
 In development, Vite can run separately for hot reload. For the laptop-hosted version, Vue builds static files and Go serves those files.
 

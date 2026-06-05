@@ -12,12 +12,11 @@ import (
 )
 
 const (
-	petUserID                int64 = 1
-	petDailyDecayPoints            = 144.0
-	petSleepRecoveryDuration       = 10 * time.Minute
-	petDecayTickInterval           = 5 * time.Minute
-	petGameTargetScore             = 10
-	petGameEnergyCost              = 5
+	petDailyDecayPoints      = 144.0
+	petSleepRecoveryDuration = 10 * time.Minute
+	petDecayTickInterval     = 5 * time.Minute
+	petGameTargetScore       = 10
+	petGameEnergyCost        = 5
 )
 
 type petService struct {
@@ -25,7 +24,12 @@ type petService struct {
 }
 
 func (service *petService) GetPetState(ctx context.Context, _ *connect.Request[petv1.GetPetStateRequest]) (*connect.Response[petv1.PetStateResponse], error) {
-	profile, err := service.app.loadStudentProfile(ctx)
+	user, err := requireStudentUser(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	profile, err := service.app.loadStudentProfile(ctx, user.ID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -34,7 +38,12 @@ func (service *petService) GetPetState(ctx context.Context, _ *connect.Request[p
 }
 
 func (service *petService) FeedPet(ctx context.Context, _ *connect.Request[petv1.FeedPetRequest]) (*connect.Response[petv1.PetStateResponse], error) {
-	profile, err := service.app.feedStudentPet(ctx)
+	user, err := requireStudentUser(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	profile, err := service.app.feedStudentPet(ctx, user.ID)
 	if errNoCookies == err {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
@@ -46,7 +55,12 @@ func (service *petService) FeedPet(ctx context.Context, _ *connect.Request[petv1
 }
 
 func (service *petService) PlayWithPet(ctx context.Context, _ *connect.Request[petv1.PlayWithPetRequest]) (*connect.Response[petv1.PetStateResponse], error) {
-	profile, err := service.app.playWithStudentPet(ctx)
+	user, err := requireStudentUser(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	profile, err := service.app.playWithStudentPet(ctx, user.ID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -55,7 +69,12 @@ func (service *petService) PlayWithPet(ctx context.Context, _ *connect.Request[p
 }
 
 func (service *petService) ApplyGameResult(ctx context.Context, request *connect.Request[petv1.ApplyGameResultRequest]) (*connect.Response[petv1.PetStateResponse], error) {
-	profile, err := service.app.applyGameResult(ctx, int(request.Msg.GetScore()))
+	user, err := requireStudentUser(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	profile, err := service.app.applyGameResult(ctx, user.ID, int(request.Msg.GetScore()))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -64,7 +83,12 @@ func (service *petService) ApplyGameResult(ctx context.Context, request *connect
 }
 
 func (service *petService) PutPetToSleep(ctx context.Context, _ *connect.Request[petv1.PutPetToSleepRequest]) (*connect.Response[petv1.PetStateResponse], error) {
-	profile, err := service.app.putStudentPetToSleep(ctx)
+	user, err := requireStudentUser(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	profile, err := service.app.putStudentPetToSleep(ctx, user.ID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -73,7 +97,12 @@ func (service *petService) PutPetToSleep(ctx context.Context, _ *connect.Request
 }
 
 func (service *petService) WakePet(ctx context.Context, _ *connect.Request[petv1.WakePetRequest]) (*connect.Response[petv1.PetStateResponse], error) {
-	profile, err := service.app.wakeStudentPet(ctx)
+	user, err := requireStudentUser(ctx)
+	if err != nil {
+		return nil, connect.NewError(connect.CodePermissionDenied, err)
+	}
+
+	profile, err := service.app.wakeStudentPet(ctx, user.ID)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -82,11 +111,16 @@ func (service *petService) WakePet(ctx context.Context, _ *connect.Request[petv1
 }
 
 func (service *petService) WatchPetState(ctx context.Context, _ *connect.Request[petv1.WatchPetStateRequest], stream *connect.ServerStream[petv1.PetStateResponse]) error {
+	user, err := requireStudentUser(ctx)
+	if err != nil {
+		return connect.NewError(connect.CodePermissionDenied, err)
+	}
+
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
-		profile, err := service.app.loadStudentProfile(ctx)
+		profile, err := service.app.loadStudentProfile(ctx, user.ID)
 		if err != nil {
 			return connect.NewError(connect.CodeInternal, err)
 		}
@@ -112,16 +146,32 @@ func (app *app) startPetDecayTicker(ctx context.Context) {
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				if err := app.applyPetDecay(context.Background()); err != nil {
-					// Decay is opportunistic; request-time decay will catch up later.
-					continue
-				}
+				_ = app.applyPetDecayForAll(context.Background())
 			}
 		}
 	}()
 }
 
-func (app *app) applyPetDecay(ctx context.Context) error {
+func (app *app) applyPetDecayForAll(ctx context.Context) error {
+	rows, err := app.db.Query(ctx, "select user_id from pet_state")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var userID int64
+		if err := rows.Scan(&userID); err != nil {
+			return err
+		}
+		if err := app.applyPetDecay(ctx, userID); err != nil {
+			continue
+		}
+	}
+	return rows.Err()
+}
+
+func (app *app) applyPetDecay(ctx context.Context, userID int64) error {
 	tx, err := app.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -145,7 +195,7 @@ func (app *app) applyPetDecay(ctx context.Context) error {
 			where user_id = $1
 			for update
 		`,
-		petUserID,
+		userID,
 	).Scan(
 		&hunger,
 		&happiness,
@@ -266,7 +316,7 @@ func (app *app) applyPetDecay(ctx context.Context) error {
 		sleepStartedAtValue,
 		sleepStartedEnergyValue,
 		decayApplied,
-		petUserID,
+		userID,
 	)
 	if err != nil {
 		return err
@@ -275,8 +325,8 @@ func (app *app) applyPetDecay(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 
-func (app *app) playWithStudentPet(ctx context.Context) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx); err != nil {
+func (app *app) playWithStudentPet(ctx context.Context, userID int64) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx, userID); err != nil {
 		return studentProfileResponse{}, err
 	}
 
@@ -294,17 +344,17 @@ func (app *app) playWithStudentPet(ctx context.Context) (studentProfileResponse,
 				and not sleeping
 				and energy >= 10
 		`,
-		petUserID,
+		userID,
 	)
 	if err != nil {
 		return studentProfileResponse{}, err
 	}
 
-	return app.loadStudentProfile(ctx)
+	return app.loadStudentProfile(ctx, userID)
 }
 
-func (app *app) applyGameResult(ctx context.Context, score int) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx); err != nil {
+func (app *app) applyGameResult(ctx context.Context, userID int64, score int) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx, userID); err != nil {
 		return studentProfileResponse{}, err
 	}
 
@@ -338,17 +388,17 @@ func (app *app) applyGameResult(ctx context.Context, score int) (studentProfileR
 		`,
 		happinessDelta,
 		petGameEnergyCost,
-		petUserID,
+		userID,
 	)
 	if err != nil {
 		return studentProfileResponse{}, err
 	}
 
-	return app.loadStudentProfile(ctx)
+	return app.loadStudentProfile(ctx, userID)
 }
 
-func (app *app) putStudentPetToSleep(ctx context.Context) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx); err != nil {
+func (app *app) putStudentPetToSleep(ctx context.Context, userID int64) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx, userID); err != nil {
 		return studentProfileResponse{}, err
 	}
 
@@ -362,17 +412,17 @@ func (app *app) putStudentPetToSleep(ctx context.Context) (studentProfileRespons
 				updated_at = now()
 			where user_id = $1
 		`,
-		petUserID,
+		userID,
 	)
 	if err != nil {
 		return studentProfileResponse{}, err
 	}
 
-	return app.loadStudentProfile(ctx)
+	return app.loadStudentProfile(ctx, userID)
 }
 
-func (app *app) wakeStudentPet(ctx context.Context) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx); err != nil {
+func (app *app) wakeStudentPet(ctx context.Context, userID int64) (studentProfileResponse, error) {
+	if err := app.applyPetDecay(ctx, userID); err != nil {
 		return studentProfileResponse{}, err
 	}
 
@@ -388,13 +438,21 @@ func (app *app) wakeStudentPet(ctx context.Context) (studentProfileResponse, err
 			where user_id = $1
 				and sleeping
 		`,
-		petUserID,
+		userID,
 	)
 	if err != nil {
 		return studentProfileResponse{}, err
 	}
 
-	return app.loadStudentProfile(ctx)
+	return app.loadStudentProfile(ctx, userID)
+}
+
+func requireStudentUser(ctx context.Context) (authUser, error) {
+	user, ok := userFromContext(ctx)
+	if !ok || !hasRole(user, "student") {
+		return authUser{}, errInvalidToken
+	}
+	return user, nil
 }
 
 func clampPetStat(value int) int {

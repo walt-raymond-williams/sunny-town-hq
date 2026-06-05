@@ -1,0 +1,43 @@
+{
+  "realm": "hq",
+  "enabled": true,
+  "displayName": "HQ",
+  "roles": {
+    "realm": [
+      {
+        "name": "teacher",
+        "description": "Can manage assignments and grade student answers"
+      },
+      {
+        "name": "student",
+        "description": "Can answer assignments and manage their pet"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "hq-web",
+      "name": "HQ Web",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://127.0.0.1:5173/*",
+        "http://localhost:18080/*",
+        "http://127.0.0.1:18080/*",
+        "http://<YOUR_LAN_IP>:18080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:18080",
+        "http://127.0.0.1:18080",
+        "http://<YOUR_LAN_IP>:18080"
+      ]
+    }
+  ]
+}

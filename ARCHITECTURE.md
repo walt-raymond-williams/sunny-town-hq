@@ -160,7 +160,7 @@ Current pieces:
 
 - `frontend/` contains the Vue 3 + Vuetify source app.
 - `frontend/src/router.js` defines Vue Router routes so browser back/forward works between app pages.
-- `frontend/vite.config.js` builds the frontend into `web/`.
+- `frontend/vite.config.ts` builds the frontend into `web/`.
 - `web/` contains generated production assets served by Go.
 - Go serves the frontend and exposes `/api/...` plus `/hq.pet.v1.PetService/...`.
 - PostgreSQL runs from Docker Compose on `localhost:55432`.
@@ -381,7 +381,7 @@ POST /api/student/pet/feed
   Legacy JSON endpoint.
   Spends one cookie and increases pet hunger by 10, capped at 100.
 
-The current Vue pet UI uses the generated Connect client in `frontend/src/stores/studentPet.js`.
+The current Vue pet UI uses the generated Connect client in `frontend/src/stores/studentPet.ts`.
 The JSON profile and feed endpoints still exist on the Go server, but they are no longer the main frontend pet path.
 
 PetService Connect RPC
@@ -422,7 +422,7 @@ DELETE /api/assignments/:id
   Deletes an assignment.
 ```
 
-The current frontend keeps API calls inside `frontend/src/App.vue`. That is acceptable for this early demo, but moving fetch helpers into a small `src/api/` module would be a good cleanup once the app grows.
+The frontend keeps JSON fetch helpers in `frontend/src/api/`, shared data contracts in `frontend/src/types/`, and workflow state in focused composables under `frontend/src/composables/`.
 
 ## Database Design
 
@@ -564,7 +564,7 @@ For reliable use:
       router.js
       style.css
     package.json
-    vite.config.js
+    vite.config.ts
 
   proto/
     hq/
