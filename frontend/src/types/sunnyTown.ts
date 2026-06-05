@@ -1,15 +1,15 @@
-export interface SunnyTownAvatar {
-  id: string
-  displayName: string
-}
-
 export interface SunnyTownSession {
   roomId: string
   mapId: string
+  avatarId: string
   websocketUrl: string
   joinToken: string
   expiresAt: string
-  avatar: SunnyTownAvatar
+  wallet: SunnyTownWallet
+}
+
+export interface SunnyTownWallet {
+  starBalance: number
 }
 
 export interface SunnyTownPlayer {
@@ -23,15 +23,30 @@ export interface SunnyTownPlayer {
   lastProcessedSeq: number
 }
 
+export interface SunnyTownCollectible {
+  id: string
+  kind: 'star'
+  x: number
+  y: number
+  active: boolean
+}
+
 export interface SunnyTownServerMessage {
-  type: 'hello' | 'snapshot' | 'error'
+  type: 'hello' | 'snapshot' | 'error' | 'reward_committed' | 'reward_failed'
   selfId?: string
   roomId?: string
   mapId?: string
   tick?: number
   serverTimeMs?: number
   players?: SunnyTownPlayer[]
+  collectibles?: SunnyTownCollectible[]
   code?: string
+  eventId?: string
+  kind?: 'star'
+  amount?: number
+  newStarBalance?: number
+  collectibleId?: string
+  reason?: string
 }
 
 export interface SunnyTownInputMessage {

@@ -62,6 +62,28 @@ create table if not exists pet_state (
   )
 );
 
+create table if not exists student_wallet (
+  app_user_id bigint primary key references app_user(id) on delete cascade,
+  star_balance integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint student_wallet_star_balance_nonnegative check (star_balance >= 0)
+);
+
+create table if not exists student_star_ledger (
+  id bigserial primary key,
+  app_user_id bigint not null references app_user(id) on delete cascade,
+  event_id text not null unique,
+  source text not null,
+  delta integer not null,
+  room_id text null,
+  map_id text null,
+  collectible_id text null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  constraint student_star_ledger_delta_nonzero check (delta <> 0)
+);
+
 create index if not exists assignment_attempt_assignment_id_idx
   on assignment_attempt (assignment_id);
 
@@ -71,3 +93,6 @@ create index if not exists assignment_attempt_student_user_id_idx
 create index if not exists assignment_attempt_active_review_idx
   on assignment_attempt (assignment_id, student_user_id, date_submitted desc)
   where reset_at is null;
+
+create index if not exists student_star_ledger_app_user_id_idx
+  on student_star_ledger (app_user_id, created_at desc);

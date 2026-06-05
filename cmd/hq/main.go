@@ -23,10 +23,11 @@ import (
 )
 
 type app struct {
-	db                    *pgxpool.Pool
-	auth                  *authVerifier
-	sunnyTownJoinSecret   string
-	sunnyTownWebSocketURL string
+	db                     *pgxpool.Pool
+	auth                   *authVerifier
+	sunnyTownJoinSecret    string
+	sunnyTownServiceSecret string
+	sunnyTownWebSocketURL  string
 }
 
 var errNoCookies = errors.New("no cookies available")
@@ -70,17 +71,33 @@ type studentProfileResponse struct {
 }
 
 type sunnyTownSessionResponse struct {
-	RoomID       string                  `json:"roomId"`
-	MapID        string                  `json:"mapId"`
-	WebSocketURL string                  `json:"websocketUrl"`
-	JoinToken    string                  `json:"joinToken"`
-	ExpiresAt    time.Time               `json:"expiresAt"`
-	Avatar       sunnyTownAvatarResponse `json:"avatar"`
+	RoomID       string                  `json:"room_id"`
+	MapID        string                  `json:"map_id"`
+	AvatarID     string                  `json:"avatar_id"`
+	WebSocketURL string                  `json:"websocket_url"`
+	JoinToken    string                  `json:"join_token"`
+	ExpiresAt    time.Time               `json:"expires_at"`
+	Wallet       sunnyTownWalletResponse `json:"wallet"`
 }
 
-type sunnyTownAvatarResponse struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"displayName"`
+type sunnyTownWalletResponse struct {
+	StarBalance int `json:"star_balance"`
+}
+
+type sunnyTownRewardEventRequest struct {
+	EventID       string `json:"event_id"`
+	AppUserID     int64  `json:"app_user_id"`
+	RoomID        string `json:"room_id"`
+	MapID         string `json:"map_id"`
+	CollectibleID string `json:"collectible_id"`
+	RewardKind    string `json:"reward_kind"`
+	Amount        int    `json:"amount"`
+}
+
+type sunnyTownRewardEventResponse struct {
+	Accepted       bool `json:"accepted"`
+	Duplicate      bool `json:"duplicate"`
+	NewStarBalance int  `json:"new_star_balance"`
 }
 
 type assignmentAttemptResponse struct {
@@ -131,10 +148,11 @@ func main() {
 	keycloakIssuer := envOrDefault("KEYCLOAK_ISSUER", "http://localhost:18081/realms/hq")
 	keycloakAudience := envOrDefault("KEYCLOAK_AUDIENCE", "hq-web")
 	app := &app{
-		db:                    db,
-		auth:                  newAuthVerifier(keycloakIssuer, keycloakAudience),
-		sunnyTownJoinSecret:   envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
-		sunnyTownWebSocketURL: envOrDefault("SUNNY_TOWN_WS_URL", "ws://127.0.0.1:18082/sunny-town/ws"),
+		db:                     db,
+		auth:                   newAuthVerifier(keycloakIssuer, keycloakAudience),
+		sunnyTownJoinSecret:    envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
+		sunnyTownServiceSecret: envOrDefault("SUNNY_TOWN_SERVICE_SECRET", "local-dev-service-secret"),
+		sunnyTownWebSocketURL:  envOrDefault("SUNNY_TOWN_WS_URL", "ws://127.0.0.1:18082/sunny-town/ws"),
 	}
 	if err := app.ensureSchema(ctx); err != nil {
 		log.Fatalf("ensure schema: %v", err)
@@ -162,6 +180,7 @@ func main() {
 	apiMux.HandleFunc("/api/assignments/answered", app.handleAnsweredAssignments)
 	apiMux.HandleFunc("/api/assignments", app.handleAssignments)
 	apiMux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
+	mux.HandleFunc("/api/internal/sunny-town/reward-events", app.handleSunnyTownRewardEvent)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
 	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
@@ -400,18 +419,56 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	starBalance, err := app.ensureStudentWallet(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load sunny town wallet: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "sunny town session could not be created",
+		})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, sunnyTownSessionResponse{
 		RoomID:       "sunny-town-main",
 		MapID:        "sunny-town-v1",
+		AvatarID:     avatarID,
 		WebSocketURL: app.sunnyTownWebSocketURL,
 		JoinToken:    token,
 		ExpiresAt:    expiresAt,
-		Avatar: sunnyTownAvatarResponse{
-			ID:          avatarID,
-			DisplayName: profile.DisplayName,
-		},
+		Wallet:       sunnyTownWalletResponse{StarBalance: starBalance},
 	})
+}
+
+func (app *app) handleSunnyTownRewardEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	var request sunnyTownRewardEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := app.commitSunnyTownReward(r.Context(), request)
+	if err != nil {
+		log.Printf("commit sunny town reward: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "reward event could not be accepted",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Request) {
@@ -987,6 +1044,87 @@ func (app *app) loadStudentProfile(ctx context.Context, userID int64) (studentPr
 	}
 
 	return app.loadStudentProfileWithoutDecay(ctx, userID)
+}
+
+func (app *app) ensureStudentWallet(ctx context.Context, userID int64) (int, error) {
+	var balance int
+	err := app.db.QueryRow(
+		ctx,
+		`
+			insert into student_wallet (app_user_id)
+			values ($1)
+			on conflict (app_user_id) do update
+			set updated_at = student_wallet.updated_at
+			returning star_balance
+		`,
+		userID,
+	).Scan(&balance)
+	return balance, err
+}
+
+func (app *app) commitSunnyTownReward(ctx context.Context, request sunnyTownRewardEventRequest) (sunnyTownRewardEventResponse, error) {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.RoomID = strings.TrimSpace(request.RoomID)
+	request.MapID = strings.TrimSpace(request.MapID)
+	request.CollectibleID = strings.TrimSpace(request.CollectibleID)
+	request.RewardKind = strings.TrimSpace(request.RewardKind)
+	if request.EventID == "" || request.AppUserID < 1 || request.RoomID == "" || request.MapID == "" || request.CollectibleID == "" {
+		return sunnyTownRewardEventResponse{}, errors.New("reward event is missing required fields")
+	}
+	if request.RewardKind != "star" || request.Amount != 1 {
+		return sunnyTownRewardEventResponse{}, errors.New("unsupported sunny town reward")
+	}
+
+	var inserted bool
+	var balance int
+	err := app.db.QueryRow(
+		ctx,
+		`
+			with inserted as (
+				insert into student_star_ledger (
+					app_user_id,
+					event_id,
+					source,
+					delta,
+					room_id,
+					map_id,
+					collectible_id
+				)
+				values ($1, $2, 'sunny_town_star_collect', $3, $4, $5, $6)
+				on conflict (event_id) do nothing
+				returning app_user_id, delta
+			),
+			updated_wallet as (
+				insert into student_wallet (app_user_id, star_balance)
+				select app_user_id, delta from inserted
+				on conflict (app_user_id) do update
+				set star_balance = student_wallet.star_balance + excluded.star_balance,
+					updated_at = now()
+				returning star_balance
+			)
+			select exists(select 1 from inserted) as inserted,
+				coalesce(
+					(select star_balance from updated_wallet),
+					(select star_balance from student_wallet where app_user_id = $1),
+					0
+				) as star_balance
+		`,
+		request.AppUserID,
+		request.EventID,
+		request.Amount,
+		request.RoomID,
+		request.MapID,
+		request.CollectibleID,
+	).Scan(&inserted, &balance)
+	if err != nil {
+		return sunnyTownRewardEventResponse{}, err
+	}
+
+	return sunnyTownRewardEventResponse{
+		Accepted:       true,
+		Duplicate:      !inserted,
+		NewStarBalance: balance,
+	}, nil
 }
 
 func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64) (studentProfileResponse, error) {

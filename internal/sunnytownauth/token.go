@@ -19,7 +19,7 @@ var (
 
 type Claims struct {
 	AppUserID       int64    `json:"app_user_id"`
-	KeycloakSubject string   `json:"keycloak_subject"`
+	KeycloakSubject string   `json:"sub"`
 	DisplayName     string   `json:"display_name"`
 	Roles           []string `json:"roles"`
 	RoomID          string   `json:"room_id"`

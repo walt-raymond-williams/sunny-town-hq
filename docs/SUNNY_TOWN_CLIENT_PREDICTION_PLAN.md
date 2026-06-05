@@ -2,7 +2,7 @@
 
 This plan improves Sunny Town movement feel by adding client-side prediction for the local player while keeping the server authoritative. Remote players should continue using interpolation.
 
-Status: implemented. The server snapshots now include `lastProcessedSeq`, and the frontend predicts only the local player while reconciling against authoritative snapshots.
+Status: implemented. The server snapshots now include `lastProcessedSeq`, and the frontend predicts only the local player while reconciling against authoritative snapshots. The stop rubber-banding remedy is also implemented: server acknowledgements now mean an input was reflected in simulation, and the client uses release-aware correction easing.
 
 ## Goal
 
@@ -50,8 +50,9 @@ Add the latest processed input sequence to each server player snapshot:
 
 Server requirements:
 
-- Store the latest input `seq` received for each player.
-- Include that value in each snapshot.
+- Store both the latest input `seq` received for each player and the latest input `seq` reflected by a simulation step.
+- Include the simulated sequence value in each snapshot as `lastProcessedSeq`.
+- Do not acknowledge a newly received input in a snapshot until `room.step` has applied the current input state.
 - Continue ignoring client-provided coordinates.
 - Continue using the fixed server tick as authoritative time.
 
@@ -80,7 +81,8 @@ Input handling:
 - On keydown/keyup, send input immediately.
 - While moving, resend input at 20 messages per second.
 - Store each sent input in `pendingInputs`.
-- Record enough local timing data to replay predicted movement client-side.
+- Record local send timestamps and enough timing data to replay predicted movement client-side.
+- Keep zero-duration idle inputs in `pendingInputs` as stop sequence boundaries until the server confirms they were simulated.
 
 Frame loop:
 
@@ -108,11 +110,14 @@ Do not visibly rewind the player to the server position and then replay. The rew
 Use distance between `renderedSelf` and corrected `predictedSelf`.
 
 ```text
-0px - 4px:
+0px - 2px:
   Ignore the correction.
 
-4px - 48px:
-  Ease renderedSelf toward corrected predictedSelf over several frames.
+2px - 16px within 200ms after key release:
+  Ease renderedSelf toward corrected predictedSelf slowly over about 200-300ms.
+
+2px - 48px outside the release grace case:
+  Ease renderedSelf toward corrected predictedSelf normally over several frames.
 
 More than 48px:
   Snap renderedSelf to corrected predictedSelf.
@@ -148,11 +153,14 @@ The current client already hardcodes the map rectangles. For this slice, mirror 
 
 Completed:
 
-- Added `lastProcessedSeq` to the Go `player` state.
-- Updated `room.updateInput` to store the latest input sequence for that player.
+- Added received and simulated input sequence tracking to the Go `player` state.
+- Updated `room.updateInput` to store the latest received input sequence without acknowledging it early.
+- Updated `room.step` to mark the latest received sequence as simulated after applying the tick.
 - Added `lastProcessedSeq` to `playerSnapshot`.
 - Updated `SunnyTownPlayer` TypeScript type.
 - Added local prediction state to `SunnyTownPage.vue`.
+- Added pending input timestamps and release-grace correction easing.
+- Added code-local prediction diagnostics for correction distance, pending count, acknowledged seq, latest sent seq, and release-grace state.
 - Added frontend movement helpers:
    - movement vector
    - diagonal normalization
@@ -188,17 +196,20 @@ Manual checks:
 1. Open Sunny Town in one browser window.
 2. Confirm local movement starts immediately on key press.
 3. Confirm local movement stops immediately on key release.
-4. Walk into map boundaries and blocked rectangles.
-5. Confirm no visible backward pull during normal movement.
-6. Open a second browser window.
-7. Confirm remote player movement remains smooth.
-8. Confirm both clients still see authoritative final positions.
+4. Release repeatedly after short taps and long runs in open space.
+5. Confirm no visible backward pull during normal release timing.
+6. Walk into map boundaries and blocked rectangles.
+7. Confirm large correction recovery still works near collisions.
+8. Open a second browser window.
+9. Confirm remote player movement remains smooth.
+10. Confirm both clients still see authoritative final positions.
 
 ## Acceptance Criteria
 
 - Local player feels immediate.
 - Server remains authoritative.
 - Normal LAN movement does not visibly rubber-band.
+- Stop inputs are not acknowledged until they have been reflected in a server simulation tick.
 - Wall and boundary collisions do not let the local player visibly pass through obstacles.
 - Remote players remain smooth.
 - Two-window multiplayer still works.

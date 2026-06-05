@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createSunnyTownSession } from '../api/sunnyTownApi'
 import type {
+  SunnyTownCollectible,
   SunnyTownInputMessage,
   SunnyTownPlayer,
   SunnyTownServerMessage,
@@ -23,10 +24,13 @@ interface MovementInput {
   right: boolean
 }
 
+type MovementDirection = keyof MovementInput
+
 interface PendingInput {
   seq: number
   input: MovementInput
   deltaSeconds: number
+  sentAtMs: number
 }
 
 const sunnyTownMap: SunnyTownMap = {
@@ -46,19 +50,25 @@ const sunnyTownMap: SunnyTownMap = {
 
 const playerSpeed = 150
 const playerSize = 28
-const tinyCorrectionDistance = 4
+const tinyCorrectionDistance = 2
+const releaseGraceCorrectionDistance = 16
+const releaseGraceMs = 200
 const snapCorrectionDistance = 48
+const enableSunnyTownPredictionDebug = false
 
 const router = useRouter()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const session = ref<SunnyTownSession | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
+const collectibles = ref<SunnyTownCollectible[]>([])
 const selfId = ref('')
 const status = ref('Entering Sunny Town...')
 const error = ref('')
 const connected = ref(false)
+const starBalance = ref(0)
+const rewardFeedback = ref('')
 
-const pressedKeys = new Set<string>()
+const pressedDirections = new Set<MovementDirection>()
 const visualPlayers = new Map<string, SunnyTownPlayer>()
 const pendingInputs: PendingInput[] = []
 let predictedSelf: SunnyTownPlayer | null = null
@@ -69,18 +79,29 @@ let inputSeq = 0
 let inputTimer = 0
 let lastInputStateJson = ''
 let lastPredictedInputJson = ''
+let lastReleaseAtMs = 0
 let lastRenderTime = 0
+let predictionDebug = {
+  correctionDistance: 0,
+  pendingInputCount: 0,
+  lastProcessedSeq: 0,
+  latestSentSeq: 0,
+  releaseGraceActive: false,
+}
 
 const playerCount = computed(() => players.value.length)
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown)
   window.addEventListener('keyup', handleKeyUp)
+  window.addEventListener('blur', handleInputCancel)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', handleResize)
   animationFrame = window.requestAnimationFrame(renderLoop)
 
   try {
     session.value = await createSunnyTownSession()
+    starBalance.value = session.value.wallet.starBalance
     status.value = 'Connecting...'
     await nextTick()
     connect(session.value)
@@ -94,6 +115,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('keyup', handleKeyUp)
+  window.removeEventListener('blur', handleInputCancel)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', handleResize)
   window.cancelAnimationFrame(animationFrame)
   window.clearInterval(inputTimer)
@@ -127,7 +150,20 @@ function connect(activeSession: SunnyTownSession) {
     }
     if (message.type === 'snapshot') {
       players.value = message.players || []
+      collectibles.value = message.collectibles || []
       reconcileSelf()
+      return
+    }
+    if (message.type === 'reward_committed') {
+      starBalance.value = message.newStarBalance ?? starBalance.value + (message.amount || 0)
+      rewardFeedback.value = `+${message.amount || 1} star`
+      window.setTimeout(() => {
+        rewardFeedback.value = ''
+      }, 1200)
+      return
+    }
+    if (message.type === 'reward_failed') {
+      error.value = 'That star could not be saved. Try again in a moment.'
       return
     }
     if (message.type === 'error') {
@@ -160,48 +196,69 @@ function parseServerMessage(data: unknown): SunnyTownServerMessage | null {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
-  if (!isMoveKey(event.key)) {
+  const direction = movementDirectionForEvent(event)
+  if (!direction) {
     return
   }
   event.preventDefault()
-  pressedKeys.add(event.key.toLowerCase())
+  pressedDirections.add(direction)
   sendInput()
 }
 
 function handleKeyUp(event: KeyboardEvent) {
-  if (!isMoveKey(event.key)) {
+  const direction = movementDirectionForEvent(event)
+  if (!direction) {
     return
   }
   event.preventDefault()
-  pressedKeys.delete(event.key.toLowerCase())
+  pressedDirections.delete(direction)
+  if (!isMovementInputActive(currentMovementInput())) {
+    lastReleaseAtMs = performance.now()
+  }
   sendInput()
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    handleInputCancel()
+  }
+}
+
+function handleInputCancel() {
+  if (pressedDirections.size === 0) {
+    return
+  }
+  pressedDirections.clear()
+  lastReleaseAtMs = performance.now()
+  sendInput(true)
 }
 
 function handleResize() {
   draw()
 }
 
-function sendInput() {
+function sendInput(force = false) {
   if (!socket || socket.readyState !== WebSocket.OPEN) {
     return
   }
 
   const movementInput = currentMovementInput()
+  const inputStateJson = JSON.stringify(movementInput)
+  const isMoving = isMovementInputActive(movementInput)
+  if (!force && !isMoving && inputStateJson === lastInputStateJson) {
+    return
+  }
   const input: SunnyTownInputMessage = {
     type: 'input',
     seq: ++inputSeq,
     ...movementInput,
-  }
-  const inputStateJson = JSON.stringify(movementInput)
-  const isMoving = isMovementInputActive(movementInput)
-  if (!isMoving && inputStateJson === lastInputStateJson) {
-    return
   }
   lastInputStateJson = inputStateJson
   pendingInputs.push({
     seq: input.seq,
     input: movementInput,
     deltaSeconds: 0,
+    sentAtMs: performance.now(),
   })
   socket.send(JSON.stringify(input))
 }
@@ -246,6 +303,11 @@ function draw(deltaSeconds = 0) {
   const cameraY = clamp((self?.y || worldHeight / 2) - rect.height / 2, 0, Math.max(0, worldHeight - rect.height))
 
   drawMap(context, cameraX, cameraY, rect.width, rect.height)
+  for (const collectible of collectibles.value) {
+    if (collectible.active) {
+      drawCollectible(context, collectible, cameraX, cameraY)
+    }
+  }
   for (const player of renderedPlayers) {
     drawPlayer(context, player, cameraX, cameraY)
   }
@@ -265,6 +327,26 @@ function renderedSunnyTownPlayers(deltaSeconds: number): SunnyTownPlayer[] {
 
   const target = predictedSelf || selfSnapshot
   const correctionDistance = Math.hypot(target.x - renderedSelf.x, target.y - renderedSelf.y)
+  const releaseGraceActive =
+    !isMovementInputActive(currentMovementInput()) &&
+    lastReleaseAtMs > 0 &&
+    performance.now() - lastReleaseAtMs <= releaseGraceMs
+  const smoothing =
+    releaseGraceActive && correctionDistance <= releaseGraceCorrectionDistance
+      ? 1 - Math.exp(-8 * Math.max(0, deltaSeconds))
+      : 1 - Math.exp(-24 * Math.max(0, deltaSeconds))
+
+  predictionDebug = {
+    correctionDistance,
+    pendingInputCount: pendingInputs.length,
+    lastProcessedSeq: target.lastProcessedSeq,
+    latestSentSeq: inputSeq,
+    releaseGraceActive,
+  }
+  if (enableSunnyTownPredictionDebug && correctionDistance > tinyCorrectionDistance) {
+    console.debug('sunny-town prediction', predictionDebug)
+  }
+
   if (correctionDistance <= tinyCorrectionDistance) {
     renderedSelf.x = target.x
     renderedSelf.y = target.y
@@ -272,7 +354,6 @@ function renderedSunnyTownPlayers(deltaSeconds: number): SunnyTownPlayer[] {
     renderedSelf.x = target.x
     renderedSelf.y = target.y
   } else {
-    const smoothing = 1 - Math.exp(-24 * Math.max(0, deltaSeconds))
     renderedSelf.x += (target.x - renderedSelf.x) * smoothing
     renderedSelf.y += (target.y - renderedSelf.y) * smoothing
   }
@@ -395,10 +476,10 @@ function simulatePlayer(player: SunnyTownPlayer, input: MovementInput, deltaSeco
 
 function currentMovementInput(): MovementInput {
   return {
-    up: pressedKeys.has('arrowup') || pressedKeys.has('w'),
-    down: pressedKeys.has('arrowdown') || pressedKeys.has('s'),
-    left: pressedKeys.has('arrowleft') || pressedKeys.has('a'),
-    right: pressedKeys.has('arrowright') || pressedKeys.has('d'),
+    up: pressedDirections.has('up'),
+    down: pressedDirections.has('down'),
+    left: pressedDirections.has('left'),
+    right: pressedDirections.has('right'),
   }
 }
 
@@ -514,8 +595,69 @@ function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, 
   context.fillText(player.displayName, x, y - 24)
 }
 
-function isMoveKey(key: string): boolean {
-  return ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(key)
+function drawCollectible(
+  context: CanvasRenderingContext2D,
+  collectible: SunnyTownCollectible,
+  cameraX: number,
+  cameraY: number,
+) {
+  const x = collectible.x - cameraX
+  const y = collectible.y - cameraY
+  context.save()
+  context.translate(x, y)
+  context.fillStyle = '#f6c945'
+  context.strokeStyle = '#7a5a00'
+  context.lineWidth = 2
+  context.beginPath()
+  for (let index = 0; index < 10; index++) {
+    const radius = index % 2 === 0 ? 15 : 7
+    const angle = -Math.PI / 2 + (index * Math.PI) / 5
+    const px = Math.cos(angle) * radius
+    const py = Math.sin(angle) * radius
+    if (index === 0) {
+      context.moveTo(px, py)
+    } else {
+      context.lineTo(px, py)
+    }
+  }
+  context.closePath()
+  context.fill()
+  context.stroke()
+  context.restore()
+}
+
+function movementDirectionForEvent(event: KeyboardEvent): MovementDirection | null {
+  switch (event.code) {
+    case 'ArrowUp':
+    case 'KeyW':
+      return 'up'
+    case 'ArrowDown':
+    case 'KeyS':
+      return 'down'
+    case 'ArrowLeft':
+    case 'KeyA':
+      return 'left'
+    case 'ArrowRight':
+    case 'KeyD':
+      return 'right'
+  }
+
+  switch (event.key.toLowerCase()) {
+    case 'arrowup':
+    case 'w':
+      return 'up'
+    case 'arrowdown':
+    case 's':
+      return 'down'
+    case 'arrowleft':
+    case 'a':
+      return 'left'
+    case 'arrowright':
+    case 'd':
+      return 'right'
+    default:
+      return null
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -540,6 +682,12 @@ function backToPet() {
         </v-chip>
         <v-chip color="primary" variant="tonal">
           {{ playerCount }} online
+        </v-chip>
+        <v-chip color="warning" variant="tonal">
+          {{ starBalance }} stars
+        </v-chip>
+        <v-chip v-if="rewardFeedback" color="success" variant="tonal">
+          {{ rewardFeedback }}
         </v-chip>
         <v-btn color="primary" prepend-icon="mdi-arrow-left" variant="tonal" @click="backToPet">
           Back

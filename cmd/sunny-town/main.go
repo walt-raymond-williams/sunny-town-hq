@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -25,14 +27,18 @@ const (
 	defaultMapID       = "sunny-town-v1"
 	playerSize         = 28.0
 	playerSpeed        = 150.0
+	starPickupRadius   = 30.0
 	simulationInterval = 50 * time.Millisecond
 	snapshotInterval   = 100 * time.Millisecond
+	starRespawnDelay   = 10 * time.Second
 )
 
 type config struct {
 	host           string
 	port           string
 	joinSecret     string
+	serviceSecret  string
+	hqInternalURL  string
 	allowedOrigins map[string]bool
 	mapPath        string
 }
@@ -45,6 +51,7 @@ type gameMap struct {
 	Height       int     `json:"height"`
 	Spawns       []point `json:"spawns"`
 	BlockedRects []rect  `json:"blockedRects"`
+	StarSpawns   []point `json:"starSpawns"`
 }
 
 type point struct {
@@ -67,20 +74,28 @@ type inputState struct {
 }
 
 type clientMessage struct {
-	Type string `json:"type"`
-	Seq  int64  `json:"seq,omitempty"`
+	Type         string `json:"type"`
+	Seq          int64  `json:"seq,omitempty"`
+	ClientTimeMS int64  `json:"client_time_ms,omitempty"`
 	inputState
 }
 
 type serverMessage struct {
-	Type         string           `json:"type"`
-	SelfID       string           `json:"selfId,omitempty"`
-	RoomID       string           `json:"roomId,omitempty"`
-	MapID        string           `json:"mapId,omitempty"`
-	Tick         int64            `json:"tick,omitempty"`
-	ServerTimeMS int64            `json:"serverTimeMs,omitempty"`
-	Players      []playerSnapshot `json:"players,omitempty"`
-	Code         string           `json:"code,omitempty"`
+	Type           string                `json:"type"`
+	SelfID         string                `json:"selfId,omitempty"`
+	RoomID         string                `json:"roomId,omitempty"`
+	MapID          string                `json:"mapId,omitempty"`
+	Tick           int64                 `json:"tick,omitempty"`
+	ServerTimeMS   int64                 `json:"serverTimeMs,omitempty"`
+	Players        []playerSnapshot      `json:"players,omitempty"`
+	Collectibles   []collectibleSnapshot `json:"collectibles,omitempty"`
+	Code           string                `json:"code,omitempty"`
+	EventID        string                `json:"eventId,omitempty"`
+	Kind           string                `json:"kind,omitempty"`
+	Amount         int                   `json:"amount,omitempty"`
+	NewStarBalance int                   `json:"newStarBalance,omitempty"`
+	CollectibleID  string                `json:"collectibleId,omitempty"`
+	Reason         string                `json:"reason,omitempty"`
 }
 
 type playerSnapshot struct {
@@ -95,39 +110,91 @@ type playerSnapshot struct {
 }
 
 type player struct {
-	id          string
-	displayName string
-	avatarID    string
-	x           float64
-	y           float64
-	facing      string
-	moving      bool
-	input       inputState
-	inputSeq    int64
-	client      *client
+	appUserID         int64
+	id                string
+	displayName       string
+	avatarID          string
+	x                 float64
+	y                 float64
+	facing            string
+	moving            bool
+	input             inputState
+	receivedInputSeq  int64
+	simulatedInputSeq int64
+	client            *client
 }
 
 type client struct {
-	conn *websocket.Conn
-	send chan serverMessage
-	room *room
-	id   string
+	conn             *websocket.Conn
+	send             chan serverMessage
+	room             *room
+	id               string
+	inputWindowStart time.Time
+	inputWindowCount int
 }
 
 type room struct {
 	id      string
 	gameMap gameMap
 
-	mu      sync.Mutex
-	players map[string]*player
-	tick    int64
+	mu           sync.Mutex
+	players      map[string]*player
+	collectibles map[string]*collectible
+	tick         int64
+	rewardEvents chan rewardEvent
 }
 
 type server struct {
 	config   config
 	gameMap  gameMap
 	room     *room
+	client   *http.Client
 	upgrader websocket.Upgrader
+}
+
+type collectible struct {
+	id        string
+	kind      string
+	x         float64
+	y         float64
+	active    bool
+	spawnSeq  int64
+	respawnAt time.Time
+}
+
+type collectibleSnapshot struct {
+	ID     string  `json:"id"`
+	Kind   string  `json:"kind"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Active bool    `json:"active"`
+}
+
+type rewardEvent struct {
+	eventID       string
+	appUserID     int64
+	roomID        string
+	mapID         string
+	collectibleID string
+	kind          string
+	amount        int
+	client        *client
+}
+
+type rewardCommitRequest struct {
+	EventID       string `json:"event_id"`
+	AppUserID     int64  `json:"app_user_id"`
+	RoomID        string `json:"room_id"`
+	MapID         string `json:"map_id"`
+	CollectibleID string `json:"collectible_id"`
+	RewardKind    string `json:"reward_kind"`
+	Amount        int    `json:"amount"`
+}
+
+type rewardCommitResponse struct {
+	Accepted       bool `json:"accepted"`
+	Duplicate      bool `json:"duplicate"`
+	NewStarBalance int  `json:"new_star_balance"`
 }
 
 func main() {
@@ -146,6 +213,7 @@ func main() {
 	go room.run(ctx)
 
 	srv := newServer(cfg, gameMap, room)
+	go srv.runRewardWorker(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -177,6 +245,8 @@ func loadConfig() config {
 		host:           envOrDefault("SUNNY_TOWN_HOST", "0.0.0.0"),
 		port:           envOrDefault("SUNNY_TOWN_PORT", "18082"),
 		joinSecret:     envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
+		serviceSecret:  envOrDefault("SUNNY_TOWN_SERVICE_SECRET", "local-dev-service-secret"),
+		hqInternalURL:  strings.TrimRight(envOrDefault("HQ_INTERNAL_BASE_URL", "http://127.0.0.1:8080"), "/"),
 		allowedOrigins: allowedOrigins(envOrDefault("SUNNY_TOWN_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:18080,http://127.0.0.1:5173,http://127.0.0.1:18080")),
 		mapPath:        envOrDefault("SUNNY_TOWN_MAP_PATH", filepath.Join("sunny-town", "maps", "sunny-town-v1.json")),
 	}
@@ -187,6 +257,9 @@ func newServer(cfg config, gameMap gameMap, room *room) *server {
 		config:  cfg,
 		gameMap: gameMap,
 		room:    room,
+		client: &http.Client{
+			Timeout: 3 * time.Second,
+		},
 	}
 	srv.upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -206,7 +279,8 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid sunny town token", http.StatusUnauthorized)
 		return
 	}
-	if claims.RoomID != srv.room.id || claims.MapID != srv.gameMap.ID {
+	if err := validateJoinTarget(claims, srv.room.id, srv.gameMap.ID); err != nil {
+		log.Printf("sunny town auth failed: unknown room=%q map=%q", claims.RoomID, claims.MapID)
 		http.Error(w, "unknown room or map", http.StatusBadRequest)
 		return
 	}
@@ -234,9 +308,11 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func newRoom(id string, gameMap gameMap) *room {
 	return &room{
-		id:      id,
-		gameMap: gameMap,
-		players: map[string]*player{},
+		id:           id,
+		gameMap:      gameMap,
+		players:      map[string]*player{},
+		collectibles: initialCollectibles(gameMap),
+		rewardEvents: make(chan rewardEvent, 32),
 	}
 }
 
@@ -250,7 +326,7 @@ func (room *room) run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			room.step(simulationInterval.Seconds())
+			room.step(simulationInterval.Seconds(), now)
 			if now.Sub(lastSnapshot) >= snapshotInterval {
 				room.broadcastSnapshot(now)
 				lastSnapshot = now
@@ -265,6 +341,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims) {
 
 	spawn := room.spawnPointLocked()
 	player := &player{
+		appUserID:   claims.AppUserID,
 		id:          client.id,
 		displayName: claims.DisplayName,
 		avatarID:    claims.AvatarID,
@@ -301,52 +378,72 @@ func (room *room) leave(client *client) {
 func (room *room) updateInput(playerID string, seq int64, input inputState) {
 	room.mu.Lock()
 	if player := room.players[playerID]; player != nil {
-		player.input = input
-		if seq > player.inputSeq {
-			player.inputSeq = seq
+		if seq <= player.receivedInputSeq {
+			room.mu.Unlock()
+			return
 		}
+		player.input = input
+		player.receivedInputSeq = seq
 	}
 	room.mu.Unlock()
 }
 
-func (room *room) step(dt float64) {
+func (room *room) step(dt float64, now time.Time) {
 	room.mu.Lock()
-	defer room.mu.Unlock()
 
 	room.tick++
+	var rewards []rewardEvent
 	for _, player := range room.players {
 		dx := boolFloat(player.input.Right) - boolFloat(player.input.Left)
 		dy := boolFloat(player.input.Down) - boolFloat(player.input.Up)
 		if dx == 0 && dy == 0 {
 			player.moving = false
-			continue
-		}
-
-		length := math.Hypot(dx, dy)
-		dx = dx / length
-		dy = dy / length
-
-		if math.Abs(dx) > math.Abs(dy) {
-			if dx > 0 {
-				player.facing = "right"
-			} else {
-				player.facing = "left"
-			}
-		} else if dy > 0 {
-			player.facing = "down"
 		} else {
-			player.facing = "up"
-		}
+			length := math.Hypot(dx, dy)
+			dx = dx / length
+			dy = dy / length
 
-		nextX := player.x + dx*playerSpeed*dt
-		nextY := player.y + dy*playerSpeed*dt
-		if !room.collidesLocked(nextX, player.y) {
-			player.x = room.clampXLocked(nextX)
+			if math.Abs(dx) > math.Abs(dy) {
+				if dx > 0 {
+					player.facing = "right"
+				} else {
+					player.facing = "left"
+				}
+			} else if dy > 0 {
+				player.facing = "down"
+			} else {
+				player.facing = "up"
+			}
+
+			nextX := player.x + dx*playerSpeed*dt
+			nextY := player.y + dy*playerSpeed*dt
+			if !room.collidesLocked(nextX, player.y) {
+				player.x = room.clampXLocked(nextX)
+			}
+			if !room.collidesLocked(player.x, nextY) {
+				player.y = room.clampYLocked(nextY)
+			}
+			player.moving = true
 		}
-		if !room.collidesLocked(player.x, nextY) {
-			player.y = room.clampYLocked(nextY)
+		player.simulatedInputSeq = player.receivedInputSeq
+
+		rewards = append(rewards, room.collectStarsLocked(player, now)...)
+	}
+
+	room.respawnCollectiblesLocked(now)
+	room.mu.Unlock()
+
+	for _, reward := range rewards {
+		select {
+		case room.rewardEvents <- reward:
+		default:
+			log.Printf("reward queue full event=%s", reward.eventID)
+			reward.client.trySend(serverMessage{
+				Type:          "reward_failed",
+				CollectibleID: reward.collectibleID,
+				Reason:        "temporary_error",
+			})
 		}
-		player.moving = true
 	}
 }
 
@@ -357,6 +454,7 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		Tick:         room.tick,
 		ServerTimeMS: now.UnixMilli(),
 		Players:      room.snapshotsLocked(),
+		Collectibles: room.collectibleSnapshotsLocked(),
 	}
 	clients := make([]*client, 0, len(room.players))
 	for _, player := range room.players {
@@ -384,10 +482,62 @@ func (room *room) snapshotsLocked() []playerSnapshot {
 			Facing:           player.facing,
 			Moving:           player.moving,
 			AvatarID:         player.avatarID,
-			LastProcessedSeq: player.inputSeq,
+			LastProcessedSeq: player.simulatedInputSeq,
 		})
 	}
 	return snapshots
+}
+
+func (room *room) collectibleSnapshotsLocked() []collectibleSnapshot {
+	snapshots := make([]collectibleSnapshot, 0, len(room.collectibles))
+	for _, collectible := range room.collectibles {
+		snapshots = append(snapshots, collectibleSnapshot{
+			ID:     collectible.id,
+			Kind:   collectible.kind,
+			X:      collectible.x,
+			Y:      collectible.y,
+			Active: collectible.active,
+		})
+	}
+	return snapshots
+}
+
+func (room *room) collectStarsLocked(player *player, now time.Time) []rewardEvent {
+	rewards := []rewardEvent{}
+	for _, collectible := range room.collectibles {
+		if !collectible.active || collectible.kind != "star" {
+			continue
+		}
+		if math.Hypot(player.x-collectible.x, player.y-collectible.y) > starPickupRadius {
+			continue
+		}
+
+		collectible.active = false
+		collectible.spawnSeq++
+		collectible.respawnAt = now.Add(starRespawnDelay)
+		eventID := fmt.Sprintf("%s:%s:%d:%d", room.id, collectible.id, collectible.spawnSeq, player.appUserID)
+		rewards = append(rewards, rewardEvent{
+			eventID:       eventID,
+			appUserID:     player.appUserID,
+			roomID:        room.id,
+			mapID:         room.gameMap.ID,
+			collectibleID: collectible.id,
+			kind:          collectible.kind,
+			amount:        1,
+			client:        player.client,
+		})
+	}
+	return rewards
+}
+
+func (room *room) respawnCollectiblesLocked(now time.Time) {
+	for _, collectible := range room.collectibles {
+		if collectible.active || collectible.respawnAt.IsZero() || now.Before(collectible.respawnAt) {
+			continue
+		}
+		collectible.active = true
+		collectible.respawnAt = time.Time{}
+	}
 }
 
 func (room *room) spawnPointLocked() point {
@@ -439,14 +589,19 @@ func (client *client) readPump() {
 		var message clientMessage
 		if err := client.conn.ReadJSON(&message); err != nil {
 			if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				log.Printf("read player=%s: %v", client.id, err)
+				log.Printf("message decode error player=%s: %v", client.id, err)
 			}
 			return
 		}
 
 		switch message.Type {
 		case "input":
+			if !client.allowInput(time.Now()) {
+				continue
+			}
 			client.room.updateInput(client.id, message.Seq, message.inputState)
+		case "ping":
+			_ = client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		default:
 			client.trySend(serverMessage{Type: "error", Code: "invalid_message"})
 		}
@@ -485,6 +640,109 @@ func (client *client) trySend(message serverMessage) {
 	case client.send <- message:
 	default:
 	}
+}
+
+func (client *client) allowInput(now time.Time) bool {
+	if client.inputWindowStart.IsZero() || now.Sub(client.inputWindowStart) >= time.Second {
+		client.inputWindowStart = now
+		client.inputWindowCount = 0
+	}
+	client.inputWindowCount++
+	return client.inputWindowCount <= 30
+}
+
+func (srv *server) runRewardWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event := <-srv.room.rewardEvents:
+			response, err := srv.commitRewardWithRetry(ctx, event)
+			if err != nil {
+				log.Printf("reward commit failed event=%s player=%d: %v", event.eventID, event.appUserID, err)
+				event.client.trySend(serverMessage{
+					Type:          "reward_failed",
+					CollectibleID: event.collectibleID,
+					Reason:        "temporary_error",
+				})
+				continue
+			}
+			log.Printf("reward commit success event=%s player=%d duplicate=%v", event.eventID, event.appUserID, response.Duplicate)
+			event.client.trySend(serverMessage{
+				Type:           "reward_committed",
+				EventID:        event.eventID,
+				Kind:           event.kind,
+				Amount:         event.amount,
+				NewStarBalance: response.NewStarBalance,
+			})
+		}
+	}
+}
+
+func (srv *server) commitRewardWithRetry(ctx context.Context, event rewardEvent) (rewardCommitResponse, error) {
+	backoffs := []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond}
+	var lastErr error
+	for attempt := 0; attempt <= len(backoffs); attempt++ {
+		response, err := srv.commitReward(ctx, event)
+		if err == nil {
+			return response, nil
+		}
+		lastErr = err
+		if attempt == len(backoffs) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return rewardCommitResponse{}, ctx.Err()
+		case <-time.After(backoffs[attempt]):
+		}
+	}
+	return rewardCommitResponse{}, lastErr
+}
+
+func (srv *server) commitReward(ctx context.Context, event rewardEvent) (rewardCommitResponse, error) {
+	body, err := json.Marshal(rewardCommitRequest{
+		EventID:       event.eventID,
+		AppUserID:     event.appUserID,
+		RoomID:        event.roomID,
+		MapID:         event.mapID,
+		CollectibleID: event.collectibleID,
+		RewardKind:    event.kind,
+		Amount:        event.amount,
+	})
+	if err != nil {
+		return rewardCommitResponse{}, err
+	}
+
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		srv.config.hqInternalURL+"/api/internal/sunny-town/reward-events",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return rewardCommitResponse{}, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-HQ-Service-Secret", srv.config.serviceSecret)
+
+	response, err := srv.client.Do(request)
+	if err != nil {
+		return rewardCommitResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return rewardCommitResponse{}, fmt.Errorf("hq reward status %d", response.StatusCode)
+	}
+
+	var committed rewardCommitResponse
+	if err := json.NewDecoder(response.Body).Decode(&committed); err != nil {
+		return rewardCommitResponse{}, err
+	}
+	if !committed.Accepted {
+		return rewardCommitResponse{}, errors.New("hq rejected reward")
+	}
+	return committed, nil
 }
 
 func loadMap(path string) (gameMap, error) {
@@ -527,6 +785,29 @@ func boolFloat(value bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+func initialCollectibles(gameMap gameMap) map[string]*collectible {
+	collectibles := map[string]*collectible{}
+	for index, spawn := range gameMap.StarSpawns {
+		id := fmt.Sprintf("star-%04d", index+1)
+		collectibles[id] = &collectible{
+			id:       id,
+			kind:     "star",
+			x:        spawn.X,
+			y:        spawn.Y,
+			active:   true,
+			spawnSeq: 0,
+		}
+	}
+	return collectibles
+}
+
+func validateJoinTarget(claims sunnytownauth.Claims, roomID string, mapID string) error {
+	if claims.RoomID != roomID || claims.MapID != mapID {
+		return errors.New("unknown room or map")
+	}
+	return nil
 }
 
 func envOrDefault(name string, fallback string) string {
