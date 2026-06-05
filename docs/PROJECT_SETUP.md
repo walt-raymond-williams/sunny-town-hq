@@ -20,6 +20,7 @@ HQ is a local-network homework app. A Go server serves the built Vue app, expose
   - `DATABASE_URL`
   - `KEYCLOAK_ISSUER`
   - `KEYCLOAK_AUDIENCE`
+  - `KEYCLOAK_JWKS_URL` when running in Docker and the browser-facing issuer differs from the Docker-network URL
 
 ### Frontend
 
@@ -96,10 +97,19 @@ The Docker Compose service allows any WebSocket origin for local home-network de
 
 ## Start The Stack
 
-Start Postgres, Keycloak, and Sunny Town:
+Start the full stack:
 
 ```powershell
-docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+HQ is available at `http://localhost:18080`, Keycloak at `http://localhost:18081`, Sunny Town at `http://localhost:18082`, and PostgreSQL at `localhost:55432`.
+
+For another device on your local network, set the browser-facing host before starting Compose. This value must match the hostname or IP address users open in the browser, because Keycloak embeds it as the token issuer:
+
+```powershell
+"HQ_PUBLIC_HOST=<YOUR_LAN_IP>" | Set-Content deploy/.env
+docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
 Find the laptop LAN IP:

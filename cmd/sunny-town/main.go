@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,6 +139,7 @@ type room struct {
 	players      map[string]*player
 	collectibles map[string]*collectible
 	tick         int64
+	rewardRunID  string
 	rewardEvents chan rewardEvent
 }
 
@@ -308,6 +311,7 @@ func newRoom(id string, gameMap gameMap) *room {
 		gameMap:      gameMap,
 		players:      map[string]*player{},
 		collectibles: initialCollectibles(gameMap),
+		rewardRunID:  newRewardRunID(),
 		rewardEvents: make(chan rewardEvent, 32),
 	}
 }
@@ -502,7 +506,7 @@ func (room *room) collectStarsLocked(player *player, now time.Time) []rewardEven
 		collectible.active = false
 		collectible.spawnSeq++
 		collectible.respawnAt = now.Add(starRespawnDelay)
-		eventID := fmt.Sprintf("%s:%s:%d:%d", room.id, collectible.id, collectible.spawnSeq, player.appUserID)
+		eventID := fmt.Sprintf("%s:%s:%s:%d:%d", room.id, room.rewardRunID, collectible.id, collectible.spawnSeq, player.appUserID)
 		rewards = append(rewards, rewardEvent{
 			eventID:       eventID,
 			appUserID:     player.appUserID,
@@ -788,6 +792,14 @@ func initialCollectibles(gameMap gameMap) map[string]*collectible {
 		}
 	}
 	return collectibles
+}
+
+func newRewardRunID() string {
+	var bytes [8]byte
+	if _, err := rand.Read(bytes[:]); err == nil {
+		return hex.EncodeToString(bytes[:])
+	}
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
 func validateJoinTarget(claims sunnytownauth.Claims, roomID string, mapID string) error {

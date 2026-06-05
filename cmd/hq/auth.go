@@ -79,12 +79,17 @@ func (claim *audienceClaim) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func newAuthVerifier(issuer string, audience string) *authVerifier {
+func newAuthVerifier(issuer string, audience string, jwksURL string) *authVerifier {
 	issuer = strings.TrimRight(strings.TrimSpace(issuer), "/")
+	jwksURL = strings.TrimSpace(jwksURL)
+	if jwksURL == "" {
+		jwksURL = issuer + "/protocol/openid-connect/certs"
+	}
+
 	return &authVerifier{
 		issuer:   issuer,
 		audience: strings.TrimSpace(audience),
-		jwksURL:  issuer + "/protocol/openid-connect/certs",
+		jwksURL:  jwksURL,
 		client: &http.Client{
 			Timeout: 5 * time.Second,
 		},

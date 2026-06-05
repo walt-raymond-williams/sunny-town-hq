@@ -147,9 +147,10 @@ func main() {
 
 	keycloakIssuer := envOrDefault("KEYCLOAK_ISSUER", "http://localhost:18081/realms/hq")
 	keycloakAudience := envOrDefault("KEYCLOAK_AUDIENCE", "hq-web")
+	keycloakJWKSURL := os.Getenv("KEYCLOAK_JWKS_URL")
 	app := &app{
 		db:                     db,
-		auth:                   newAuthVerifier(keycloakIssuer, keycloakAudience),
+		auth:                   newAuthVerifier(keycloakIssuer, keycloakAudience, keycloakJWKSURL),
 		sunnyTownJoinSecret:    envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
 		sunnyTownServiceSecret: envOrDefault("SUNNY_TOWN_SERVICE_SECRET", "local-dev-service-secret"),
 		sunnyTownWebSocketURL:  envOrDefault("SUNNY_TOWN_WS_URL", "ws://127.0.0.1:18082/sunny-town/ws"),

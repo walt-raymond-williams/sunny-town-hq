@@ -150,6 +150,7 @@ func TestRoomPickupEnqueuesRewardFromServerOverlap(t *testing.T) {
 	gameMap := testMap()
 	gameMap.StarSpawns = []point{{X: 100, Y: 100}}
 	room := newRoom(defaultRoomID, gameMap)
+	room.rewardRunID = "test-run"
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -157,8 +158,8 @@ func TestRoomPickupEnqueuesRewardFromServerOverlap(t *testing.T) {
 
 	select {
 	case event := <-room.rewardEvents:
-		if event.eventID != "sunny-town-main:star-0001:1:42" {
-			t.Fatalf("eventID = %q, want sunny-town-main:star-0001:1:42", event.eventID)
+		if event.eventID != "sunny-town-main:test-run:star-0001:1:42" {
+			t.Fatalf("eventID = %q, want sunny-town-main:test-run:star-0001:1:42", event.eventID)
 		}
 		if event.appUserID != 42 || event.collectibleID != "star-0001" || event.kind != "star" {
 			t.Fatalf("reward event = %#v", event)

@@ -1,4 +1,31 @@
 services:
+  hq:
+    build:
+      context: ..
+      dockerfile: deploy/hq/Dockerfile
+    container_name: hq-server
+    environment:
+      HQ_PORT: "18080"
+      DATABASE_URL: postgres://hq:hq@postgres:5432/hq?sslmode=disable
+      KEYCLOAK_ISSUER: http://${HQ_PUBLIC_HOST:-localhost}:18081/realms/hq
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/hq/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: hq-web
+      SUNNY_TOWN_JOIN_SECRET: local-dev-secret
+      SUNNY_TOWN_SERVICE_SECRET: local-dev-service-secret
+      SUNNY_TOWN_WS_URL: ws://${HQ_PUBLIC_HOST:-localhost}:18082/sunny-town/ws
+    ports:
+      - "18080:18080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   postgres:
     image: postgres:16-alpine
     container_name: hq-postgres
@@ -63,7 +90,7 @@ services:
       SUNNY_TOWN_PORT: "18082"
       SUNNY_TOWN_JOIN_SECRET: local-dev-secret
       SUNNY_TOWN_SERVICE_SECRET: local-dev-service-secret
-      HQ_INTERNAL_BASE_URL: http://host.docker.internal:18080
+      HQ_INTERNAL_BASE_URL: http://hq:18080
       SUNNY_TOWN_ALLOWED_ORIGINS: "*"
     ports:
       - "18082:18082"
