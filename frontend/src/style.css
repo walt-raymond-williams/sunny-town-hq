@@ -403,6 +403,22 @@ h2 {
   position: absolute;
 }
 
+.sunny-town-toast {
+  background: rgba(23, 33, 43, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(23, 33, 43, 0.22);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: none;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  transform: translateY(0);
+  padding: 8px 12px;
+}
+
 @media (max-width: 640px) {
   .app-container {
     padding: 12px;

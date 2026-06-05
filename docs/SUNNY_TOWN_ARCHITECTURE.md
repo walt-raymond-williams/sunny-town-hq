@@ -51,7 +51,7 @@ Sunny Town Service
   join-token validation
   in-memory room state
   server tick loop
-  movement and collision
+  movement samples and presence
   presence and snapshots
   gameplay event emission
 ```
@@ -144,10 +144,10 @@ The Sunny Town service should reject expired tokens, tokens without the `student
 
 Use WebSocket for the live session.
 
-Client-to-server messages should represent intent, not final authority:
+Client-to-server movement messages should represent the client's current avatar position. They are accepted into server state after basic validation, but raw message coordinates never trigger rewards directly:
 
 ```json
-{ "type": "input", "seq": 42, "up": false, "down": true, "left": false, "right": false }
+{ "type": "move", "seq": 42, "x": 640, "y": 480, "facing": "down", "moving": true }
 { "type": "emote", "emote": "wave" }
 { "type": "ping", "client_time_ms": 123456 }
 ```
@@ -175,7 +175,7 @@ Server-to-client messages should represent authoritative state:
 }
 ```
 
-The `lastProcessedSeq` value lets the client reconcile local prediction against authoritative server snapshots. The first version uses JSON messages for simplicity. If message volume becomes a problem later, the protocol can move to protobuf binary messages without changing the service boundary.
+The `lastProcessedSeq` value tells the client which movement sample the server has accepted. The first version uses JSON messages for simplicity. If message volume becomes a problem later, the protocol can move to protobuf binary messages without changing the service boundary.
 
 ## Simulation Model
 
@@ -183,20 +183,20 @@ The server should be authoritative over:
 
 - room membership
 - spawn points
-- player position
-- movement speed
-- collision
 - map boundaries
 - interaction eligibility
+- accepted player position used by gameplay effects
 
-The client performs local prediction for the current player so movement feels immediate. When authoritative snapshots arrive, the client drops acknowledged inputs, replays unacknowledged inputs, and eases small corrections to avoid visible rubber-banding. Remote players are interpolated between server snapshots.
+The client owns local avatar movement feel. It simulates its current player immediately, sends position samples to Sunny Town, and renders the local player from that local state. The server accepts finite samples, clamps map bounds, and stores the accepted position. Rewards and other gameplay effects run only from the server-accepted position, never from raw client coordinates.
+
+Server snapshots do not correct the local player's rendered `x`/`y` during normal play. They are used to update server-accepted metadata and to show the player to other clients. Remote players are interpolated between server snapshots.
 
 Initial tick settings:
 
 ```text
 Simulation tick:       20 ticks/second
 Snapshot broadcast:    10-20 snapshots/second
-Input send rate:       on input change plus repeat at 10-20/second while moving
+Move sample send rate: on movement change plus repeat at 10-20/second while moving
 Idle timeout:          60 seconds without pong or input
 ```
 
@@ -222,11 +222,11 @@ The map should define:
 - dimensions in tiles
 - tile size in pixels
 - spawn points
-- blocked rectangles or blocked tile ids
+- blocked rectangles or blocked tile ids for client-side movement feel
 - decorative layers for the client
 - interactive zones for later features
 
-The server only needs collision and spawn data. The client owns rendering detail.
+The server only needs bounds, spawn, and reward data for the current movement model. The client owns rendering detail and local collision feel.
 
 ## Persistence and Events
 
@@ -285,9 +285,9 @@ Useful counters:
 - active connections
 - active rooms
 - players per room
-- input messages per second
+- move messages per second
 - snapshots sent per second
-- local prediction corrections by distance bucket
+- invalid move samples
 - disconnect reasons
 - tick duration
 

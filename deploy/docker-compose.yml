@@ -63,7 +63,7 @@ services:
       SUNNY_TOWN_PORT: "18082"
       SUNNY_TOWN_JOIN_SECRET: local-dev-secret
       SUNNY_TOWN_SERVICE_SECRET: local-dev-service-secret
-      HQ_INTERNAL_BASE_URL: http://host.docker.internal:8080
+      HQ_INTERNAL_BASE_URL: http://host.docker.internal:18080
       SUNNY_TOWN_ALLOWED_ORIGINS: "*"
     ports:
       - "18082:18082"

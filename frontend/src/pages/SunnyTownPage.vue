@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { createSunnyTownSession } from '../api/sunnyTownApi'
 import type {
   SunnyTownCollectible,
-  SunnyTownInputMessage,
+  SunnyTownMoveMessage,
   SunnyTownPlayer,
   SunnyTownServerMessage,
   SunnyTownSession,
@@ -26,13 +26,6 @@ interface MovementInput {
 
 type MovementDirection = keyof MovementInput
 
-interface PendingInput {
-  seq: number
-  input: MovementInput
-  deltaSeconds: number
-  sentAtMs: number
-}
-
 const sunnyTownMap: SunnyTownMap = {
   tileSize: 32,
   width: 40,
@@ -50,11 +43,10 @@ const sunnyTownMap: SunnyTownMap = {
 
 const playerSpeed = 150
 const playerSize = 28
-const tinyCorrectionDistance = 2
-const releaseGraceCorrectionDistance = 16
-const releaseGraceMs = 200
-const snapCorrectionDistance = 48
-const enableSunnyTownPredictionDebug = false
+const moveSendIntervalMs = 50
+const remoteInterpolationDelayMs = 150
+const maxRemoteHistoryFrames = 12
+const movementInputEventOptions = { capture: true }
 
 const router = useRouter()
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -66,34 +58,24 @@ const status = ref('Entering Sunny Town...')
 const error = ref('')
 const connected = ref(false)
 const starBalance = ref(0)
-const rewardFeedback = ref('')
+const gameToast = ref('')
 
 const pressedDirections = new Set<MovementDirection>()
-const visualPlayers = new Map<string, SunnyTownPlayer>()
-const pendingInputs: PendingInput[] = []
-let predictedSelf: SunnyTownPlayer | null = null
+const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
+let localSelf: SunnyTownPlayer | null = null
 let renderedSelf: SunnyTownPlayer | null = null
 let socket: WebSocket | null = null
 let animationFrame = 0
-let inputSeq = 0
-let inputTimer = 0
-let lastInputStateJson = ''
-let lastPredictedInputJson = ''
-let lastReleaseAtMs = 0
+let moveSeq = 0
+let lastMoveSendAtMs = 0
+let lastSentMoveJson = ''
 let lastRenderTime = 0
-let predictionDebug = {
-  correctionDistance: 0,
-  pendingInputCount: 0,
-  lastProcessedSeq: 0,
-  latestSentSeq: 0,
-  releaseGraceActive: false,
-}
 
 const playerCount = computed(() => players.value.length)
 
 onMounted(async () => {
-  window.addEventListener('keydown', handleKeyDown)
-  window.addEventListener('keyup', handleKeyUp)
+  window.addEventListener('keydown', handleKeyDown, movementInputEventOptions)
+  window.addEventListener('keyup', handleKeyUp, movementInputEventOptions)
   window.addEventListener('blur', handleInputCancel)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', handleResize)
@@ -105,7 +87,6 @@ onMounted(async () => {
     status.value = 'Connecting...'
     await nextTick()
     connect(session.value)
-    inputTimer = window.setInterval(sendInput, 75)
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught)
     status.value = 'Could not enter Sunny Town'
@@ -113,19 +94,17 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeyDown)
-  window.removeEventListener('keyup', handleKeyUp)
+  window.removeEventListener('keydown', handleKeyDown, movementInputEventOptions)
+  window.removeEventListener('keyup', handleKeyUp, movementInputEventOptions)
   window.removeEventListener('blur', handleInputCancel)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', handleResize)
   window.cancelAnimationFrame(animationFrame)
-  window.clearInterval(inputTimer)
   socket?.close()
   socket = null
-  pendingInputs.splice(0)
-  predictedSelf = null
+  localSelf = null
   renderedSelf = null
-  visualPlayers.clear()
+  remotePlayerHistories.clear()
 })
 
 function connect(activeSession: SunnyTownSession) {
@@ -136,7 +115,6 @@ function connect(activeSession: SunnyTownSession) {
   socket.addEventListener('open', () => {
     connected.value = true
     status.value = 'Connected'
-    sendInput()
   })
 
   socket.addEventListener('message', (event) => {
@@ -151,14 +129,15 @@ function connect(activeSession: SunnyTownSession) {
     if (message.type === 'snapshot') {
       players.value = message.players || []
       collectibles.value = message.collectibles || []
-      reconcileSelf()
+      recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
+      syncLocalSelfFromSnapshot()
       return
     }
     if (message.type === 'reward_committed') {
       starBalance.value = message.newStarBalance ?? starBalance.value + (message.amount || 0)
-      rewardFeedback.value = `+${message.amount || 1} star`
+      gameToast.value = `+${message.amount || 1} star`
       window.setTimeout(() => {
-        rewardFeedback.value = ''
+        gameToast.value = ''
       }, 1200)
       return
     }
@@ -202,7 +181,8 @@ function handleKeyDown(event: KeyboardEvent) {
   }
   event.preventDefault()
   pressedDirections.add(direction)
-  sendInput()
+  refreshLocalMovementState()
+  sendMove(true)
 }
 
 function handleKeyUp(event: KeyboardEvent) {
@@ -212,10 +192,8 @@ function handleKeyUp(event: KeyboardEvent) {
   }
   event.preventDefault()
   pressedDirections.delete(direction)
-  if (!isMovementInputActive(currentMovementInput())) {
-    lastReleaseAtMs = performance.now()
-  }
-  sendInput()
+  refreshLocalMovementState()
+  sendMove(true)
 }
 
 function handleVisibilityChange() {
@@ -229,38 +207,52 @@ function handleInputCancel() {
     return
   }
   pressedDirections.clear()
-  lastReleaseAtMs = performance.now()
-  sendInput(true)
+  refreshLocalMovementState()
+  sendMove(true)
 }
 
 function handleResize() {
   draw()
 }
 
-function sendInput(force = false) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
+function refreshLocalMovementState() {
+  if (!localSelf) {
+    return
+  }
+  localSelf = simulatePlayer(localSelf, currentMovementInput(), 0)
+}
+
+function sendMove(force = false) {
+  if (!socket || socket.readyState !== WebSocket.OPEN || !localSelf) {
     return
   }
 
-  const movementInput = currentMovementInput()
-  const inputStateJson = JSON.stringify(movementInput)
-  const isMoving = isMovementInputActive(movementInput)
-  if (!force && !isMoving && inputStateJson === lastInputStateJson) {
+  const now = performance.now()
+  const moveState = {
+    x: Math.round(localSelf.x * 10) / 10,
+    y: Math.round(localSelf.y * 10) / 10,
+    facing: localSelf.facing,
+    moving: localSelf.moving,
+  }
+  const moveStateJson = JSON.stringify(moveState)
+  if (!force && now - lastMoveSendAtMs < moveSendIntervalMs) {
     return
   }
-  const input: SunnyTownInputMessage = {
-    type: 'input',
-    seq: ++inputSeq,
-    ...movementInput,
+  if (!force && !localSelf.moving && moveStateJson === lastSentMoveJson) {
+    return
   }
-  lastInputStateJson = inputStateJson
-  pendingInputs.push({
-    seq: input.seq,
-    input: movementInput,
-    deltaSeconds: 0,
-    sentAtMs: performance.now(),
-  })
-  socket.send(JSON.stringify(input))
+  const message: SunnyTownMoveMessage = {
+    type: 'move',
+    seq: ++moveSeq,
+    x: moveState.x,
+    y: moveState.y,
+    facing: moveState.facing,
+    moving: moveState.moving,
+    clientTimeMs: Date.now(),
+  }
+  lastMoveSendAtMs = now
+  lastSentMoveJson = moveStateJson
+  socket.send(JSON.stringify(message))
 }
 
 function renderLoop() {
@@ -268,11 +260,11 @@ function renderLoop() {
   const deltaSeconds = lastRenderTime ? (now - lastRenderTime) / 1000 : 0
   lastRenderTime = now
   predictSelf(deltaSeconds)
-  draw(deltaSeconds)
+  draw()
   animationFrame = window.requestAnimationFrame(renderLoop)
 }
 
-function draw(deltaSeconds = 0) {
+function draw() {
   const target = canvas.value
   if (!target) {
     return
@@ -295,7 +287,7 @@ function draw(deltaSeconds = 0) {
   context.setTransform(scale, 0, 0, scale, 0, 0)
   context.clearRect(0, 0, rect.width, rect.height)
 
-  const renderedPlayers = renderedSunnyTownPlayers(deltaSeconds)
+  const renderedPlayers = renderedSunnyTownPlayers()
   const self = renderedPlayers.find((player) => player.id === selfId.value) || renderedPlayers[0]
   const worldWidth = sunnyTownMap.width * sunnyTownMap.tileSize
   const worldHeight = sunnyTownMap.height * sunnyTownMap.tileSize
@@ -313,50 +305,24 @@ function draw(deltaSeconds = 0) {
   }
 }
 
-function renderedSunnyTownPlayers(deltaSeconds: number): SunnyTownPlayer[] {
+function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
   const selfSnapshot = players.value.find((player) => player.id === selfId.value)
   const remotePlayers = players.value.filter((player) => player.id !== selfId.value)
-  const renderedRemotePlayers = smoothRemotePlayers(remotePlayers, deltaSeconds)
+  const renderedRemotePlayers = smoothRemotePlayers(remotePlayers)
   if (!selfSnapshot) {
     return renderedRemotePlayers
   }
 
+  if (!localSelf) {
+    localSelf = { ...selfSnapshot }
+  }
   if (!renderedSelf) {
-    renderedSelf = { ...(predictedSelf || selfSnapshot) }
+    renderedSelf = { ...localSelf }
   }
 
-  const target = predictedSelf || selfSnapshot
-  const correctionDistance = Math.hypot(target.x - renderedSelf.x, target.y - renderedSelf.y)
-  const releaseGraceActive =
-    !isMovementInputActive(currentMovementInput()) &&
-    lastReleaseAtMs > 0 &&
-    performance.now() - lastReleaseAtMs <= releaseGraceMs
-  const smoothing =
-    releaseGraceActive && correctionDistance <= releaseGraceCorrectionDistance
-      ? 1 - Math.exp(-8 * Math.max(0, deltaSeconds))
-      : 1 - Math.exp(-24 * Math.max(0, deltaSeconds))
-
-  predictionDebug = {
-    correctionDistance,
-    pendingInputCount: pendingInputs.length,
-    lastProcessedSeq: target.lastProcessedSeq,
-    latestSentSeq: inputSeq,
-    releaseGraceActive,
-  }
-  if (enableSunnyTownPredictionDebug && correctionDistance > tinyCorrectionDistance) {
-    console.debug('sunny-town prediction', predictionDebug)
-  }
-
-  if (correctionDistance <= tinyCorrectionDistance) {
-    renderedSelf.x = target.x
-    renderedSelf.y = target.y
-  } else if (correctionDistance > snapCorrectionDistance) {
-    renderedSelf.x = target.x
-    renderedSelf.y = target.y
-  } else {
-    renderedSelf.x += (target.x - renderedSelf.x) * smoothing
-    renderedSelf.y += (target.y - renderedSelf.y) * smoothing
-  }
+  const target = localSelf
+  renderedSelf.x = target.x
+  renderedSelf.y = target.y
   renderedSelf.displayName = target.displayName
   renderedSelf.facing = target.facing
   renderedSelf.moving = target.moving
@@ -366,33 +332,80 @@ function renderedSunnyTownPlayers(deltaSeconds: number): SunnyTownPlayer[] {
   return [...renderedRemotePlayers, renderedSelf]
 }
 
-function smoothRemotePlayers(remotePlayers: SunnyTownPlayer[], deltaSeconds: number): SunnyTownPlayer[] {
-  const targets = new Map(remotePlayers.map((player) => [player.id, player]))
-  for (const playerId of visualPlayers.keys()) {
-    if (!targets.has(playerId)) {
-      visualPlayers.delete(playerId)
-    }
-  }
-
-  const smoothing = 1 - Math.exp(-18 * Math.max(0, deltaSeconds))
-  for (const target of remotePlayers) {
-    const visual = visualPlayers.get(target.id)
-    if (!visual) {
-      visualPlayers.set(target.id, { ...target })
+function recordRemoteSnapshots(snapshotPlayers: SunnyTownPlayer[], snapshotAt: number) {
+  const remoteIds = new Set<string>()
+  for (const player of snapshotPlayers) {
+    if (player.id === selfId.value) {
       continue
     }
 
-    const distance = Math.hypot(target.x - visual.x, target.y - visual.y)
-    const snapDistance = 160
-    visual.x = distance > snapDistance ? target.x : visual.x + (target.x - visual.x) * smoothing
-    visual.y = distance > snapDistance ? target.y : visual.y + (target.y - visual.y) * smoothing
-    visual.displayName = target.displayName
-    visual.facing = target.facing
-    visual.moving = target.moving
-    visual.avatarId = target.avatarId
+    remoteIds.add(player.id)
+    const history = remotePlayerHistories.get(player.id) || []
+    const latest = history[history.length - 1]
+    if (latest && latest.at === snapshotAt) {
+      latest.player = { ...player }
+      continue
+    }
+
+    history.push({ at: snapshotAt, player: { ...player } })
+    while (history.length > maxRemoteHistoryFrames) {
+      history.shift()
+    }
+    remotePlayerHistories.set(player.id, history)
   }
 
-  return Array.from(visualPlayers.values())
+  for (const playerId of remotePlayerHistories.keys()) {
+    if (!remoteIds.has(playerId)) {
+      remotePlayerHistories.delete(playerId)
+    }
+  }
+}
+
+function smoothRemotePlayers(remotePlayers: SunnyTownPlayer[]): SunnyTownPlayer[] {
+  const renderAt = Date.now() - remoteInterpolationDelayMs
+  return remotePlayers.map((target) => interpolateRemotePlayer(target, renderAt))
+}
+
+function interpolateRemotePlayer(target: SunnyTownPlayer, renderAt: number): SunnyTownPlayer {
+  const history = remotePlayerHistories.get(target.id)
+  if (!history || history.length === 0) {
+    return { ...target }
+  }
+  const first = history[0]
+  const latest = history[history.length - 1]
+  if (!first || !latest) {
+    return { ...target }
+  }
+  if (history.length === 1 || renderAt <= first.at) {
+    return { ...first.player }
+  }
+
+  let before = first
+  let after = latest
+  for (let index = 1; index < history.length; index++) {
+    const candidate = history[index]
+    if (!candidate) {
+      continue
+    }
+    if (candidate.at >= renderAt) {
+      after = candidate
+      break
+    }
+    before = candidate
+  }
+
+  if (renderAt >= after.at || after.at <= before.at) {
+    return { ...after.player }
+  }
+
+  const progress = clamp((renderAt - before.at) / (after.at - before.at), 0, 1)
+  return {
+    ...after.player,
+    x: before.player.x + (after.player.x - before.player.x) * progress,
+    y: before.player.y + (after.player.y - before.player.y) * progress,
+    facing: progress < 0.5 ? before.player.facing : after.player.facing,
+    moving: before.player.moving || after.player.moving,
+  }
 }
 
 function predictSelf(deltaSeconds: number) {
@@ -404,53 +417,35 @@ function predictSelf(deltaSeconds: number) {
   if (!selfSnapshot) {
     return
   }
-  if (!predictedSelf) {
-    predictedSelf = { ...selfSnapshot }
+  if (!localSelf) {
+    localSelf = { ...selfSnapshot }
   }
 
   const input = currentMovementInput()
-  const inputStateJson = JSON.stringify(input)
-  if (isMovementInputActive(input)) {
-    predictedSelf = simulatePlayer(predictedSelf, input, deltaSeconds)
-    const latestPendingInput = pendingInputs[pendingInputs.length - 1]
-    if (latestPendingInput) {
-      latestPendingInput.deltaSeconds += deltaSeconds
-    }
-    if (inputStateJson !== lastPredictedInputJson) {
-      sendInput()
-    }
-  }
-  lastPredictedInputJson = inputStateJson
+  localSelf = simulatePlayer(localSelf, input, deltaSeconds)
+  sendMove(false)
 }
 
-function reconcileSelf() {
+function syncLocalSelfFromSnapshot() {
   if (!selfId.value) {
     return
   }
 
   const selfSnapshot = players.value.find((player) => player.id === selfId.value)
   if (!selfSnapshot) {
-    predictedSelf = null
+    localSelf = null
     renderedSelf = null
     return
   }
 
-  const firstUnackedIndex = pendingInputs.findIndex((input) => input.seq > selfSnapshot.lastProcessedSeq)
-  if (firstUnackedIndex === -1) {
-    pendingInputs.splice(0)
-  } else if (firstUnackedIndex > 0) {
-    pendingInputs.splice(0, firstUnackedIndex)
+  if (!localSelf) {
+    localSelf = { ...selfSnapshot }
+    return
   }
 
-  let corrected = { ...selfSnapshot }
-  for (const pendingInput of pendingInputs) {
-    corrected = simulatePlayer(corrected, pendingInput.input, pendingInput.deltaSeconds)
-  }
-  predictedSelf = corrected
-
-  if (!renderedSelf) {
-    renderedSelf = { ...corrected }
-  }
+  localSelf.displayName = selfSnapshot.displayName
+  localSelf.avatarId = selfSnapshot.avatarId
+  localSelf.lastProcessedSeq = selfSnapshot.lastProcessedSeq
 }
 
 function simulatePlayer(player: SunnyTownPlayer, input: MovementInput, deltaSeconds: number): SunnyTownPlayer {
@@ -481,10 +476,6 @@ function currentMovementInput(): MovementInput {
     left: pressedDirections.has('left'),
     right: pressedDirections.has('right'),
   }
-}
-
-function isMovementInputActive(input: MovementInput): boolean {
-  return input.up || input.down || input.left || input.right
 }
 
 function movementVector(input: MovementInput): { x: number; y: number } | null {
@@ -686,9 +677,6 @@ function backToPet() {
         <v-chip color="warning" variant="tonal">
           {{ starBalance }} stars
         </v-chip>
-        <v-chip v-if="rewardFeedback" color="success" variant="tonal">
-          {{ rewardFeedback }}
-        </v-chip>
         <v-btn color="primary" prepend-icon="mdi-arrow-left" variant="tonal" @click="backToPet">
           Back
         </v-btn>
@@ -701,6 +689,9 @@ function backToPet() {
 
     <div class="sunny-town-stage">
       <canvas ref="canvas" aria-label="Sunny Town map" />
+      <div v-if="gameToast" class="sunny-town-toast" role="status">
+        {{ gameToast }}
+      </div>
       <div class="sunny-town-help">
         <v-icon icon="mdi-keyboard" size="small" />
         <span>Move with arrow keys or WASD</span>

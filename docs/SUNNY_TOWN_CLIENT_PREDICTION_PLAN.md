@@ -1,39 +1,32 @@
-# Sunny Town Client Prediction Plan
+# Sunny Town Movement Model
 
-This plan improves Sunny Town movement feel by adding client-side prediction for the local player while keeping the server authoritative. Remote players should continue using interpolation.
+Sunny Town now uses client-owned movement with server-accepted position samples.
 
-Status: implemented. The server snapshots now include `lastProcessedSeq`, and the frontend predicts only the local player while reconciling against authoritative snapshots. The stop rubber-banding remedy is also implemented: server acknowledgements now mean an input was reflected in simulation, and the client uses release-aware correction easing.
+Status: implemented. The local client moves and renders its own avatar immediately. The Sunny Town service accepts finite move samples, clamps map bounds, and broadcasts the accepted position to other clients. Remote players are interpolated from a short snapshot buffer.
 
 ## Goal
 
-Make the local avatar start and stop immediately when the user presses movement keys, without waiting for the next server snapshot.
+Movement should feel direct: when the user presses a key, the avatar moves; when the user releases the key, the avatar stops. Normal network lag must not rubber-band the local avatar backward.
 
-The implementation must avoid obvious rubber-banding. Small server corrections should be hidden with easing. Large corrections should snap only when necessary.
+This is acceptable because Sunny Town is not a competitive PvP game. The server still owns gameplay effects, rewards, room membership, and the accepted position other clients see.
 
-## Current State
+## Protocol
 
-- Sunny Town server runs an authoritative room simulation.
-- Client sends movement input over WebSocket.
-- Server broadcasts snapshots about 10 times per second.
-- Client renders all players by smoothing visual positions toward the latest snapshot.
-- This makes movement better than raw snapshots, but the local player still feels slightly delayed and steppy.
-
-## Protocol Changes
-
-Keep the existing client input shape:
+Client-to-server movement messages use position samples:
 
 ```json
 {
-  "type": "input",
+  "type": "move",
   "seq": 12,
-  "up": false,
-  "down": true,
-  "left": false,
-  "right": false
+  "x": 640,
+  "y": 480,
+  "facing": "down",
+  "moving": true,
+  "clientTimeMs": 123456
 }
 ```
 
-Add the latest processed input sequence to each server player snapshot:
+Server snapshots include the latest accepted movement sequence:
 
 ```json
 {
@@ -48,133 +41,32 @@ Add the latest processed input sequence to each server player snapshot:
 }
 ```
 
-Server requirements:
+`lastProcessedSeq` means "accepted by the server." It is not used for local rewind/replay.
 
-- Store both the latest input `seq` received for each player and the latest input `seq` reflected by a simulation step.
-- Include the simulated sequence value in each snapshot as `lastProcessedSeq`.
-- Do not acknowledge a newly received input in a snapshot until `room.step` has applied the current input state.
-- Continue ignoring client-provided coordinates.
-- Continue using the fixed server tick as authoritative time.
+## Client Model
 
-## Client Prediction Model
+- The frontend calculates the local player's next position every animation frame.
+- The frontend sends move samples on input changes and at a fixed interval while moving.
+- Key release sends a final forced `moving: false` sample with the current local position.
+- The local player renders from local state, not from server-correction easing.
+- Server snapshots can initialize the local player and update metadata such as display name, avatar, and accepted sequence.
+- Server snapshots do not pull the local player's rendered `x`/`y` around during normal play.
+- Remote players render about 150ms behind real time so the client can interpolate between two known server snapshots instead of chasing the newest one.
 
-Use prediction only for the local player.
+## Server Model
 
-Client state:
+- The server stores the last accepted position for each player.
+- Out-of-order move samples are ignored by sequence number.
+- Invalid numeric samples are rejected.
+- Position samples are clamped to map bounds.
+- The accepted position is stored directly after bounds clamping; the server does not choose a nearby collision fallback point.
+- If no new samples arrive, the player remains at the last accepted position.
 
-```text
-authoritativeSelf
-  last server snapshot for self
+## Rewards And Gameplay Effects
 
-predictedSelf
-  authoritative self plus replayed unacknowledged inputs
+Raw client coordinates must not trigger rewards.
 
-renderedSelf
-  what the canvas actually draws
-
-pendingInputs
-  inputs sent by the client but not yet acknowledged by the server
-```
-
-Input handling:
-
-- On keydown/keyup, send input immediately.
-- While moving, resend input at 20 messages per second.
-- Store each sent input in `pendingInputs`.
-- Record local send timestamps and enough timing data to replay predicted movement client-side.
-- Keep zero-duration idle inputs in `pendingInputs` as stop sequence boundaries until the server confirms they were simulated.
-
-Frame loop:
-
-1. Read current movement state.
-2. Advance the local predicted player immediately using the same movement rules as the server.
-3. Render the local player from `renderedSelf`, eased toward `predictedSelf`.
-4. Render remote players with the existing interpolation behavior.
-
-## Reconciliation
-
-When a server snapshot arrives:
-
-1. Find the local player snapshot.
-2. Drop all pending inputs with `seq <= lastProcessedSeq`.
-3. Reset a temporary player state to the server position.
-4. Replay remaining pending inputs.
-5. The result becomes the corrected `predictedSelf`.
-6. Compare corrected `predictedSelf` to current `renderedSelf`.
-7. Apply the correction policy below.
-
-Do not visibly rewind the player to the server position and then replay. The rewind/replay is internal only.
-
-## Correction Policy
-
-Use distance between `renderedSelf` and corrected `predictedSelf`.
-
-```text
-0px - 2px:
-  Ignore the correction.
-
-2px - 16px within 200ms after key release:
-  Ease renderedSelf toward corrected predictedSelf slowly over about 200-300ms.
-
-2px - 48px outside the release grace case:
-  Ease renderedSelf toward corrected predictedSelf normally over several frames.
-
-More than 48px:
-  Snap renderedSelf to corrected predictedSelf.
-```
-
-This keeps normal LAN corrections invisible while still recovering from real desyncs, reconnect-like jumps, or collision mismatches.
-
-The thresholds can be tuned after testing, but these are the initial defaults.
-
-## Movement Rules To Mirror
-
-The client prediction must match the server as closely as possible:
-
-- `playerSpeed = 150`
-- `playerSize = 28`
-- four-direction input
-- diagonal movement normalized
-- axis-separated collision
-- map bounds clamping
-- blocked rectangle collision
-
-The current client already hardcodes the map rectangles. For this slice, mirror the server logic against that same data. Later, load the shared `sunny-town/maps/sunny-town-v1.json` map data instead of hardcoding it.
-
-## Failure Modes To Watch
-
-- Rubber-banding near walls or corners means client/server collision differs.
-- Slow visual drift means smoothing is too soft or errors are being ignored too aggressively.
-- Small shaking while holding a key means the client and server movement speeds differ.
-- Snapping while walking normally means replayed pending inputs are wrong or input acknowledgements are stale.
-- Remote players should not use local prediction.
-
-## Implementation Steps
-
-Completed:
-
-- Added received and simulated input sequence tracking to the Go `player` state.
-- Updated `room.updateInput` to store the latest received input sequence without acknowledging it early.
-- Updated `room.step` to mark the latest received sequence as simulated after applying the tick.
-- Added `lastProcessedSeq` to `playerSnapshot`.
-- Updated `SunnyTownPlayer` TypeScript type.
-- Added local prediction state to `SunnyTownPage.vue`.
-- Added pending input timestamps and release-grace correction easing.
-- Added code-local prediction diagnostics for correction distance, pending count, acknowledged seq, latest sent seq, and release-grace state.
-- Added frontend movement helpers:
-   - movement vector
-   - diagonal normalization
-   - axis-separated collision
-   - bounds clamping
-- Use prediction for `selfId` only.
-- Kept interpolation for non-self players.
-- Applied correction policy on snapshots.
-- Rebuilt frontend and Sunny Town service.
-
-Follow-up:
-
-- Load shared map/collision data from `sunny-town/maps/sunny-town-v1.json` in the frontend instead of duplicating map rectangles.
-- Add developer-facing debug counters for ignored/eased/snapped corrections if movement tuning gets harder.
+The server's accepted player position is the only position used for stars, rewards, interactions, and future gameplay effects. This means a client can own its movement feel without being able to claim rewards from arbitrary raw coordinates.
 
 ## Test Plan
 
@@ -193,23 +85,18 @@ npm run build
 
 Manual checks:
 
-1. Open Sunny Town in one browser window.
-2. Confirm local movement starts immediately on key press.
-3. Confirm local movement stops immediately on key release.
-4. Release repeatedly after short taps and long runs in open space.
-5. Confirm no visible backward pull during normal release timing.
-6. Walk into map boundaries and blocked rectangles.
-7. Confirm large correction recovery still works near collisions.
-8. Open a second browser window.
-9. Confirm remote player movement remains smooth.
-10. Confirm both clients still see authoritative final positions.
+1. Hold and release each movement key.
+2. Alternate left/right quickly and confirm the avatar never continues sliding after release.
+3. Move diagonally and confirm speed feels stable.
+4. Walk into walls and bounds.
+5. Simulate lag or packet delay and confirm the local avatar is not rubber-banded backward.
+6. Open two clients and confirm remote players still move smoothly.
+7. Pick up stars and confirm rewards save from the server-accepted position.
 
 ## Acceptance Criteria
 
-- Local player feels immediate.
-- Server remains authoritative.
-- Normal LAN movement does not visibly rubber-band.
-- Stop inputs are not acknowledged until they have been reflected in a server simulation tick.
-- Wall and boundary collisions do not let the local player visibly pass through obstacles.
-- Remote players remain smooth.
-- Two-window multiplayer still works.
+- Local movement starts immediately.
+- Local movement stops immediately.
+- Normal lag does not cause local rubber-banding.
+- Server snapshots still let other clients see the accepted player position.
+- Rewards are only triggered from accepted server state.

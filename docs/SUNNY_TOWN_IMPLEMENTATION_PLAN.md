@@ -2,7 +2,7 @@
 
 This plan builds Sunny Town as a new Go realtime service that launches from the existing student Pet page.
 
-Current status: the first movement MVP is implemented. Sunny Town now runs as a separate Go WebSocket service, Docker Compose includes the `sunny-town` container, HQ issues short-lived join tokens, the Pet page opens a dedicated Sunny Town route, and the client uses local prediction for the current player with interpolation for remote players.
+Current status: the first movement MVP is implemented. Sunny Town now runs as a separate Go WebSocket service, Docker Compose includes the `sunny-town` container, HQ issues short-lived join tokens, the Pet page opens a dedicated Sunny Town route, and the client uses client-owned local movement with interpolation for remote players.
 
 ## Phase 0: Decisions to Lock
 
@@ -122,9 +122,9 @@ Room responsibilities:
 
 - hold connected players
 - assign spawn positions
-- accept player input
+- accept player movement samples
 - run a fixed tick loop
-- apply movement and collision
+- accept/clamp movement samples
 - broadcast snapshots
 - remove disconnected players
 
@@ -134,8 +134,10 @@ Initial movement rules:
 - constant movement speed
 - four-direction movement
 - no diagonal speed advantage
-- server clamps positions to map bounds
-- server blocks movement through collision rectangles or blocked tiles
+- client owns local movement feel
+- server accepts move samples and clamps positions to map bounds
+- server stores accepted positions directly instead of choosing a nearby collision fallback point
+- rewards and interactions use only server-accepted positions
 
 ## Phase 5: Static Map Contract
 
@@ -175,7 +177,7 @@ Frontend work:
 - call the session endpoint when the view opens
 - connect to the WebSocket
 - render the map and avatars
-- send input state from keyboard or touch controls
+- send movement samples from keyboard or touch controls
 - close the socket when leaving the route
 
 Rendering can start with HTML canvas. Use a simple top-down map first:
@@ -195,7 +197,7 @@ Start with JSON messages.
 Client-to-server:
 
 ```json
-{ "type": "input", "seq": 1, "up": false, "down": true, "left": false, "right": false }
+{ "type": "move", "seq": 1, "x": 640, "y": 480, "facing": "down", "moving": true }
 { "type": "emote", "emote": "wave" }
 { "type": "pong", "serverTimeMs": 123456 }
 ```
@@ -213,10 +215,11 @@ Server-to-client:
 
 Rules:
 
-- clients send intent only
-- clients never send authoritative `x` or `y`
-- server snapshots are authoritative
-- server snapshots include `lastProcessedSeq` so the local client can reconcile prediction
+- clients send movement samples for their own avatar
+- server snapshots contain server-accepted positions
+- server snapshots include `lastProcessedSeq` so the local client can see which sample was accepted
+- local rendering is not corrected back to snapshots during normal play
+- rewards and gameplay effects use only server-accepted positions, never raw client coordinates
 - unknown message types are ignored or rejected with a small error
 - message size is capped
 
@@ -257,7 +260,7 @@ Backend tests:
 - room join and leave
 - input validation
 - movement bounds
-- collision blocking
+- bounds clamping
 
 Frontend checks:
 
@@ -303,4 +306,4 @@ The first milestone is complete when:
 - leaving the Pet/Sunny Town route closes the connection cleanly
 - no permanent student or pet state is written by Sunny Town directly
 
-This milestone is complete. The next implementation slice should load shared map data into the frontend instead of duplicating collision rectangles in the Vue component.
+This milestone is complete. The next implementation slice should load shared map data into the frontend instead of duplicating map rectangles in the Vue component.

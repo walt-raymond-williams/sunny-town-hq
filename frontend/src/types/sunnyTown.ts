@@ -49,11 +49,12 @@ export interface SunnyTownServerMessage {
   reason?: string
 }
 
-export interface SunnyTownInputMessage {
-  type: 'input'
+export interface SunnyTownMoveMessage {
+  type: 'move'
   seq: number
-  up: boolean
-  down: boolean
-  left: boolean
-  right: boolean
+  x: number
+  y: number
+  facing: 'up' | 'down' | 'left' | 'right'
+  moving: boolean
+  clientTimeMs: number
 }

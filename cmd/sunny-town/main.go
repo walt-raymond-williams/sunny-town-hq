@@ -30,6 +30,7 @@ const (
 	starPickupRadius   = 30.0
 	simulationInterval = 50 * time.Millisecond
 	snapshotInterval   = 100 * time.Millisecond
+	movingStateTTL     = 250 * time.Millisecond
 	starRespawnDelay   = 10 * time.Second
 )
 
@@ -66,18 +67,14 @@ type rect struct {
 	Height float64 `json:"height"`
 }
 
-type inputState struct {
-	Up    bool `json:"up"`
-	Down  bool `json:"down"`
-	Left  bool `json:"left"`
-	Right bool `json:"right"`
-}
-
 type clientMessage struct {
-	Type         string `json:"type"`
-	Seq          int64  `json:"seq,omitempty"`
-	ClientTimeMS int64  `json:"client_time_ms,omitempty"`
-	inputState
+	Type         string  `json:"type"`
+	Seq          int64   `json:"seq,omitempty"`
+	ClientTimeMS int64   `json:"client_time_ms,omitempty"`
+	X            float64 `json:"x,omitempty"`
+	Y            float64 `json:"y,omitempty"`
+	Facing       string  `json:"facing,omitempty"`
+	Moving       bool    `json:"moving,omitempty"`
 }
 
 type serverMessage struct {
@@ -110,18 +107,17 @@ type playerSnapshot struct {
 }
 
 type player struct {
-	appUserID         int64
-	id                string
-	displayName       string
-	avatarID          string
-	x                 float64
-	y                 float64
-	facing            string
-	moving            bool
-	input             inputState
-	receivedInputSeq  int64
-	simulatedInputSeq int64
-	client            *client
+	appUserID   int64
+	id          string
+	displayName string
+	avatarID    string
+	x           float64
+	y           float64
+	facing      string
+	moving      bool
+	lastMoveAt  time.Time
+	lastMoveSeq int64
+	client      *client
 }
 
 type client struct {
@@ -348,6 +344,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims) {
 		x:           spawn.X,
 		y:           spawn.Y,
 		facing:      "down",
+		lastMoveAt:  time.Now(),
 		client:      client,
 	}
 	if player.displayName == "" {
@@ -375,15 +372,24 @@ func (room *room) leave(client *client) {
 	room.mu.Unlock()
 }
 
-func (room *room) updateInput(playerID string, seq int64, input inputState) {
+func (room *room) updateMove(playerID string, seq int64, x float64, y float64, facing string, moving bool, now time.Time) {
 	room.mu.Lock()
 	if player := room.players[playerID]; player != nil {
-		if seq <= player.receivedInputSeq {
+		if seq <= player.lastMoveSeq {
 			room.mu.Unlock()
 			return
 		}
-		player.input = input
-		player.receivedInputSeq = seq
+		acceptedX, acceptedY, ok := room.acceptedMoveLocked(player, x, y)
+		if ok {
+			player.x = acceptedX
+			player.y = acceptedY
+			player.lastMoveAt = now
+		}
+		if isFacing(facing) {
+			player.facing = facing
+		}
+		player.moving = moving && ok
+		player.lastMoveSeq = seq
 	}
 	room.mu.Unlock()
 }
@@ -394,38 +400,9 @@ func (room *room) step(dt float64, now time.Time) {
 	room.tick++
 	var rewards []rewardEvent
 	for _, player := range room.players {
-		dx := boolFloat(player.input.Right) - boolFloat(player.input.Left)
-		dy := boolFloat(player.input.Down) - boolFloat(player.input.Up)
-		if dx == 0 && dy == 0 {
+		if !player.lastMoveAt.IsZero() && now.Sub(player.lastMoveAt) > movingStateTTL {
 			player.moving = false
-		} else {
-			length := math.Hypot(dx, dy)
-			dx = dx / length
-			dy = dy / length
-
-			if math.Abs(dx) > math.Abs(dy) {
-				if dx > 0 {
-					player.facing = "right"
-				} else {
-					player.facing = "left"
-				}
-			} else if dy > 0 {
-				player.facing = "down"
-			} else {
-				player.facing = "up"
-			}
-
-			nextX := player.x + dx*playerSpeed*dt
-			nextY := player.y + dy*playerSpeed*dt
-			if !room.collidesLocked(nextX, player.y) {
-				player.x = room.clampXLocked(nextX)
-			}
-			if !room.collidesLocked(player.x, nextY) {
-				player.y = room.clampYLocked(nextY)
-			}
-			player.moving = true
 		}
-		player.simulatedInputSeq = player.receivedInputSeq
 
 		rewards = append(rewards, room.collectStarsLocked(player, now)...)
 	}
@@ -482,10 +459,20 @@ func (room *room) snapshotsLocked() []playerSnapshot {
 			Facing:           player.facing,
 			Moving:           player.moving,
 			AvatarID:         player.avatarID,
-			LastProcessedSeq: player.simulatedInputSeq,
+			LastProcessedSeq: player.lastMoveSeq,
 		})
 	}
 	return snapshots
+}
+
+func (room *room) acceptedMoveLocked(player *player, proposedX float64, proposedY float64) (float64, float64, bool) {
+	if math.IsNaN(proposedX) || math.IsNaN(proposedY) || math.IsInf(proposedX, 0) || math.IsInf(proposedY, 0) {
+		return player.x, player.y, false
+	}
+
+	x := room.clampXLocked(proposedX)
+	y := room.clampYLocked(proposedY)
+	return x, y, true
 }
 
 func (room *room) collectibleSnapshotsLocked() []collectibleSnapshot {
@@ -595,11 +582,11 @@ func (client *client) readPump() {
 		}
 
 		switch message.Type {
-		case "input":
-			if !client.allowInput(time.Now()) {
+		case "move":
+			if !client.allowMove(time.Now(), message.Moving) {
 				continue
 			}
-			client.room.updateInput(client.id, message.Seq, message.inputState)
+			client.room.updateMove(client.id, message.Seq, message.X, message.Y, message.Facing, message.Moving, time.Now())
 		case "ping":
 			_ = client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		default:
@@ -642,7 +629,10 @@ func (client *client) trySend(message serverMessage) {
 	}
 }
 
-func (client *client) allowInput(now time.Time) bool {
+func (client *client) allowMove(now time.Time, moving bool) bool {
+	if !moving {
+		return true
+	}
 	if client.inputWindowStart.IsZero() || now.Sub(client.inputWindowStart) >= time.Second {
 		client.inputWindowStart = now
 		client.inputWindowCount = 0
@@ -780,11 +770,8 @@ func rectsOverlap(a rect, b rect) bool {
 		a.Y+a.Height > b.Y
 }
 
-func boolFloat(value bool) float64 {
-	if value {
-		return 1
-	}
-	return 0
+func isFacing(value string) bool {
+	return value == "up" || value == "down" || value == "left" || value == "right"
 }
 
 func initialCollectibles(gameMap gameMap) map[string]*collectible {
