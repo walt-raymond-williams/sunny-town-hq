@@ -1,11 +1,14 @@
 import { authJson } from './http'
-import type { InventoryItem, StudentInventory } from '../types/inventory'
+import type { EquipmentSlot, InventoryItem, StudentInventory } from '../types/inventory'
 
 export interface InventoryItemResponse {
   key?: string
   name?: string
   description?: string
   quantity?: number
+  equipSlot?: EquipmentSlot | ''
+  visualKey?: string
+  equipped?: boolean
 }
 
 export interface StudentInventoryResponse {
@@ -25,5 +28,8 @@ function normalizeInventoryItem(item: InventoryItemResponse): InventoryItem {
     name: item.name || '',
     description: item.description || '',
     quantity: item.quantity ?? 0,
+    equipSlot: item.equipSlot || '',
+    visualKey: item.visualKey || '',
+    equipped: item.equipped ?? false,
   }
 }

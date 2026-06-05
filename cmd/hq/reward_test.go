@@ -212,6 +212,85 @@ func TestPurchaseStudentShopItemRejectsInvalidPurchase(t *testing.T) {
 	}
 }
 
+func TestEquipStudentItemRequiresOwnedEquippableItem(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, "sunny_hoodie", 1); err != nil {
+		t.Fatalf("seed hoodie inventory: %v", err)
+	}
+
+	equipment, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
+		Slot:    equipmentSlotGear,
+		ItemKey: "sunny_hoodie",
+	})
+	if err != nil {
+		t.Fatalf("equip hoodie error = %v", err)
+	}
+	if equipment.Slots[0].Item == nil || equipment.Slots[0].Item.Key != "sunny_hoodie" {
+		t.Fatalf("equipment = %#v, want hoodie in gear slot", equipment)
+	}
+
+	inventory, err := app.loadStudentInventory(ctx, 123)
+	if err != nil {
+		t.Fatalf("load inventory: %v", err)
+	}
+	if len(inventory.Items) != 1 || !inventory.Items[0].Equipped {
+		t.Fatalf("inventory = %#v, want equipped hoodie", inventory)
+	}
+}
+
+func TestEquipStudentItemRejectsCookieAndMissingOwnership(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, cookieInventoryKey, 1); err != nil {
+		t.Fatalf("seed cookie inventory: %v", err)
+	}
+
+	_, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
+		Slot:    equipmentSlotGear,
+		ItemKey: cookieInventoryKey,
+	})
+	if err != errItemNotEquippable {
+		t.Fatalf("equip cookie error = %v, want errItemNotEquippable", err)
+	}
+
+	_, err = app.equipStudentItem(ctx, 123, equipmentChangeRequest{
+		Slot:    equipmentSlotAccessory,
+		ItemKey: "star_cap",
+	})
+	if err != errItemNotOwned {
+		t.Fatalf("equip unowned cap error = %v, want errItemNotOwned", err)
+	}
+}
+
+func TestUnequipStudentItemClearsSlot(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, "star_cap", 1); err != nil {
+		t.Fatalf("seed cap inventory: %v", err)
+	}
+	if _, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
+		Slot:    equipmentSlotAccessory,
+		ItemKey: "star_cap",
+	}); err != nil {
+		t.Fatalf("equip cap error = %v", err)
+	}
+
+	equipment, err := app.unequipStudentItem(ctx, 123, equipmentChangeRequest{Slot: equipmentSlotAccessory})
+	if err != nil {
+		t.Fatalf("unequip cap error = %v", err)
+	}
+	if equipment.Slots[1].Item != nil {
+		t.Fatalf("equipment = %#v, want empty accessory slot", equipment)
+	}
+}
+
 func testRewardApp(t *testing.T) (*app, func()) {
 	t.Helper()
 
@@ -285,11 +364,17 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			key text not null unique,
 			name text not null,
 			description text not null default '',
+			equip_slot text null,
+			visual_key text null,
 			created_at timestamptz not null default now(),
 			updated_at timestamptz not null default now()
 		)`,
 		`insert into inventory_item_type (key, name, description)
 			values ('cookie', 'Cookie', 'A treat for your pet.')`,
+		`insert into inventory_item_type (key, name, description, equip_slot, visual_key)
+			values
+				('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie'),
+				('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap')`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
@@ -298,6 +383,15 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (app_user_id, item_type_id),
 			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table student_equipped_item (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			slot text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, slot),
+			constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory'))
 		)`,
 		`insert into app_user (id, display_name) values (123, 'Student')`,
 		`insert into pet_state (user_id, hunger, happiness, energy) values (123, 50, 50, 50)`,

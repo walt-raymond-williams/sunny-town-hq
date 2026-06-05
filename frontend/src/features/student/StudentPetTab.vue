@@ -29,6 +29,13 @@ async function openInventory() {
   inventoryOpen.value = true
   await inventoryStore.loadInventory()
 }
+
+async function equipFromInventory(itemKey: string, slot: 'gear' | 'accessory' | '') {
+  if (!slot) {
+    return
+  }
+  await inventoryStore.equipItem(slot, itemKey)
+}
 </script>
 
 <template>
@@ -178,6 +185,24 @@ async function openInventory() {
         <v-alert v-if="inventoryStore.error" class="mb-4" type="error" variant="tonal">
           {{ inventoryStore.error }}
         </v-alert>
+        <section class="equipment-panel mb-4" aria-label="Equipment">
+          <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
+            <div>
+              <p class="summary-category">{{ slot.slot }}</p>
+              <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
+            </div>
+            <v-btn
+              v-if="slot.item"
+              :loading="inventoryStore.isUpdatingEquipment"
+              color="secondary"
+              size="small"
+              variant="tonal"
+              @click="inventoryStore.unequipItem(slot.slot)"
+            >
+              Unequip
+            </v-btn>
+          </div>
+        </section>
         <div class="inventory-list">
           <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item">
             <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
@@ -185,7 +210,27 @@ async function openInventory() {
               <p class="inventory-item__name">{{ item.name }}</p>
               <p class="inventory-item__description">{{ item.description }}</p>
             </div>
-            <strong class="inventory-item__quantity">{{ item.quantity }}</strong>
+            <v-btn
+              v-if="item.equipSlot && !item.equipped"
+              :loading="inventoryStore.isUpdatingEquipment"
+              color="primary"
+              size="small"
+              variant="flat"
+              @click="equipFromInventory(item.key, item.equipSlot)"
+            >
+              Equip
+            </v-btn>
+            <v-btn
+              v-else-if="item.equipped && item.equipSlot"
+              :loading="inventoryStore.isUpdatingEquipment"
+              color="secondary"
+              size="small"
+              variant="tonal"
+              @click="inventoryStore.unequipItem(item.equipSlot)"
+            >
+              Unequip
+            </v-btn>
+            <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
           </div>
         </div>
       </v-card-text>

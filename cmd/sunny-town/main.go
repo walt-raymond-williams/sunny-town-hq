@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -25,15 +26,17 @@ import (
 )
 
 const (
-	defaultRoomID      = "sunny-town-main"
-	defaultMapID       = "sunny-town-v1"
-	playerSize         = 28.0
-	playerSpeed        = 150.0
-	starPickupRadius   = 30.0
-	simulationInterval = 50 * time.Millisecond
-	snapshotInterval   = 100 * time.Millisecond
-	movingStateTTL     = 250 * time.Millisecond
-	starRespawnDelay   = 10 * time.Second
+	defaultRoomID          = "sunny-town-main"
+	defaultMapID           = "sunny-town-v1"
+	equipmentSlotGear      = "gear"
+	equipmentSlotAccessory = "accessory"
+	playerSize             = 28.0
+	playerSpeed            = 150.0
+	starPickupRadius       = 30.0
+	simulationInterval     = 50 * time.Millisecond
+	snapshotInterval       = 100 * time.Millisecond
+	movingStateTTL         = 250 * time.Millisecond
+	starRespawnDelay       = 10 * time.Second
 )
 
 type config struct {
@@ -116,6 +119,8 @@ type clientMessage struct {
 	Moving       bool    `json:"moving,omitempty"`
 }
 
+type equipmentSnapshot map[string]string
+
 type serverMessage struct {
 	Type           string                `json:"type"`
 	SelfID         string                `json:"selfId,omitempty"`
@@ -136,14 +141,15 @@ type serverMessage struct {
 }
 
 type playerSnapshot struct {
-	ID               string  `json:"id"`
-	DisplayName      string  `json:"displayName"`
-	X                float64 `json:"x"`
-	Y                float64 `json:"y"`
-	Facing           string  `json:"facing"`
-	Moving           bool    `json:"moving"`
-	AvatarID         string  `json:"avatarId"`
-	LastProcessedSeq int64   `json:"lastProcessedSeq"`
+	ID               string            `json:"id"`
+	DisplayName      string            `json:"displayName"`
+	X                float64           `json:"x"`
+	Y                float64           `json:"y"`
+	Facing           string            `json:"facing"`
+	Moving           bool              `json:"moving"`
+	AvatarID         string            `json:"avatarId"`
+	Equipment        equipmentSnapshot `json:"equipment"`
+	LastProcessedSeq int64             `json:"lastProcessedSeq"`
 }
 
 type player struct {
@@ -151,6 +157,7 @@ type player struct {
 	id          string
 	displayName string
 	avatarID    string
+	equipment   equipmentSnapshot
 	x           float64
 	y           float64
 	facing      string
@@ -163,6 +170,7 @@ type player struct {
 type client struct {
 	conn             *websocket.Conn
 	send             chan serverMessage
+	server           *server
 	mu               sync.Mutex
 	room             *room
 	id               string
@@ -243,6 +251,19 @@ type rewardCommitResponse struct {
 	NewStarBalance int  `json:"new_star_balance"`
 }
 
+type studentEquipmentResponse struct {
+	Slots []equipmentSlotResponse `json:"slots"`
+}
+
+type equipmentSlotResponse struct {
+	Slot string                 `json:"slot"`
+	Item *equipmentItemResponse `json:"item"`
+}
+
+type equipmentItemResponse struct {
+	VisualKey string `json:"visualKey"`
+}
+
 func main() {
 	cfg := loadConfig()
 	maps, err := loadMaps(cfg.mapsDir)
@@ -319,6 +340,46 @@ func newServer(cfg config, world *world) *server {
 	return srv
 }
 
+func (srv *server) loadStudentEquipment(ctx context.Context, appUserID int64) (equipmentSnapshot, error) {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		srv.config.hqInternalURL+"/api/internal/sunny-town/student-equipment?app_user_id="+strconv.FormatInt(appUserID, 10),
+		nil,
+	)
+	if err != nil {
+		return equipmentSnapshot{}, err
+	}
+	request.Header.Set("X-HQ-Service-Secret", srv.config.serviceSecret)
+
+	response, err := srv.client.Do(request)
+	if err != nil {
+		return equipmentSnapshot{}, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return equipmentSnapshot{}, fmt.Errorf("equipment request failed status=%d", response.StatusCode)
+	}
+
+	var equipment studentEquipmentResponse
+	if err := json.NewDecoder(response.Body).Decode(&equipment); err != nil {
+		return equipmentSnapshot{}, err
+	}
+
+	snapshot := equipmentSnapshot{}
+	for _, slot := range equipment.Slots {
+		if slot.Slot != equipmentSlotGear && slot.Slot != equipmentSlotAccessory {
+			continue
+		}
+		if slot.Item == nil || strings.TrimSpace(slot.Item.VisualKey) == "" {
+			continue
+		}
+		snapshot[slot.Slot] = strings.TrimSpace(slot.Item.VisualKey)
+	}
+	return snapshot, nil
+}
+
 func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	claims, err := sunnytownauth.Verify(r.URL.Query().Get("token"), srv.config.joinSecret, time.Now())
 	if err != nil {
@@ -340,12 +401,19 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	playerID := sunnytownauth.PlayerID(claims.AppUserID)
 	client := &client{
-		conn: conn,
-		send: make(chan serverMessage, 16),
-		id:   playerID,
+		conn:   conn,
+		send:   make(chan serverMessage, 16),
+		server: srv,
+		id:     playerID,
 	}
 
-	srv.world.join(client, claims)
+	equipment, err := srv.loadStudentEquipment(r.Context(), claims.AppUserID)
+	if err != nil {
+		log.Printf("load sunny town equipment: %v", err)
+		equipment = equipmentSnapshot{}
+	}
+
+	srv.world.join(client, claims, equipment)
 	log.Printf("player joined room=%s map=%s player=%s", srv.world.roomID, defaultMapID, playerID)
 
 	go client.writePump()
@@ -378,8 +446,8 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, world *w
 	}
 }
 
-func (world *world) join(client *client, claims sunnytownauth.Claims) {
-	world.defaultRoom.join(client, claims)
+func (world *world) join(client *client, claims sunnytownauth.Claims, equipmentValues ...equipmentSnapshot) {
+	world.defaultRoom.join(client, claims, equipmentValues...)
 }
 
 func (room *room) run(ctx context.Context) {
@@ -401,9 +469,14 @@ func (room *room) run(ctx context.Context) {
 	}
 }
 
-func (room *room) join(client *client, claims sunnytownauth.Claims) {
+func (room *room) join(client *client, claims sunnytownauth.Claims, equipmentValues ...equipmentSnapshot) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
+
+	equipment := equipmentSnapshot{}
+	if len(equipmentValues) > 0 {
+		equipment = equipmentValues[0]
+	}
 
 	spawn := room.spawnPointLocked()
 	player := &player{
@@ -411,6 +484,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims) {
 		id:          client.id,
 		displayName: claims.DisplayName,
 		avatarID:    claims.AvatarID,
+		equipment:   equipment,
 		x:           spawn.X,
 		y:           spawn.Y,
 		facing:      "down",
@@ -517,6 +591,36 @@ func (client *client) setRoom(room *room) {
 	client.mu.Unlock()
 }
 
+func (client *client) refreshEquipment() {
+	room := client.currentRoom()
+	if room == nil || client.server == nil {
+		return
+	}
+
+	room.mu.Lock()
+	player := room.players[client.id]
+	if player == nil {
+		room.mu.Unlock()
+		return
+	}
+	userID := player.appUserID
+	room.mu.Unlock()
+
+	equipment, err := client.server.loadStudentEquipment(context.Background(), userID)
+	if err != nil {
+		log.Printf("refresh equipment player=%s: %v", client.id, err)
+		client.trySend(serverMessage{Type: "error", Code: "equipment_refresh_failed"})
+		return
+	}
+
+	room.mu.Lock()
+	if player := room.players[client.id]; player != nil {
+		player.equipment = equipment
+	}
+	room.mu.Unlock()
+	room.broadcastSnapshot(time.Now())
+}
+
 func (room *room) updateMove(playerID string, seq int64, x float64, y float64, facing string, moving bool, now time.Time) {
 	var triggered *portal
 	room.mu.Lock()
@@ -613,10 +717,22 @@ func (room *room) snapshotsLocked() []playerSnapshot {
 			Facing:           player.facing,
 			Moving:           player.moving,
 			AvatarID:         player.avatarID,
+			Equipment:        cloneEquipment(player.equipment),
 			LastProcessedSeq: player.lastMoveSeq,
 		})
 	}
 	return snapshots
+}
+
+func cloneEquipment(equipment equipmentSnapshot) equipmentSnapshot {
+	if len(equipment) == 0 {
+		return equipmentSnapshot{}
+	}
+	cloned := make(equipmentSnapshot, len(equipment))
+	for slot, visualKey := range equipment {
+		cloned[slot] = visualKey
+	}
+	return cloned
 }
 
 func (room *room) acceptedMoveLocked(player *player, proposedX float64, proposedY float64) (float64, float64, bool) {
@@ -774,6 +890,8 @@ func (client *client) readPump() {
 			if room := client.currentRoom(); room != nil {
 				room.updateMove(client.id, message.Seq, message.X, message.Y, message.Facing, message.Moving, time.Now())
 			}
+		case "equipment_changed":
+			client.refreshEquipment()
 		case "ping":
 			_ = client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		default:

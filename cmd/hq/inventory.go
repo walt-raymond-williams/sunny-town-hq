@@ -16,6 +16,9 @@ type inventoryItemResponse struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Quantity    int    `json:"quantity"`
+	EquipSlot   string `json:"equipSlot,omitempty"`
+	VisualKey   string `json:"visualKey,omitempty"`
+	Equipped    bool   `json:"equipped"`
 }
 
 type studentInventoryResponse struct {
@@ -41,11 +44,16 @@ func loadStudentInventory(ctx context.Context, querier inventoryLoader, userID i
 			select iit.key,
 				iit.name,
 				iit.description,
-				coalesce(sii.quantity, 0) as quantity
+				coalesce(sii.quantity, 0) as quantity,
+				coalesce(iit.equip_slot, '') as equip_slot,
+				coalesce(iit.visual_key, '') as visual_key,
+				sei.app_user_id is not null as equipped
 			from inventory_item_type iit
 			join student_inventory_item sii on sii.item_type_id = iit.id
 				and sii.app_user_id = $1
 				and sii.quantity > 0
+			left join student_equipped_item sei on sei.app_user_id = sii.app_user_id
+				and sei.item_type_id = iit.id
 			order by iit.id
 		`,
 		userID,
@@ -58,7 +66,15 @@ func loadStudentInventory(ctx context.Context, querier inventoryLoader, userID i
 	inventory := studentInventoryResponse{Items: []inventoryItemResponse{}}
 	for rows.Next() {
 		var item inventoryItemResponse
-		if err := rows.Scan(&item.Key, &item.Name, &item.Description, &item.Quantity); err != nil {
+		if err := rows.Scan(
+			&item.Key,
+			&item.Name,
+			&item.Description,
+			&item.Quantity,
+			&item.EquipSlot,
+			&item.VisualKey,
+			&item.Equipped,
+		); err != nil {
 			return studentInventoryResponse{}, err
 		}
 		inventory.Items = append(inventory.Items, item)

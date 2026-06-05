@@ -6,6 +6,7 @@ import { purchaseShopItem } from '../api/shopApi'
 import { useStudentInventoryStore } from '../stores/studentInventory'
 import type {
   SunnyTownCollectible,
+  SunnyTownEquipmentChangedMessage,
   SunnyTownMap,
   SunnyTownMoveMessage,
   SunnyTownNpc,
@@ -249,6 +250,27 @@ async function toggleInventory() {
   if (inventoryOpen.value) {
     await inventoryStore.loadInventory()
   }
+}
+
+function notifyEquipmentChanged() {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return
+  }
+  const message: SunnyTownEquipmentChangedMessage = { type: 'equipment_changed' }
+  socket.send(JSON.stringify(message))
+}
+
+async function equipInventoryItem(itemKey: string, slot: 'gear' | 'accessory' | '') {
+  if (!slot) {
+    return
+  }
+  await inventoryStore.equipItem(slot, itemKey)
+  notifyEquipmentChanged()
+}
+
+async function unequipInventorySlot(slot: 'gear' | 'accessory') {
+  await inventoryStore.unequipItem(slot)
+  notifyEquipmentChanged()
 }
 
 function applyMapState(message: SunnyTownServerMessage) {
@@ -779,10 +801,47 @@ function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, 
   context.ellipse(x, y + 16, 18, 7, 0, 0, Math.PI * 2)
   context.fill()
 
-  context.fillStyle = isSelf ? '#27746f' : '#5c6bc0'
+  const gearKey = player.equipment?.gear || ''
+  const accessoryKey = player.equipment?.accessory || ''
+
+  context.fillStyle = gearKey === 'sunny_hoodie' ? '#f06f38' : (isSelf ? '#27746f' : '#5c6bc0')
   context.beginPath()
   context.arc(x, y, 16, 0, Math.PI * 2)
   context.fill()
+
+  if (gearKey === 'sunny_hoodie') {
+    context.fillStyle = '#2f7d72'
+    context.fillRect(x - 10, y + 2, 20, 8)
+    context.strokeStyle = '#f4d48e'
+    context.lineWidth = 2
+    context.beginPath()
+    context.moveTo(x, y + 2)
+    context.lineTo(x, y + 10)
+    context.stroke()
+  }
+
+  if (accessoryKey === 'star_cap') {
+    context.fillStyle = '#f2c84b'
+    context.beginPath()
+    context.ellipse(x, y - 14, 14, 6, 0, 0, Math.PI * 2)
+    context.fill()
+    context.fillStyle = '#365d9f'
+    context.fillRect(x - 9, y - 20, 18, 8)
+    context.fillStyle = '#ffffff'
+    context.beginPath()
+    context.moveTo(x, y - 21)
+    context.lineTo(x + 3, y - 16)
+    context.lineTo(x + 8, y - 16)
+    context.lineTo(x + 4, y - 13)
+    context.lineTo(x + 6, y - 8)
+    context.lineTo(x, y - 11)
+    context.lineTo(x - 6, y - 8)
+    context.lineTo(x - 4, y - 13)
+    context.lineTo(x - 8, y - 16)
+    context.lineTo(x - 3, y - 16)
+    context.closePath()
+    context.fill()
+  }
 
   context.fillStyle = '#ffffff'
   context.beginPath()
@@ -1031,6 +1090,24 @@ function backToPet() {
         <v-alert v-if="inventoryStore.error" class="mb-3" density="compact" type="error" variant="tonal">
           {{ inventoryStore.error }}
         </v-alert>
+        <section class="equipment-panel equipment-panel--dark" aria-label="Equipment">
+          <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
+            <div>
+              <p class="summary-category">{{ slot.slot }}</p>
+              <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
+            </div>
+            <v-btn
+              v-if="slot.item"
+              :loading="inventoryStore.isUpdatingEquipment"
+              color="secondary"
+              size="x-small"
+              variant="tonal"
+              @click="unequipInventorySlot(slot.slot)"
+            >
+              Unequip
+            </v-btn>
+          </div>
+        </section>
         <div class="inventory-list inventory-list--compact">
           <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item inventory-item--dark">
             <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
@@ -1038,7 +1115,27 @@ function backToPet() {
               <p class="inventory-item__name">{{ item.name }}</p>
               <p class="inventory-item__description">{{ item.description }}</p>
             </div>
-            <strong class="inventory-item__quantity">{{ item.quantity }}</strong>
+            <v-btn
+              v-if="item.equipSlot && !item.equipped"
+              :loading="inventoryStore.isUpdatingEquipment"
+              color="primary"
+              size="x-small"
+              variant="flat"
+              @click="equipInventoryItem(item.key, item.equipSlot)"
+            >
+              Equip
+            </v-btn>
+            <v-btn
+              v-else-if="item.equipped && item.equipSlot"
+              :loading="inventoryStore.isUpdatingEquipment"
+              color="secondary"
+              size="x-small"
+              variant="tonal"
+              @click="unequipInventorySlot(item.equipSlot)"
+            >
+              Unequip
+            </v-btn>
+            <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
           </div>
         </div>
       </div>

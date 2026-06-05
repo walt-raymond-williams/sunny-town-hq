@@ -1,5 +1,5 @@
 import { authJson, jsonOptions } from './http'
-import type { StudentInventory } from '../types/inventory'
+import type { InventoryItem, StudentInventory } from '../types/inventory'
 import type { InventoryItemResponse, StudentInventoryResponse } from './inventoryApi'
 
 interface ShopPurchaseResponse {
@@ -31,11 +31,14 @@ export async function purchaseShopItem(purchase: ShopPurchase): Promise<Purchase
   }
 }
 
-function normalizeInventoryItem(item: InventoryItemResponse) {
+function normalizeInventoryItem(item: InventoryItemResponse): InventoryItem {
   return {
     key: item.key || '',
     name: item.name || '',
     description: item.description || '',
     quantity: item.quantity ?? 0,
+    equipSlot: item.equipSlot || '',
+    visualKey: item.visualKey || '',
+    equipped: item.equipped ?? false,
   }
 }

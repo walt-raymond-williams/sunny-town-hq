@@ -372,6 +372,22 @@ h2 {
   border: 2px solid #7b4b24;
 }
 
+.inventory-item__icon--sunny_hoodie {
+  background:
+    linear-gradient(90deg, transparent 0 18%, #f06f38 19% 81%, transparent 82%),
+    linear-gradient(#2f7d72 0 24%, #f06f38 25%);
+  border: 2px solid #8d3f22;
+  border-radius: 10px;
+}
+
+.inventory-item__icon--star_cap {
+  background:
+    radial-gradient(circle at 50% 42%, #ffffff 0 13%, transparent 14%),
+    linear-gradient(#365d9f 0 52%, #f2c84b 53%);
+  border: 2px solid #7a5a00;
+  border-radius: 12px 12px 18px 18px;
+}
+
 .inventory-item__name,
 .inventory-item__description {
   margin: 0;
@@ -398,6 +414,35 @@ h2 {
   min-width: 36px;
   padding: 6px 10px;
   text-align: center;
+}
+
+.equipment-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.equipment-slot {
+  align-items: center;
+  background: #f3f7f8;
+  border: 1px solid #d9e1e4;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.equipment-panel--dark {
+  margin-bottom: 12px;
+}
+
+.equipment-panel--dark .equipment-slot {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.equipment-panel--dark .summary-category {
+  color: rgba(255, 255, 255, 0.66);
 }
 
 .game-overlay {

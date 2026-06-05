@@ -200,6 +200,9 @@ func main() {
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
 	apiMux.HandleFunc("/api/student/inventory", app.handleStudentInventory)
+	apiMux.HandleFunc("/api/student/equipment", app.handleStudentEquipment)
+	apiMux.HandleFunc("/api/student/equipment/equip", app.handleEquipStudentItem)
+	apiMux.HandleFunc("/api/student/equipment/unequip", app.handleUnequipStudentItem)
 	apiMux.HandleFunc("/api/student/shop/purchase", app.handleStudentShopPurchase)
 	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
@@ -209,6 +212,7 @@ func main() {
 	apiMux.HandleFunc("/api/assignments", app.handleAssignments)
 	apiMux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
 	mux.HandleFunc("/api/internal/sunny-town/reward-events", app.handleSunnyTownRewardEvent)
+	mux.HandleFunc("/api/internal/sunny-town/student-equipment", app.handleInternalSunnyTownStudentEquipment)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
 	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
@@ -403,6 +407,88 @@ func (app *app) handleStudentInventory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, inventory)
 }
 
+func (app *app) handleStudentEquipment(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	equipment, err := app.loadStudentEquipment(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load student equipment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "equipment could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, equipment)
+}
+
+func (app *app) handleEquipStudentItem(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request equipmentChangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	equipment, err := app.equipStudentItem(r.Context(), user.ID, request)
+	if err != nil {
+		log.Printf("equip student item: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": equipmentErrorMessage(err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, equipment)
+}
+
+func (app *app) handleUnequipStudentItem(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request equipmentChangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	equipment, err := app.unequipStudentItem(r.Context(), user.ID, request)
+	if err != nil {
+		log.Printf("unequip student item: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": equipmentErrorMessage(err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, equipment)
+}
+
 func (app *app) handleStudentShopPurchase(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireRole(w, r, "student")
 	if !ok {
@@ -555,6 +641,51 @@ func (app *app) handleSunnyTownRewardEvent(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (app *app) handleInternalSunnyTownStudentEquipment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	userID, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("app_user_id")), 10, 64)
+	if err != nil || userID < 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "app_user_id is required",
+		})
+		return
+	}
+
+	equipment, err := app.loadStudentEquipment(r.Context(), userID)
+	if err != nil {
+		log.Printf("load internal sunny town student equipment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "equipment could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, equipment)
+}
+
+func equipmentErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, errInvalidEquipmentSlot):
+		return "invalid equipment slot"
+	case errors.Is(err, errItemNotEquippable):
+		return "item cannot be equipped in that slot"
+	case errors.Is(err, errItemNotOwned):
+		return "item is not in your inventory"
+	default:
+		return "equipment could not be updated"
+	}
 }
 
 func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Request) {

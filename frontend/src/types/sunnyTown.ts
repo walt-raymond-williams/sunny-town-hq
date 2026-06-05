@@ -20,7 +20,13 @@ export interface SunnyTownPlayer {
   facing: 'up' | 'down' | 'left' | 'right'
   moving: boolean
   avatarId: string
+  equipment?: SunnyTownEquipment
   lastProcessedSeq: number
+}
+
+export interface SunnyTownEquipment {
+  gear?: string
+  accessory?: string
 }
 
 export interface SunnyTownPortal {
@@ -106,4 +112,8 @@ export interface SunnyTownMoveMessage {
   facing: 'up' | 'down' | 'left' | 'right'
   moving: boolean
   clientTimeMs: number
+}
+
+export interface SunnyTownEquipmentChangedMessage {
+  type: 'equipment_changed'
 }

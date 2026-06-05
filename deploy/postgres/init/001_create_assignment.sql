@@ -102,9 +102,12 @@ create table if not exists inventory_item_type (
   key text not null unique,
   name text not null,
   description text not null default '',
+  equip_slot text null,
+  visual_key text null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint inventory_item_type_key_check check (key ~ '^[a-z][a-z0-9_]*$')
+  constraint inventory_item_type_key_check check (key ~ '^[a-z][a-z0-9_]*$'),
+  constraint inventory_item_type_equip_slot_check check (equip_slot is null or equip_slot in ('gear', 'accessory'))
 );
 
 insert into inventory_item_type (key, name, description)
@@ -112,6 +115,19 @@ values ('cookie', 'Cookie', 'A treat for your pet.')
 on conflict (key) do update
 set name = excluded.name,
   description = excluded.description,
+  equip_slot = null,
+  visual_key = null,
+  updated_at = now();
+
+insert into inventory_item_type (key, name, description, equip_slot, visual_key)
+values
+  ('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie'),
+  ('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap')
+on conflict (key) do update
+set name = excluded.name,
+  description = excluded.description,
+  equip_slot = excluded.equip_slot,
+  visual_key = excluded.visual_key,
   updated_at = now();
 
 create table if not exists student_inventory_item (
@@ -123,3 +139,26 @@ create table if not exists student_inventory_item (
   primary key (app_user_id, item_type_id),
   constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
 );
+
+insert into student_inventory_item (app_user_id, item_type_id, quantity)
+select u.id, iit.id, 1
+from app_user u
+join app_user_role ur on ur.user_id = u.id and ur.role = 'student'
+cross join inventory_item_type iit
+where iit.key in ('sunny_hoodie', 'star_cap')
+on conflict (app_user_id, item_type_id) do update
+set quantity = greatest(student_inventory_item.quantity, excluded.quantity),
+  updated_at = now();
+
+create table if not exists student_equipped_item (
+  app_user_id bigint not null references app_user(id) on delete cascade,
+  slot text not null,
+  item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (app_user_id, slot),
+  constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory'))
+);
+
+create index if not exists student_equipped_item_app_user_id_idx
+  on student_equipped_item (app_user_id);
