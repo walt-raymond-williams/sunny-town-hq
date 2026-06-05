@@ -17,7 +17,7 @@ COPY sunny-town/maps /app/sunny-town/maps
 
 ENV SUNNY_TOWN_HOST=0.0.0.0
 ENV SUNNY_TOWN_PORT=18082
-ENV SUNNY_TOWN_MAP_PATH=/app/sunny-town/maps/sunny-town-v1.json
+ENV SUNNY_TOWN_MAPS_DIR=/app/sunny-town/maps
 
 EXPOSE 18082
 

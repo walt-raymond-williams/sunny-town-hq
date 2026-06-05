@@ -66,6 +66,40 @@ func (app *app) ensureSchema(ctx context.Context) error {
 		)`,
 		`create index if not exists student_star_ledger_app_user_id_idx
 			on student_star_ledger (app_user_id, created_at desc)`,
+		`create table if not exists inventory_item_type (
+			id bigserial primary key,
+			key text not null unique,
+			name text not null,
+			description text not null default '',
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint inventory_item_type_key_check check (key ~ '^[a-z][a-z0-9_]*$')
+		)`,
+		`insert into inventory_item_type (key, name, description)
+			values ('cookie', 'Cookie', 'A treat for your pet.')
+			on conflict (key) do update
+			set name = excluded.name,
+				description = excluded.description,
+				updated_at = now()`,
+		`create table if not exists student_inventory_item (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			quantity integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, item_type_id),
+			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`insert into student_inventory_item (app_user_id, item_type_id, quantity)
+			select u.id, iit.id, u.cookies
+			from app_user u
+			cross join inventory_item_type iit
+			where iit.key = 'cookie'
+				and u.cookies > 0
+			on conflict (app_user_id, item_type_id) do update
+			set quantity = greatest(student_inventory_item.quantity, excluded.quantity),
+				updated_at = now()`,
+		`update app_user set cookies = 0 where cookies > 0`,
 	}
 
 	for _, statement := range statements {

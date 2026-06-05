@@ -333,6 +333,73 @@ h2 {
   justify-content: space-between;
 }
 
+.inventory-list {
+  display: grid;
+  gap: 10px;
+}
+
+.inventory-item {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d9e1e4;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: 12px;
+}
+
+.inventory-item--dark {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.inventory-item__icon {
+  align-self: center;
+  background: #d9e1e4;
+  border-radius: 50%;
+  height: 40px;
+  width: 40px;
+}
+
+.inventory-item__icon--cookie {
+  background:
+    radial-gradient(circle at 34% 34%, #7b4b24 0 8%, transparent 9%),
+    radial-gradient(circle at 66% 42%, #7b4b24 0 8%, transparent 9%),
+    radial-gradient(circle at 48% 68%, #7b4b24 0 7%, transparent 8%),
+    #d99a45;
+  border: 2px solid #7b4b24;
+}
+
+.inventory-item__name,
+.inventory-item__description {
+  margin: 0;
+}
+
+.inventory-item__name {
+  color: inherit;
+  font-weight: 800;
+}
+
+.inventory-item__description {
+  color: #5f6b75;
+  font-size: 13px;
+}
+
+.inventory-item--dark .inventory-item__description {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.inventory-item__quantity {
+  background: #f3f7f8;
+  border-radius: 999px;
+  color: #17212b;
+  min-width: 36px;
+  padding: 6px 10px;
+  text-align: center;
+}
+
 .game-overlay {
   align-items: center;
   background: rgba(23, 33, 43, 0.72);
@@ -417,6 +484,28 @@ h2 {
   top: 12px;
   transform: translateY(0);
   padding: 8px 12px;
+}
+
+.sunny-town-inventory {
+  background: rgba(23, 33, 43, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
+  color: #ffffff;
+  max-width: min(360px, calc(100% - 24px));
+  padding: 14px;
+  position: absolute;
+  right: 12px;
+  top: 54px;
+  width: 360px;
+  z-index: 5;
+}
+
+.sunny-town-inventory__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 @media (max-width: 640px) {

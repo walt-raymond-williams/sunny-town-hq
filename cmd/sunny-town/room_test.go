@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -8,7 +10,7 @@ import (
 )
 
 func TestRoomJoinAndLeave(t *testing.T) {
-	room := newRoom(defaultRoomID, testMap())
+	room := testRoom(testMap())
 	client := testClient(room, "42")
 
 	room.join(client, testClaims(42))
@@ -23,7 +25,7 @@ func TestRoomJoinAndLeave(t *testing.T) {
 }
 
 func TestRoomMovement(t *testing.T) {
-	room := newRoom(defaultRoomID, testMap())
+	room := testRoom(testMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -43,7 +45,7 @@ func TestRoomMovement(t *testing.T) {
 func TestRoomAcceptsClientPositionInsideBlockedGeometry(t *testing.T) {
 	gameMap := testMap()
 	gameMap.BlockedRects = []rect{{X: 130, Y: 80, Width: 60, Height: 60}}
-	room := newRoom(defaultRoomID, gameMap)
+	room := testRoom(gameMap)
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -58,7 +60,7 @@ func TestRoomAcceptsClientPositionInsideBlockedGeometry(t *testing.T) {
 }
 
 func TestRoomClampsBounds(t *testing.T) {
-	room := newRoom(defaultRoomID, testMap())
+	room := testRoom(testMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -74,7 +76,7 @@ func TestRoomClampsBounds(t *testing.T) {
 }
 
 func TestRoomAcceptsLargeClientMoveSamples(t *testing.T) {
-	room := newRoom(defaultRoomID, testMap())
+	room := testRoom(testMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -89,7 +91,7 @@ func TestRoomAcceptsLargeClientMoveSamples(t *testing.T) {
 }
 
 func TestRoomSnapshotIncludesLastProcessedSeq(t *testing.T) {
-	room := newRoom(defaultRoomID, testMap())
+	room := testRoom(testMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -107,7 +109,7 @@ func TestRoomSnapshotIncludesLastProcessedSeq(t *testing.T) {
 }
 
 func TestRoomIgnoresOutOfOrderMove(t *testing.T) {
-	room := newRoom(defaultRoomID, testMap())
+	room := testRoom(testMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -125,7 +127,7 @@ func TestRoomIgnoresOutOfOrderMove(t *testing.T) {
 }
 
 func TestRoomDoesNotDriftWithoutNewMoveSamples(t *testing.T) {
-	room := newRoom(defaultRoomID, testMap())
+	room := testRoom(testMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -149,7 +151,7 @@ func TestRoomDoesNotDriftWithoutNewMoveSamples(t *testing.T) {
 func TestRoomPickupEnqueuesRewardFromServerOverlap(t *testing.T) {
 	gameMap := testMap()
 	gameMap.StarSpawns = []point{{X: 100, Y: 100}}
-	room := newRoom(defaultRoomID, gameMap)
+	room := testRoom(gameMap)
 	room.rewardRunID = "test-run"
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
@@ -176,7 +178,7 @@ func TestRoomPickupEnqueuesRewardFromServerOverlap(t *testing.T) {
 func TestRoomPickupRequiresOverlap(t *testing.T) {
 	gameMap := testMap()
 	gameMap.StarSpawns = []point{{X: 250, Y: 250}}
-	room := newRoom(defaultRoomID, gameMap)
+	room := testRoom(gameMap)
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
@@ -185,6 +187,94 @@ func TestRoomPickupRequiresOverlap(t *testing.T) {
 	select {
 	case event := <-room.rewardEvents:
 		t.Fatalf("unexpected reward event: %#v", event)
+	default:
+	}
+}
+
+func TestWorldTransfersPlayerThroughPortal(t *testing.T) {
+	world := testWorld(outdoorTestMap(), indoorTestMap())
+	client := testClient(nil, "42")
+	world.join(client, testClaims(42))
+
+	source := world.rooms[defaultMapID]
+	source.updateMove("42", 7, 100, 100, "down", true, time.Now())
+
+	if client.currentRoom().gameMap.ID != "test-house" {
+		t.Fatalf("current map = %q, want test-house", client.currentRoom().gameMap.ID)
+	}
+	if _, ok := source.players["42"]; ok {
+		t.Fatal("player should leave source room")
+	}
+	if _, ok := world.rooms["test-house"].players["42"]; !ok {
+		t.Fatal("player should enter target room")
+	}
+
+	select {
+	case message := <-client.send:
+		if message.Type != "hello" {
+			t.Fatalf("first message type = %q, want hello", message.Type)
+		}
+	default:
+		t.Fatal("expected hello message")
+	}
+	select {
+	case message := <-client.send:
+		if message.Type != "map_changed" || message.MapID != "test-house" || message.Map == nil {
+			t.Fatalf("transition message = %#v", message)
+		}
+	default:
+		t.Fatal("expected map_changed message")
+	}
+}
+
+func TestWorldSnapshotsStayWithinCurrentCell(t *testing.T) {
+	world := testWorld(outdoorTestMap(), indoorTestMap())
+	firstClient := testClient(nil, "42")
+	secondClient := testClient(nil, "43")
+	world.join(firstClient, testClaims(42))
+	world.join(secondClient, testClaims(43))
+
+	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "down", true, time.Now())
+
+	outdoorSnapshots := world.rooms[defaultMapID].snapshotsLocked()
+	if len(outdoorSnapshots) != 1 || outdoorSnapshots[0].ID != "43" {
+		t.Fatalf("outdoor snapshots = %#v, want only player 43", outdoorSnapshots)
+	}
+
+	indoorSnapshots := world.rooms["test-house"].snapshotsLocked()
+	if len(indoorSnapshots) != 1 || indoorSnapshots[0].ID != "42" {
+		t.Fatalf("indoor snapshots = %#v, want only player 42", indoorSnapshots)
+	}
+}
+
+func TestWorldPlayersShareInteriorCell(t *testing.T) {
+	world := testWorld(outdoorTestMap(), indoorTestMap())
+	firstClient := testClient(nil, "42")
+	secondClient := testClient(nil, "43")
+	world.join(firstClient, testClaims(42))
+	world.join(secondClient, testClaims(43))
+
+	now := time.Now()
+	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "down", true, now)
+	world.rooms[defaultMapID].updateMove("43", 7, 100, 100, "down", true, now)
+
+	indoorSnapshots := world.rooms["test-house"].snapshotsLocked()
+	if len(indoorSnapshots) != 2 {
+		t.Fatalf("indoor snapshot count = %d, want 2", len(indoorSnapshots))
+	}
+}
+
+func TestIndoorMapDoesNotCollectStars(t *testing.T) {
+	world := testWorld(outdoorTestMap(), indoorTestMap())
+	client := testClient(nil, "42")
+	world.join(client, testClaims(42))
+	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "down", true, time.Now())
+
+	world.rooms["test-house"].step(0, time.Now())
+
+	select {
+	case event := <-world.rewardEvents:
+		t.Fatalf("unexpected indoor reward event: %#v", event)
 	default:
 	}
 }
@@ -203,12 +293,56 @@ func TestValidateJoinTargetRejectsUnknownRoomOrMap(t *testing.T) {
 	}
 }
 
+func TestLoadMapsRejectsDuplicateMapIDs(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"duplicate","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "two.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected duplicate map ID to be rejected")
+	}
+}
+
+func TestLoadMapsRejectsUnknownPortalTarget(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"portals":[{"id":"door","x":64,"y":64,"width":32,"height":32,"targetMapId":"missing","targetX":64,"targetY":64,"targetFacing":"down"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected unknown portal target to be rejected")
+	}
+}
+
 func testClient(room *room, id string) *client {
-	return &client{
+	client := &client{
 		send: make(chan serverMessage, 4),
-		room: room,
 		id:   id,
 	}
+	client.setRoom(room)
+	return client
+}
+
+func testRoom(gameMap gameMap) *room {
+	world := testWorld(gameMap)
+	return world.rooms[gameMap.ID]
+}
+
+func testWorld(maps ...gameMap) *world {
+	byID := map[string]gameMap{}
+	for _, gameMap := range maps {
+		byID[gameMap.ID] = gameMap
+	}
+	if _, ok := byID[defaultMapID]; !ok {
+		byID[defaultMapID] = testMap()
+	}
+	return newWorld(defaultRoomID, byID)
 }
 
 func testClaims(appUserID int64) sunnytownauth.Claims {
@@ -232,5 +366,32 @@ func testMap() gameMap {
 		Width:    10,
 		Height:   10,
 		Spawns:   []point{{X: 100, Y: 100}},
+	}
+}
+
+func outdoorTestMap() gameMap {
+	gameMap := testMap()
+	gameMap.Portals = []portal{{
+		ID:           "test-door",
+		X:            86,
+		Y:            86,
+		Width:        32,
+		Height:       32,
+		TargetMapID:  "test-house",
+		TargetX:      160,
+		TargetY:      160,
+		TargetFacing: "up",
+	}}
+	return gameMap
+}
+
+func indoorTestMap() gameMap {
+	return gameMap{
+		ID:       "test-house",
+		Name:     "Test House",
+		TileSize: 32,
+		Width:    10,
+		Height:   10,
+		Spawns:   []point{{X: 160, Y: 160}},
 	}
 }

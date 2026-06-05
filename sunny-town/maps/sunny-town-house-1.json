@@ -1,0 +1,33 @@
+{
+  "id": "sunny-town-house-1",
+  "name": "Sunny Town House",
+  "tileSize": 32,
+  "width": 20,
+  "height": 15,
+  "spawns": [
+    { "x": 320, "y": 416 }
+  ],
+  "starSpawns": [],
+  "portals": [
+    {
+      "id": "house-exit-door",
+      "x": 304,
+      "y": 448,
+      "width": 64,
+      "height": 32,
+      "targetMapId": "sunny-town-v1",
+      "targetX": 640,
+      "targetY": 800,
+      "targetFacing": "down"
+    }
+  ],
+  "blockedRects": [
+    { "x": 0, "y": 0, "width": 640, "height": 32 },
+    { "x": 0, "y": 448, "width": 304, "height": 32 },
+    { "x": 368, "y": 448, "width": 272, "height": 32 },
+    { "x": 0, "y": 0, "width": 32, "height": 480 },
+    { "x": 608, "y": 0, "width": 32, "height": 480 },
+    { "x": 96, "y": 96, "width": 128, "height": 64 },
+    { "x": 416, "y": 96, "width": 96, "height": 96 }
+  ]
+}

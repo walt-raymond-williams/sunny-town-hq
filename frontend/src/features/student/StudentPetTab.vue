@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { petStats } from '../../domain/categories'
+import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { useStudentPetStore } from '../../stores/studentPet'
 import type { FallingStarsResult } from '../../types/pet'
 
@@ -19,6 +21,14 @@ defineEmits({
   sleep: () => true,
   wake: () => true,
 })
+
+const inventoryStore = useStudentInventoryStore()
+const inventoryOpen = ref(false)
+
+async function openInventory() {
+  inventoryOpen.value = true
+  await inventoryStore.loadInventory()
+}
 </script>
 
 <template>
@@ -32,6 +42,15 @@ defineEmits({
         @click="$emit('enterSunnyTown')"
       >
         Sunny Town
+      </v-btn>
+      <v-btn
+        :loading="inventoryStore.isLoading"
+        color="secondary"
+        prepend-icon="mdi-bag-personal"
+        variant="tonal"
+        @click="openInventory"
+      >
+        Inventory
       </v-btn>
       <v-btn
         :loading="studentPetStore.isLoading"
@@ -148,4 +167,28 @@ defineEmits({
       </div>
     </div>
   </section>
+
+  <v-dialog v-model="inventoryOpen" max-width="420">
+    <v-card>
+      <v-card-title class="d-flex align-center justify-space-between">
+        <span>Inventory</span>
+        <v-btn icon="mdi-close" size="small" variant="text" @click="inventoryOpen = false" />
+      </v-card-title>
+      <v-card-text>
+        <v-alert v-if="inventoryStore.error" class="mb-4" type="error" variant="tonal">
+          {{ inventoryStore.error }}
+        </v-alert>
+        <div class="inventory-list">
+          <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item">
+            <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
+            <div>
+              <p class="inventory-item__name">{{ item.name }}</p>
+              <p class="inventory-item__description">{{ item.description }}</p>
+            </div>
+            <strong class="inventory-item__quantity">{{ item.quantity }}</strong>
+          </div>
+        </div>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 </template>

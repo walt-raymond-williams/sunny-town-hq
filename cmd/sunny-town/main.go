@@ -43,18 +43,19 @@ type config struct {
 	serviceSecret  string
 	hqInternalURL  string
 	allowedOrigins map[string]bool
-	mapPath        string
+	mapsDir        string
 }
 
 type gameMap struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"`
-	TileSize     int     `json:"tileSize"`
-	Width        int     `json:"width"`
-	Height       int     `json:"height"`
-	Spawns       []point `json:"spawns"`
-	BlockedRects []rect  `json:"blockedRects"`
-	StarSpawns   []point `json:"starSpawns"`
+	ID           string   `json:"id"`
+	Name         string   `json:"name"`
+	TileSize     int      `json:"tileSize"`
+	Width        int      `json:"width"`
+	Height       int      `json:"height"`
+	Spawns       []point  `json:"spawns"`
+	BlockedRects []rect   `json:"blockedRects"`
+	StarSpawns   []point  `json:"starSpawns"`
+	Portals      []portal `json:"portals"`
 }
 
 type point struct {
@@ -67,6 +68,18 @@ type rect struct {
 	Y      float64 `json:"y"`
 	Width  float64 `json:"width"`
 	Height float64 `json:"height"`
+}
+
+type portal struct {
+	ID           string  `json:"id"`
+	X            float64 `json:"x"`
+	Y            float64 `json:"y"`
+	Width        float64 `json:"width"`
+	Height       float64 `json:"height"`
+	TargetMapID  string  `json:"targetMapId"`
+	TargetX      float64 `json:"targetX"`
+	TargetY      float64 `json:"targetY"`
+	TargetFacing string  `json:"targetFacing"`
 }
 
 type clientMessage struct {
@@ -84,6 +97,7 @@ type serverMessage struct {
 	SelfID         string                `json:"selfId,omitempty"`
 	RoomID         string                `json:"roomId,omitempty"`
 	MapID          string                `json:"mapId,omitempty"`
+	Map            *gameMap              `json:"map,omitempty"`
 	Tick           int64                 `json:"tick,omitempty"`
 	ServerTimeMS   int64                 `json:"serverTimeMs,omitempty"`
 	Players        []playerSnapshot      `json:"players,omitempty"`
@@ -125,6 +139,7 @@ type player struct {
 type client struct {
 	conn             *websocket.Conn
 	send             chan serverMessage
+	mu               sync.Mutex
 	room             *room
 	id               string
 	inputWindowStart time.Time
@@ -141,14 +156,22 @@ type room struct {
 	tick         int64
 	rewardRunID  string
 	rewardEvents chan rewardEvent
+	world        *world
 }
 
 type server struct {
 	config   config
-	gameMap  gameMap
-	room     *room
+	world    *world
 	client   *http.Client
 	upgrader websocket.Upgrader
+}
+
+type world struct {
+	roomID       string
+	rooms        map[string]*room
+	defaultRoom  *room
+	rewardEvents chan rewardEvent
+	transferMu   sync.Mutex
 }
 
 type collectible struct {
@@ -198,20 +221,22 @@ type rewardCommitResponse struct {
 
 func main() {
 	cfg := loadConfig()
-	gameMap, err := loadMap(cfg.mapPath)
+	maps, err := loadMaps(cfg.mapsDir)
 	if err != nil {
-		log.Fatalf("load map: %v", err)
+		log.Fatalf("load maps: %v", err)
 	}
-	if gameMap.ID != defaultMapID {
-		log.Fatalf("map id %q does not match expected %q", gameMap.ID, defaultMapID)
+	if _, ok := maps[defaultMapID]; !ok {
+		log.Fatalf("default map %q was not loaded", defaultMapID)
 	}
 
-	room := newRoom(defaultRoomID, gameMap)
+	world := newWorld(defaultRoomID, maps)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go room.run(ctx)
+	for _, room := range world.rooms {
+		go room.run(ctx)
+	}
 
-	srv := newServer(cfg, gameMap, room)
+	srv := newServer(cfg, world)
 	go srv.runRewardWorker(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -247,15 +272,14 @@ func loadConfig() config {
 		serviceSecret:  envOrDefault("SUNNY_TOWN_SERVICE_SECRET", "local-dev-service-secret"),
 		hqInternalURL:  strings.TrimRight(envOrDefault("HQ_INTERNAL_BASE_URL", "http://127.0.0.1:8080"), "/"),
 		allowedOrigins: allowedOrigins(envOrDefault("SUNNY_TOWN_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:18080,http://127.0.0.1:5173,http://127.0.0.1:18080")),
-		mapPath:        envOrDefault("SUNNY_TOWN_MAP_PATH", filepath.Join("sunny-town", "maps", "sunny-town-v1.json")),
+		mapsDir:        envOrDefault("SUNNY_TOWN_MAPS_DIR", filepath.Join("sunny-town", "maps")),
 	}
 }
 
-func newServer(cfg config, gameMap gameMap, room *room) *server {
+func newServer(cfg config, world *world) *server {
 	srv := &server{
-		config:  cfg,
-		gameMap: gameMap,
-		room:    room,
+		config: cfg,
+		world:  world,
 		client: &http.Client{
 			Timeout: 3 * time.Second,
 		},
@@ -278,7 +302,7 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid sunny town token", http.StatusUnauthorized)
 		return
 	}
-	if err := validateJoinTarget(claims, srv.room.id, srv.gameMap.ID); err != nil {
+	if err := validateJoinTarget(claims, srv.world.roomID, defaultMapID); err != nil {
 		log.Printf("sunny town auth failed: unknown room=%q map=%q", claims.RoomID, claims.MapID)
 		http.Error(w, "unknown room or map", http.StatusBadRequest)
 		return
@@ -294,26 +318,44 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	client := &client{
 		conn: conn,
 		send: make(chan serverMessage, 16),
-		room: srv.room,
 		id:   playerID,
 	}
 
-	srv.room.join(client, claims)
-	log.Printf("player joined room=%s player=%s", srv.room.id, playerID)
+	srv.world.join(client, claims)
+	log.Printf("player joined room=%s map=%s player=%s", srv.world.roomID, defaultMapID, playerID)
 
 	go client.writePump()
 	client.readPump()
 }
 
-func newRoom(id string, gameMap gameMap) *room {
+func newWorld(roomID string, maps map[string]gameMap) *world {
+	rewardEvents := make(chan rewardEvent, 32)
+	created := &world{
+		roomID:       roomID,
+		rooms:        map[string]*room{},
+		rewardEvents: rewardEvents,
+	}
+	for _, gameMap := range maps {
+		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, created)
+	}
+	created.defaultRoom = created.rooms[defaultMapID]
+	return created
+}
+
+func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, world *world) *room {
 	return &room{
 		id:           id,
 		gameMap:      gameMap,
 		players:      map[string]*player{},
 		collectibles: initialCollectibles(gameMap),
 		rewardRunID:  newRewardRunID(),
-		rewardEvents: make(chan rewardEvent, 32),
+		rewardEvents: rewardEvents,
+		world:        world,
 	}
+}
+
+func (world *world) join(client *client, claims sunnytownauth.Claims) {
+	world.defaultRoom.join(client, claims)
 }
 
 func (room *room) run(ctx context.Context) {
@@ -358,12 +400,16 @@ func (room *room) join(client *client, claims sunnytownauth.Claims) {
 		player.avatarID = "pet-default"
 	}
 	room.players[player.id] = player
+	client.setRoom(room)
 
 	client.send <- serverMessage{
-		Type:   "hello",
-		SelfID: player.id,
-		RoomID: room.id,
-		MapID:  room.gameMap.ID,
+		Type:         "hello",
+		SelfID:       player.id,
+		RoomID:       room.id,
+		MapID:        room.gameMap.ID,
+		Map:          &room.gameMap,
+		Players:      room.snapshotsLocked(),
+		Collectibles: room.collectibleSnapshotsLocked(),
 	}
 }
 
@@ -376,7 +422,79 @@ func (room *room) leave(client *client) {
 	room.mu.Unlock()
 }
 
+func (world *world) leave(client *client) {
+	if room := client.currentRoom(); room != nil {
+		room.leave(client)
+	}
+}
+
+func (world *world) transferPlayer(sourceMapID string, playerID string, usedPortal portal, seq int64, now time.Time) {
+	world.transferMu.Lock()
+	defer world.transferMu.Unlock()
+
+	source := world.rooms[sourceMapID]
+	target := world.rooms[usedPortal.TargetMapID]
+	if source == nil || target == nil {
+		return
+	}
+
+	source.mu.Lock()
+	player := source.players[playerID]
+	if player == nil {
+		source.mu.Unlock()
+		return
+	}
+	if player.client.currentRoom() != source {
+		source.mu.Unlock()
+		return
+	}
+	delete(source.players, playerID)
+	source.mu.Unlock()
+
+	player.x = target.clampX(usedPortal.TargetX)
+	player.y = target.clampY(usedPortal.TargetY)
+	if isFacing(usedPortal.TargetFacing) {
+		player.facing = usedPortal.TargetFacing
+	}
+	player.moving = false
+	player.lastMoveAt = now
+	player.lastMoveSeq = seq
+
+	target.mu.Lock()
+	target.players[playerID] = player
+	player.client.setRoom(target)
+	message := serverMessage{
+		Type:         "map_changed",
+		SelfID:       player.id,
+		RoomID:       target.id,
+		MapID:        target.gameMap.ID,
+		Map:          &target.gameMap,
+		Players:      target.snapshotsLocked(),
+		Collectibles: target.collectibleSnapshotsLocked(),
+		ServerTimeMS: now.UnixMilli(),
+		Tick:         target.tick,
+	}
+	target.mu.Unlock()
+
+	player.client.trySend(message)
+	source.broadcastSnapshot(now)
+	target.broadcastSnapshot(now)
+}
+
+func (client *client) currentRoom() *room {
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	return client.room
+}
+
+func (client *client) setRoom(room *room) {
+	client.mu.Lock()
+	client.room = room
+	client.mu.Unlock()
+}
+
 func (room *room) updateMove(playerID string, seq int64, x float64, y float64, facing string, moving bool, now time.Time) {
+	var triggered *portal
 	room.mu.Lock()
 	if player := room.players[playerID]; player != nil {
 		if seq <= player.lastMoveSeq {
@@ -394,8 +512,15 @@ func (room *room) updateMove(playerID string, seq int64, x float64, y float64, f
 		}
 		player.moving = moving && ok
 		player.lastMoveSeq = seq
+		if ok {
+			triggered = room.portalForPlayerLocked(player)
+		}
 	}
 	room.mu.Unlock()
+
+	if triggered != nil {
+		room.world.transferPlayer(room.gameMap.ID, playerID, *triggered, seq, now)
+	}
 }
 
 func (room *room) step(dt float64, now time.Time) {
@@ -432,6 +557,7 @@ func (room *room) broadcastSnapshot(now time.Time) {
 	room.mu.Lock()
 	message := serverMessage{
 		Type:         "snapshot",
+		MapID:        room.gameMap.ID,
 		Tick:         room.tick,
 		ServerTimeMS: now.UnixMilli(),
 		Players:      room.snapshotsLocked(),
@@ -447,7 +573,7 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		select {
 		case client.send <- message:
 		default:
-			client.room.leave(client)
+			room.leave(client)
 		}
 	}
 }
@@ -555,18 +681,49 @@ func (room *room) collidesLocked(x float64, y float64) bool {
 }
 
 func (room *room) clampXLocked(x float64) float64 {
+	return room.clampX(x)
+}
+
+func (room *room) clampYLocked(y float64) float64 {
+	return room.clampY(y)
+}
+
+func (room *room) clampX(x float64) float64 {
 	maxX := float64(room.gameMap.Width*room.gameMap.TileSize) - playerSize/2
 	return math.Max(playerSize/2, math.Min(maxX, x))
 }
 
-func (room *room) clampYLocked(y float64) float64 {
+func (room *room) clampY(y float64) float64 {
 	maxY := float64(room.gameMap.Height*room.gameMap.TileSize) - playerSize/2
 	return math.Max(playerSize/2, math.Min(maxY, y))
 }
 
+func (room *room) portalForPlayerLocked(player *player) *portal {
+	playerRect := rect{
+		X:      player.x - playerSize/2,
+		Y:      player.y - playerSize/2,
+		Width:  playerSize,
+		Height: playerSize,
+	}
+	for index := range room.gameMap.Portals {
+		portal := room.gameMap.Portals[index]
+		if rectsOverlap(playerRect, rect{
+			X:      portal.X,
+			Y:      portal.Y,
+			Width:  portal.Width,
+			Height: portal.Height,
+		}) {
+			return &room.gameMap.Portals[index]
+		}
+	}
+	return nil
+}
+
 func (client *client) readPump() {
 	defer func() {
-		client.room.leave(client)
+		if room := client.currentRoom(); room != nil {
+			room.leave(client)
+		}
 		_ = client.conn.Close()
 	}()
 
@@ -590,7 +747,9 @@ func (client *client) readPump() {
 			if !client.allowMove(time.Now(), message.Moving) {
 				continue
 			}
-			client.room.updateMove(client.id, message.Seq, message.X, message.Y, message.Facing, message.Moving, time.Now())
+			if room := client.currentRoom(); room != nil {
+				room.updateMove(client.id, message.Seq, message.X, message.Y, message.Facing, message.Moving, time.Now())
+			}
 		case "ping":
 			_ = client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		default:
@@ -650,7 +809,7 @@ func (srv *server) runRewardWorker(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case event := <-srv.room.rewardEvents:
+		case event := <-srv.world.rewardEvents:
 			response, err := srv.commitRewardWithRetry(ctx, event)
 			if err != nil {
 				log.Printf("reward commit failed event=%s player=%d: %v", event.eventID, event.appUserID, err)
@@ -753,7 +912,48 @@ func loadMap(path string) (gameMap, error) {
 	if loaded.ID == "" || loaded.TileSize < 1 || loaded.Width < 1 || loaded.Height < 1 {
 		return gameMap{}, errors.New("map is missing required dimensions")
 	}
+	for _, portal := range loaded.Portals {
+		if portal.ID == "" || portal.Width <= 0 || portal.Height <= 0 || portal.TargetMapID == "" {
+			return gameMap{}, fmt.Errorf("map %q has an invalid portal", loaded.ID)
+		}
+		if !isFacing(portal.TargetFacing) {
+			return gameMap{}, fmt.Errorf("map %q portal %q has invalid target facing", loaded.ID, portal.ID)
+		}
+	}
 	return loaded, nil
+}
+
+func loadMaps(dir string) (map[string]gameMap, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	maps := map[string]gameMap{}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		loaded, err := loadMap(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := maps[loaded.ID]; exists {
+			return nil, fmt.Errorf("duplicate map id %q", loaded.ID)
+		}
+		maps[loaded.ID] = loaded
+	}
+	if len(maps) == 0 {
+		return nil, fmt.Errorf("no maps found in %s", dir)
+	}
+	for _, loaded := range maps {
+		for _, portal := range loaded.Portals {
+			if _, ok := maps[portal.TargetMapID]; !ok {
+				return nil, fmt.Errorf("map %q portal %q targets unknown map %q", loaded.ID, portal.ID, portal.TargetMapID)
+			}
+		}
+	}
+	return maps, nil
 }
 
 func allowedOrigins(value string) map[string]bool {

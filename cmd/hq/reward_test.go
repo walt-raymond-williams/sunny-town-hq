@@ -88,6 +88,34 @@ func TestApplyGameResultCreditsPetStarsOnce(t *testing.T) {
 	}
 }
 
+func TestFeedStudentPetConsumesCookieInventory(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, cookieInventoryKey, 2); err != nil {
+		t.Fatalf("seed cookie inventory: %v", err)
+	}
+
+	profile, err := app.feedStudentPet(ctx, 123)
+	if err != nil {
+		t.Fatalf("feed pet error = %v", err)
+	}
+	if profile.Cookies != 1 || profile.PetState.Hunger != 60 {
+		t.Fatalf("profile = %#v, want 1 cookie and hunger 60", profile)
+	}
+}
+
+func TestFeedStudentPetRequiresCookieInventory(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	_, err := app.feedStudentPet(context.Background(), 123)
+	if err != errNoCookies {
+		t.Fatalf("feed pet error = %v, want errNoCookies", err)
+	}
+}
+
 func testRewardApp(t *testing.T) (*app, func()) {
 	t.Helper()
 
@@ -155,6 +183,25 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			last_decay_at timestamptz not null default now(),
 			sleep_started_at timestamptz null,
 			sleep_started_energy integer null
+		)`,
+		`create table inventory_item_type (
+			id bigserial primary key,
+			key text not null unique,
+			name text not null,
+			description text not null default '',
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now()
+		)`,
+		`insert into inventory_item_type (key, name, description)
+			values ('cookie', 'Cookie', 'A treat for your pet.')`,
+		`create table student_inventory_item (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			quantity integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, item_type_id),
+			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
 		)`,
 		`insert into app_user (id, display_name) values (123, 'Student')`,
 		`insert into pet_state (user_id, hunger, happiness, energy) values (123, 50, 50, 50)`,

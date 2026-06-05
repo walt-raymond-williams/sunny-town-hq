@@ -23,6 +23,30 @@ export interface SunnyTownPlayer {
   lastProcessedSeq: number
 }
 
+export interface SunnyTownPortal {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  targetMapId: string
+  targetX: number
+  targetY: number
+  targetFacing: SunnyTownPlayer['facing']
+}
+
+export interface SunnyTownMap {
+  id: string
+  name: string
+  tileSize: number
+  width: number
+  height: number
+  spawns: Array<{ x: number; y: number }>
+  blockedRects: Array<{ x: number; y: number; width: number; height: number }>
+  starSpawns: Array<{ x: number; y: number }>
+  portals: SunnyTownPortal[]
+}
+
 export interface SunnyTownCollectible {
   id: string
   kind: 'star'
@@ -32,10 +56,11 @@ export interface SunnyTownCollectible {
 }
 
 export interface SunnyTownServerMessage {
-  type: 'hello' | 'snapshot' | 'error' | 'reward_committed' | 'reward_failed'
+  type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed'
   selfId?: string
   roomId?: string
   mapId?: string
+  map?: SunnyTownMap
   tick?: number
   serverTimeMs?: number
   players?: SunnyTownPlayer[]

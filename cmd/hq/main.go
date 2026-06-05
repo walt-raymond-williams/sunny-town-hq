@@ -185,6 +185,7 @@ func main() {
 	apiMux.HandleFunc("/api/teacher/login", app.handleTeacherLogin)
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
+	apiMux.HandleFunc("/api/student/inventory", app.handleStudentInventory)
 	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	apiMux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
@@ -363,6 +364,28 @@ func (app *app) handleStudentProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, profile)
+}
+
+func (app *app) handleStudentInventory(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	inventory, err := app.loadStudentInventory(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load student inventory: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "inventory could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, inventory)
 }
 
 func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
@@ -859,10 +882,12 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if awardCookie {
-		if _, err := tx.Exec(
+		if err := incrementStudentInventoryItem(
 			r.Context(),
-			"update app_user set cookies = cookies + 1 where id = $1",
+			tx,
 			studentUserID,
+			cookieInventoryKey,
+			1,
 		); err != nil {
 			log.Printf("award cookie: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -1197,7 +1222,7 @@ func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64
 		`
 			select u.id,
 				u.display_name,
-				u.cookies,
+				coalesce(cookie_inventory.quantity, 0),
 				coalesce(sw.star_balance, 0),
 				ps.hunger,
 				ps.happiness,
@@ -1214,6 +1239,9 @@ func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64
 			from app_user u
 			join pet_state ps on ps.user_id = u.id
 			left join student_wallet sw on sw.app_user_id = u.id
+			left join inventory_item_type cookie_type on cookie_type.key = 'cookie'
+			left join student_inventory_item cookie_inventory on cookie_inventory.app_user_id = u.id
+				and cookie_inventory.item_type_id = cookie_type.id
 			where u.id = $1
 		`,
 		userID,
@@ -1246,20 +1274,17 @@ func (app *app) feedStudentPet(ctx context.Context, userID int64) (studentProfil
 		_ = tx.Rollback(ctx)
 	}()
 
-	result, err := tx.Exec(
+	consumed, err := consumeStudentInventoryItem(
 		ctx,
-		`
-			update app_user
-			set cookies = cookies - 1
-			where id = $1
-				and cookies > 0
-		`,
+		tx,
 		userID,
+		cookieInventoryKey,
+		1,
 	)
 	if err != nil {
 		return studentProfileResponse{}, err
 	}
-	if result.RowsAffected() == 0 {
+	if !consumed {
 		return studentProfileResponse{}, errNoCookies
 	}
 

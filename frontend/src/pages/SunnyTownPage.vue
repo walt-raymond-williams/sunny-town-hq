@@ -2,20 +2,15 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createSunnyTownSession } from '../api/sunnyTownApi'
+import { useStudentInventoryStore } from '../stores/studentInventory'
 import type {
   SunnyTownCollectible,
+  SunnyTownMap,
   SunnyTownMoveMessage,
   SunnyTownPlayer,
   SunnyTownServerMessage,
   SunnyTownSession,
 } from '../types/sunnyTown'
-
-interface SunnyTownMap {
-  tileSize: number
-  width: number
-  height: number
-  blockedRects: Array<{ x: number; y: number; width: number; height: number }>
-}
 
 interface MovementInput {
   up: boolean
@@ -26,21 +21,6 @@ interface MovementInput {
 
 type MovementDirection = keyof MovementInput
 
-const sunnyTownMap: SunnyTownMap = {
-  tileSize: 32,
-  width: 40,
-  height: 30,
-  blockedRects: [
-    { x: 0, y: 0, width: 1280, height: 32 },
-    { x: 0, y: 928, width: 1280, height: 32 },
-    { x: 0, y: 0, width: 32, height: 960 },
-    { x: 1248, y: 0, width: 32, height: 960 },
-    { x: 160, y: 128, width: 224, height: 160 },
-    { x: 832, y: 128, width: 224, height: 160 },
-    { x: 512, y: 672, width: 256, height: 96 },
-  ],
-}
-
 const playerSpeed = 150
 const playerSize = 28
 const moveSendIntervalMs = 50
@@ -49,8 +29,10 @@ const maxRemoteHistoryFrames = 12
 const movementInputEventOptions = { capture: true }
 
 const router = useRouter()
+const inventoryStore = useStudentInventoryStore()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const session = ref<SunnyTownSession | null>(null)
+const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
 const collectibles = ref<SunnyTownCollectible[]>([])
 const selfId = ref('')
@@ -59,6 +41,7 @@ const error = ref('')
 const connected = ref(false)
 const starBalance = ref(0)
 const gameToast = ref('')
+const inventoryOpen = ref(false)
 
 const pressedDirections = new Set<MovementDirection>()
 const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
@@ -124,13 +107,21 @@ function connect(activeSession: SunnyTownSession) {
     }
     if (message.type === 'hello') {
       selfId.value = message.selfId || ''
+      applyMapState(message)
       return
     }
     if (message.type === 'snapshot') {
+      if (message.mapId && activeMap.value && message.mapId !== activeMap.value.id) {
+        return
+      }
       players.value = message.players || []
       collectibles.value = message.collectibles || []
       recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
       syncLocalSelfFromSnapshot()
+      return
+    }
+    if (message.type === 'map_changed') {
+      applyMapState(message)
       return
     }
     if (message.type === 'reward_committed') {
@@ -175,6 +166,12 @@ function parseServerMessage(data: unknown): SunnyTownServerMessage | null {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
+  if (event.code === 'KeyE' || event.key.toLowerCase() === 'e') {
+    event.preventDefault()
+    toggleInventory()
+    return
+  }
+
   const direction = movementDirectionForEvent(event)
   if (!direction) {
     return
@@ -212,6 +209,34 @@ function handleInputCancel() {
 }
 
 function handleResize() {
+  draw()
+}
+
+async function toggleInventory() {
+  inventoryOpen.value = !inventoryOpen.value
+  if (inventoryOpen.value) {
+    await inventoryStore.loadInventory()
+  }
+}
+
+function applyMapState(message: SunnyTownServerMessage) {
+  if (message.map) {
+    activeMap.value = {
+      ...message.map,
+      portals: message.map.portals || [],
+      blockedRects: message.map.blockedRects || [],
+      starSpawns: message.map.starSpawns || [],
+      spawns: message.map.spawns || [],
+    }
+  }
+  players.value = message.players || []
+  collectibles.value = message.collectibles || []
+  remotePlayerHistories.clear()
+  localSelf = null
+  renderedSelf = null
+  lastSentMoveJson = ''
+  pressedDirections.clear()
+  syncLocalSelfFromSnapshot()
   draw()
 }
 
@@ -287,14 +312,21 @@ function draw() {
   context.setTransform(scale, 0, 0, scale, 0, 0)
   context.clearRect(0, 0, rect.width, rect.height)
 
+  const map = activeMap.value
+  if (!map) {
+    context.fillStyle = '#8fcf85'
+    context.fillRect(0, 0, rect.width, rect.height)
+    return
+  }
+
   const renderedPlayers = renderedSunnyTownPlayers()
   const self = renderedPlayers.find((player) => player.id === selfId.value) || renderedPlayers[0]
-  const worldWidth = sunnyTownMap.width * sunnyTownMap.tileSize
-  const worldHeight = sunnyTownMap.height * sunnyTownMap.tileSize
+  const worldWidth = map.width * map.tileSize
+  const worldHeight = map.height * map.tileSize
   const cameraX = clamp((self?.x || worldWidth / 2) - rect.width / 2, 0, Math.max(0, worldWidth - rect.width))
   const cameraY = clamp((self?.y || worldHeight / 2) - rect.height / 2, 0, Math.max(0, worldHeight - rect.height))
 
-  drawMap(context, cameraX, cameraY, rect.width, rect.height)
+  drawMap(context, map, cameraX, cameraY, rect.width, rect.height)
   for (const collectible of collectibles.value) {
     if (collectible.active) {
       drawCollectible(context, collectible, cameraX, cameraY)
@@ -409,7 +441,7 @@ function interpolateRemotePlayer(target: SunnyTownPlayer, renderAt: number): Sun
 }
 
 function predictSelf(deltaSeconds: number) {
-  if (!selfId.value || !connected.value) {
+  if (!selfId.value || !connected.value || !activeMap.value) {
     return
   }
 
@@ -449,6 +481,10 @@ function syncLocalSelfFromSnapshot() {
 }
 
 function simulatePlayer(player: SunnyTownPlayer, input: MovementInput, deltaSeconds: number): SunnyTownPlayer {
+  const map = activeMap.value
+  if (!map) {
+    return player
+  }
   const result = { ...player }
   const vector = movementVector(input)
   if (!vector) {
@@ -458,11 +494,11 @@ function simulatePlayer(player: SunnyTownPlayer, input: MovementInput, deltaSeco
 
   const nextX = result.x + vector.x * playerSpeed * deltaSeconds
   const nextY = result.y + vector.y * playerSpeed * deltaSeconds
-  if (!collides(nextX, result.y)) {
-    result.x = clampPlayerX(nextX)
+  if (!collides(map, nextX, result.y)) {
+    result.x = clampPlayerX(map, nextX)
   }
-  if (!collides(result.x, nextY)) {
-    result.y = clampPlayerY(nextY)
+  if (!collides(map, result.x, nextY)) {
+    result.y = clampPlayerY(map, nextY)
   }
   result.facing = movementFacing(vector)
   result.moving = true
@@ -498,23 +534,23 @@ function movementFacing(vector: { x: number; y: number }): SunnyTownPlayer['faci
   return vector.y > 0 ? 'down' : 'up'
 }
 
-function collides(x: number, y: number): boolean {
+function collides(map: SunnyTownMap, x: number, y: number): boolean {
   const playerRect = {
     x: x - playerSize / 2,
     y: y - playerSize / 2,
     width: playerSize,
     height: playerSize,
   }
-  return sunnyTownMap.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked))
+  return map.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked))
 }
 
-function clampPlayerX(x: number): number {
-  const maxX = sunnyTownMap.width * sunnyTownMap.tileSize - playerSize / 2
+function clampPlayerX(map: SunnyTownMap, x: number): number {
+  const maxX = map.width * map.tileSize - playerSize / 2
   return clamp(x, playerSize / 2, maxX)
 }
 
-function clampPlayerY(y: number): number {
-  const maxY = sunnyTownMap.height * sunnyTownMap.tileSize - playerSize / 2
+function clampPlayerY(map: SunnyTownMap, y: number): number {
+  const maxY = map.height * map.tileSize - playerSize / 2
   return clamp(y, playerSize / 2, maxY)
 }
 
@@ -530,32 +566,54 @@ function rectsOverlap(
   )
 }
 
-function drawMap(context: CanvasRenderingContext2D, cameraX: number, cameraY: number, width: number, height: number) {
-  context.fillStyle = '#8fcf85'
+function drawMap(
+  context: CanvasRenderingContext2D,
+  map: SunnyTownMap,
+  cameraX: number,
+  cameraY: number,
+  width: number,
+  height: number,
+) {
+  context.fillStyle = map.id === 'sunny-town-v1' ? '#8fcf85' : '#cda66f'
   context.fillRect(0, 0, width, height)
 
-  context.fillStyle = '#d6bd79'
-  context.fillRect(0 - cameraX, 420 - cameraY, sunnyTownMap.width * sunnyTownMap.tileSize, 124)
-  context.fillRect(570 - cameraX, 0 - cameraY, 140, sunnyTownMap.height * sunnyTownMap.tileSize)
+  if (map.id === 'sunny-town-v1') {
+    context.fillStyle = '#d6bd79'
+    context.fillRect(0 - cameraX, 420 - cameraY, map.width * map.tileSize, 124)
+    context.fillRect(570 - cameraX, 0 - cameraY, 140, map.height * map.tileSize)
+  } else {
+    context.fillStyle = '#d9bd8d'
+    context.fillRect(64 - cameraX, 64 - cameraY, map.width * map.tileSize - 128, map.height * map.tileSize - 128)
+  }
 
   context.strokeStyle = 'rgba(255, 255, 255, 0.18)'
   context.lineWidth = 1
-  for (let x = -cameraX % sunnyTownMap.tileSize; x < width; x += sunnyTownMap.tileSize) {
+  for (let x = -cameraX % map.tileSize; x < width; x += map.tileSize) {
     context.beginPath()
     context.moveTo(x, 0)
     context.lineTo(x, height)
     context.stroke()
   }
-  for (let y = -cameraY % sunnyTownMap.tileSize; y < height; y += sunnyTownMap.tileSize) {
+  for (let y = -cameraY % map.tileSize; y < height; y += map.tileSize) {
     context.beginPath()
     context.moveTo(0, y)
     context.lineTo(width, y)
     context.stroke()
   }
 
-  for (const blocked of sunnyTownMap.blockedRects) {
-    context.fillStyle = blocked.width > 400 || blocked.height > 400 ? '#4f8a5b' : '#7e6b52'
+  for (const blocked of map.blockedRects) {
+    context.fillStyle = map.id === 'sunny-town-v1'
+      ? blocked.width > 400 || blocked.height > 400 ? '#4f8a5b' : '#7e6b52'
+      : blocked.width > 260 || blocked.height > 260 ? '#6d4f38' : '#8b6748'
     context.fillRect(blocked.x - cameraX, blocked.y - cameraY, blocked.width, blocked.height)
+  }
+
+  for (const portal of map.portals) {
+    context.fillStyle = '#3d2c22'
+    context.fillRect(portal.x - cameraX, portal.y - cameraY, portal.width, portal.height)
+    context.strokeStyle = '#f1d28f'
+    context.lineWidth = 2
+    context.strokeRect(portal.x - cameraX + 2, portal.y - cameraY + 2, portal.width - 4, portal.height - 4)
   }
 }
 
@@ -694,7 +752,26 @@ function backToPet() {
       </div>
       <div class="sunny-town-help">
         <v-icon icon="mdi-keyboard" size="small" />
-        <span>Move with arrow keys or WASD</span>
+        <span>Move with arrow keys or WASD - E inventory</span>
+      </div>
+      <div v-if="inventoryOpen" class="sunny-town-inventory" role="dialog" aria-label="Inventory">
+        <div class="sunny-town-inventory__header">
+          <strong>Inventory</strong>
+          <v-btn icon="mdi-close" size="x-small" variant="text" @click="inventoryOpen = false" />
+        </div>
+        <v-alert v-if="inventoryStore.error" class="mb-3" density="compact" type="error" variant="tonal">
+          {{ inventoryStore.error }}
+        </v-alert>
+        <div class="inventory-list inventory-list--compact">
+          <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item inventory-item--dark">
+            <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
+            <div>
+              <p class="inventory-item__name">{{ item.name }}</p>
+              <p class="inventory-item__description">{{ item.description }}</p>
+            </div>
+            <strong class="inventory-item__quantity">{{ item.quantity }}</strong>
+          </div>
+        </div>
       </div>
     </div>
   </section>
