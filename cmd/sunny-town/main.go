@@ -84,13 +84,14 @@ type serverMessage struct {
 }
 
 type playerSnapshot struct {
-	ID          string  `json:"id"`
-	DisplayName string  `json:"displayName"`
-	X           float64 `json:"x"`
-	Y           float64 `json:"y"`
-	Facing      string  `json:"facing"`
-	Moving      bool    `json:"moving"`
-	AvatarID    string  `json:"avatarId"`
+	ID               string  `json:"id"`
+	DisplayName      string  `json:"displayName"`
+	X                float64 `json:"x"`
+	Y                float64 `json:"y"`
+	Facing           string  `json:"facing"`
+	Moving           bool    `json:"moving"`
+	AvatarID         string  `json:"avatarId"`
+	LastProcessedSeq int64   `json:"lastProcessedSeq"`
 }
 
 type player struct {
@@ -102,6 +103,7 @@ type player struct {
 	facing      string
 	moving      bool
 	input       inputState
+	inputSeq    int64
 	client      *client
 }
 
@@ -296,10 +298,13 @@ func (room *room) leave(client *client) {
 	room.mu.Unlock()
 }
 
-func (room *room) updateInput(playerID string, input inputState) {
+func (room *room) updateInput(playerID string, seq int64, input inputState) {
 	room.mu.Lock()
 	if player := room.players[playerID]; player != nil {
 		player.input = input
+		if seq > player.inputSeq {
+			player.inputSeq = seq
+		}
 	}
 	room.mu.Unlock()
 }
@@ -372,13 +377,14 @@ func (room *room) snapshotsLocked() []playerSnapshot {
 	snapshots := make([]playerSnapshot, 0, len(room.players))
 	for _, player := range room.players {
 		snapshots = append(snapshots, playerSnapshot{
-			ID:          player.id,
-			DisplayName: player.displayName,
-			X:           math.Round(player.x*10) / 10,
-			Y:           math.Round(player.y*10) / 10,
-			Facing:      player.facing,
-			Moving:      player.moving,
-			AvatarID:    player.avatarID,
+			ID:               player.id,
+			DisplayName:      player.displayName,
+			X:                math.Round(player.x*10) / 10,
+			Y:                math.Round(player.y*10) / 10,
+			Facing:           player.facing,
+			Moving:           player.moving,
+			AvatarID:         player.avatarID,
+			LastProcessedSeq: player.inputSeq,
 		})
 	}
 	return snapshots
@@ -440,7 +446,7 @@ func (client *client) readPump() {
 
 		switch message.Type {
 		case "input":
-			client.room.updateInput(client.id, message.inputState)
+			client.room.updateInput(client.id, message.Seq, message.inputState)
 		default:
 			client.trySend(serverMessage{Type: "error", Code: "invalid_message"})
 		}

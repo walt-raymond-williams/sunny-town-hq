@@ -20,6 +20,7 @@ export interface SunnyTownPlayer {
   facing: 'up' | 'down' | 'left' | 'right'
   moving: boolean
   avatarId: string
+  lastProcessedSeq: number
 }
 
 export interface SunnyTownServerMessage {

@@ -197,6 +197,19 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18082/healthz
 docker logs hq-sunny-town --tail 120
 ```
 
+Rebuild Sunny Town after Go service or WebSocket protocol changes:
+
+```powershell
+docker compose -f deploy/docker-compose.yml up -d --build sunny-town
+```
+
+Rebuild the frontend after Sunny Town client changes:
+
+```powershell
+cd frontend
+npm run build
+```
+
 ## Local-Network Auth Notes
 
 - Use one consistent host/IP for HQ and Keycloak. If users open HQ at `http://<YOUR_LAN_IP>:18080`, then `KEYCLOAK_ISSUER` should be `http://<YOUR_LAN_IP>:18081/realms/hq`.

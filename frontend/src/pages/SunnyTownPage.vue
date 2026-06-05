@@ -16,6 +16,19 @@ interface SunnyTownMap {
   blockedRects: Array<{ x: number; y: number; width: number; height: number }>
 }
 
+interface MovementInput {
+  up: boolean
+  down: boolean
+  left: boolean
+  right: boolean
+}
+
+interface PendingInput {
+  seq: number
+  input: MovementInput
+  deltaSeconds: number
+}
+
 const sunnyTownMap: SunnyTownMap = {
   tileSize: 32,
   width: 40,
@@ -31,6 +44,11 @@ const sunnyTownMap: SunnyTownMap = {
   ],
 }
 
+const playerSpeed = 150
+const playerSize = 28
+const tinyCorrectionDistance = 4
+const snapCorrectionDistance = 48
+
 const router = useRouter()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const session = ref<SunnyTownSession | null>(null)
@@ -42,11 +60,15 @@ const connected = ref(false)
 
 const pressedKeys = new Set<string>()
 const visualPlayers = new Map<string, SunnyTownPlayer>()
+const pendingInputs: PendingInput[] = []
+let predictedSelf: SunnyTownPlayer | null = null
+let renderedSelf: SunnyTownPlayer | null = null
 let socket: WebSocket | null = null
 let animationFrame = 0
 let inputSeq = 0
 let inputTimer = 0
 let lastInputStateJson = ''
+let lastPredictedInputJson = ''
 let lastRenderTime = 0
 
 const playerCount = computed(() => players.value.length)
@@ -77,6 +99,10 @@ onBeforeUnmount(() => {
   window.clearInterval(inputTimer)
   socket?.close()
   socket = null
+  pendingInputs.splice(0)
+  predictedSelf = null
+  renderedSelf = null
+  visualPlayers.clear()
 })
 
 function connect(activeSession: SunnyTownSession) {
@@ -101,6 +127,7 @@ function connect(activeSession: SunnyTownSession) {
     }
     if (message.type === 'snapshot') {
       players.value = message.players || []
+      reconcileSelf()
       return
     }
     if (message.type === 'error') {
@@ -159,25 +186,23 @@ function sendInput() {
     return
   }
 
+  const movementInput = currentMovementInput()
   const input: SunnyTownInputMessage = {
     type: 'input',
     seq: ++inputSeq,
-    up: pressedKeys.has('arrowup') || pressedKeys.has('w'),
-    down: pressedKeys.has('arrowdown') || pressedKeys.has('s'),
-    left: pressedKeys.has('arrowleft') || pressedKeys.has('a'),
-    right: pressedKeys.has('arrowright') || pressedKeys.has('d'),
+    ...movementInput,
   }
-  const inputStateJson = JSON.stringify({
-    up: input.up,
-    down: input.down,
-    left: input.left,
-    right: input.right,
-  })
-  const isMoving = input.up || input.down || input.left || input.right
+  const inputStateJson = JSON.stringify(movementInput)
+  const isMoving = isMovementInputActive(movementInput)
   if (!isMoving && inputStateJson === lastInputStateJson) {
     return
   }
   lastInputStateJson = inputStateJson
+  pendingInputs.push({
+    seq: input.seq,
+    input: movementInput,
+    deltaSeconds: 0,
+  })
   socket.send(JSON.stringify(input))
 }
 
@@ -185,6 +210,7 @@ function renderLoop() {
   const now = performance.now()
   const deltaSeconds = lastRenderTime ? (now - lastRenderTime) / 1000 : 0
   lastRenderTime = now
+  predictSelf(deltaSeconds)
   draw(deltaSeconds)
   animationFrame = window.requestAnimationFrame(renderLoop)
 }
@@ -212,7 +238,7 @@ function draw(deltaSeconds = 0) {
   context.setTransform(scale, 0, 0, scale, 0, 0)
   context.clearRect(0, 0, rect.width, rect.height)
 
-  const renderedPlayers = smoothPlayers(deltaSeconds)
+  const renderedPlayers = renderedSunnyTownPlayers(deltaSeconds)
   const self = renderedPlayers.find((player) => player.id === selfId.value) || renderedPlayers[0]
   const worldWidth = sunnyTownMap.width * sunnyTownMap.tileSize
   const worldHeight = sunnyTownMap.height * sunnyTownMap.tileSize
@@ -225,8 +251,42 @@ function draw(deltaSeconds = 0) {
   }
 }
 
-function smoothPlayers(deltaSeconds: number): SunnyTownPlayer[] {
-  const targets = new Map(players.value.map((player) => [player.id, player]))
+function renderedSunnyTownPlayers(deltaSeconds: number): SunnyTownPlayer[] {
+  const selfSnapshot = players.value.find((player) => player.id === selfId.value)
+  const remotePlayers = players.value.filter((player) => player.id !== selfId.value)
+  const renderedRemotePlayers = smoothRemotePlayers(remotePlayers, deltaSeconds)
+  if (!selfSnapshot) {
+    return renderedRemotePlayers
+  }
+
+  if (!renderedSelf) {
+    renderedSelf = { ...(predictedSelf || selfSnapshot) }
+  }
+
+  const target = predictedSelf || selfSnapshot
+  const correctionDistance = Math.hypot(target.x - renderedSelf.x, target.y - renderedSelf.y)
+  if (correctionDistance <= tinyCorrectionDistance) {
+    renderedSelf.x = target.x
+    renderedSelf.y = target.y
+  } else if (correctionDistance > snapCorrectionDistance) {
+    renderedSelf.x = target.x
+    renderedSelf.y = target.y
+  } else {
+    const smoothing = 1 - Math.exp(-24 * Math.max(0, deltaSeconds))
+    renderedSelf.x += (target.x - renderedSelf.x) * smoothing
+    renderedSelf.y += (target.y - renderedSelf.y) * smoothing
+  }
+  renderedSelf.displayName = target.displayName
+  renderedSelf.facing = target.facing
+  renderedSelf.moving = target.moving
+  renderedSelf.avatarId = target.avatarId
+  renderedSelf.lastProcessedSeq = target.lastProcessedSeq
+
+  return [...renderedRemotePlayers, renderedSelf]
+}
+
+function smoothRemotePlayers(remotePlayers: SunnyTownPlayer[], deltaSeconds: number): SunnyTownPlayer[] {
+  const targets = new Map(remotePlayers.map((player) => [player.id, player]))
   for (const playerId of visualPlayers.keys()) {
     if (!targets.has(playerId)) {
       visualPlayers.delete(playerId)
@@ -234,7 +294,7 @@ function smoothPlayers(deltaSeconds: number): SunnyTownPlayer[] {
   }
 
   const smoothing = 1 - Math.exp(-18 * Math.max(0, deltaSeconds))
-  for (const target of players.value) {
+  for (const target of remotePlayers) {
     const visual = visualPlayers.get(target.id)
     if (!visual) {
       visualPlayers.set(target.id, { ...target })
@@ -252,6 +312,150 @@ function smoothPlayers(deltaSeconds: number): SunnyTownPlayer[] {
   }
 
   return Array.from(visualPlayers.values())
+}
+
+function predictSelf(deltaSeconds: number) {
+  if (!selfId.value || !connected.value) {
+    return
+  }
+
+  const selfSnapshot = players.value.find((player) => player.id === selfId.value)
+  if (!selfSnapshot) {
+    return
+  }
+  if (!predictedSelf) {
+    predictedSelf = { ...selfSnapshot }
+  }
+
+  const input = currentMovementInput()
+  const inputStateJson = JSON.stringify(input)
+  if (isMovementInputActive(input)) {
+    predictedSelf = simulatePlayer(predictedSelf, input, deltaSeconds)
+    const latestPendingInput = pendingInputs[pendingInputs.length - 1]
+    if (latestPendingInput) {
+      latestPendingInput.deltaSeconds += deltaSeconds
+    }
+    if (inputStateJson !== lastPredictedInputJson) {
+      sendInput()
+    }
+  }
+  lastPredictedInputJson = inputStateJson
+}
+
+function reconcileSelf() {
+  if (!selfId.value) {
+    return
+  }
+
+  const selfSnapshot = players.value.find((player) => player.id === selfId.value)
+  if (!selfSnapshot) {
+    predictedSelf = null
+    renderedSelf = null
+    return
+  }
+
+  const firstUnackedIndex = pendingInputs.findIndex((input) => input.seq > selfSnapshot.lastProcessedSeq)
+  if (firstUnackedIndex === -1) {
+    pendingInputs.splice(0)
+  } else if (firstUnackedIndex > 0) {
+    pendingInputs.splice(0, firstUnackedIndex)
+  }
+
+  let corrected = { ...selfSnapshot }
+  for (const pendingInput of pendingInputs) {
+    corrected = simulatePlayer(corrected, pendingInput.input, pendingInput.deltaSeconds)
+  }
+  predictedSelf = corrected
+
+  if (!renderedSelf) {
+    renderedSelf = { ...corrected }
+  }
+}
+
+function simulatePlayer(player: SunnyTownPlayer, input: MovementInput, deltaSeconds: number): SunnyTownPlayer {
+  const result = { ...player }
+  const vector = movementVector(input)
+  if (!vector) {
+    result.moving = false
+    return result
+  }
+
+  const nextX = result.x + vector.x * playerSpeed * deltaSeconds
+  const nextY = result.y + vector.y * playerSpeed * deltaSeconds
+  if (!collides(nextX, result.y)) {
+    result.x = clampPlayerX(nextX)
+  }
+  if (!collides(result.x, nextY)) {
+    result.y = clampPlayerY(nextY)
+  }
+  result.facing = movementFacing(vector)
+  result.moving = true
+  return result
+}
+
+function currentMovementInput(): MovementInput {
+  return {
+    up: pressedKeys.has('arrowup') || pressedKeys.has('w'),
+    down: pressedKeys.has('arrowdown') || pressedKeys.has('s'),
+    left: pressedKeys.has('arrowleft') || pressedKeys.has('a'),
+    right: pressedKeys.has('arrowright') || pressedKeys.has('d'),
+  }
+}
+
+function isMovementInputActive(input: MovementInput): boolean {
+  return input.up || input.down || input.left || input.right
+}
+
+function movementVector(input: MovementInput): { x: number; y: number } | null {
+  let x = Number(input.right) - Number(input.left)
+  let y = Number(input.down) - Number(input.up)
+  if (x === 0 && y === 0) {
+    return null
+  }
+
+  const length = Math.hypot(x, y)
+  x /= length
+  y /= length
+  return { x, y }
+}
+
+function movementFacing(vector: { x: number; y: number }): SunnyTownPlayer['facing'] {
+  if (Math.abs(vector.x) > Math.abs(vector.y)) {
+    return vector.x > 0 ? 'right' : 'left'
+  }
+  return vector.y > 0 ? 'down' : 'up'
+}
+
+function collides(x: number, y: number): boolean {
+  const playerRect = {
+    x: x - playerSize / 2,
+    y: y - playerSize / 2,
+    width: playerSize,
+    height: playerSize,
+  }
+  return sunnyTownMap.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked))
+}
+
+function clampPlayerX(x: number): number {
+  const maxX = sunnyTownMap.width * sunnyTownMap.tileSize - playerSize / 2
+  return clamp(x, playerSize / 2, maxX)
+}
+
+function clampPlayerY(y: number): number {
+  const maxY = sunnyTownMap.height * sunnyTownMap.tileSize - playerSize / 2
+  return clamp(y, playerSize / 2, maxY)
+}
+
+function rectsOverlap(
+  first: { x: number; y: number; width: number; height: number },
+  second: { x: number; y: number; width: number; height: number },
+): boolean {
+  return (
+    first.x < second.x + second.width &&
+    first.x + first.width > second.x &&
+    first.y < second.y + second.height &&
+    first.y + first.height > second.y
+  )
 }
 
 function drawMap(context: CanvasRenderingContext2D, cameraX: number, cameraY: number, width: number, height: number) {

@@ -27,7 +27,7 @@ func TestRoomMovement(t *testing.T) {
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
-	room.updateInput("42", inputState{Right: true})
+	room.updateInput("42", 7, inputState{Right: true})
 	room.step(0.2)
 
 	player := room.players["42"]
@@ -46,7 +46,7 @@ func TestRoomBlocksCollision(t *testing.T) {
 	client := testClient(room, "42")
 	room.join(client, testClaims(42))
 
-	room.updateInput("42", inputState{Right: true})
+	room.updateInput("42", 7, inputState{Right: true})
 	room.step(0.2)
 
 	player := room.players["42"]
@@ -62,11 +62,27 @@ func TestRoomClampsBounds(t *testing.T) {
 
 	player := room.players["42"]
 	player.x = 20
-	room.updateInput("42", inputState{Left: true})
+	room.updateInput("42", 7, inputState{Left: true})
 	room.step(1)
 
 	if player.x < playerSize/2 {
 		t.Fatalf("player x = %v, want clamped to map bounds", player.x)
+	}
+}
+
+func TestRoomSnapshotIncludesLastProcessedSeq(t *testing.T) {
+	room := newRoom(defaultRoomID, testMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42))
+
+	room.updateInput("42", 12, inputState{Down: true})
+	snapshots := room.snapshotsLocked()
+
+	if len(snapshots) != 1 {
+		t.Fatalf("snapshot count = %d, want 1", len(snapshots))
+	}
+	if snapshots[0].LastProcessedSeq != 12 {
+		t.Fatalf("LastProcessedSeq = %d, want 12", snapshots[0].LastProcessedSeq)
 	}
 }
 

@@ -157,24 +157,25 @@ Server-to-client messages should represent authoritative state:
 ```json
 {
   "type": "snapshot",
-  "server_time_ms": 123456,
+  "serverTimeMs": 123456,
   "tick": 991,
-  "self_id": "123",
+  "selfId": "123",
   "players": [
     {
       "id": "123",
-      "display_name": "Student",
+      "displayName": "Student",
       "x": 128,
       "y": 96,
       "facing": "down",
       "moving": true,
-      "avatar_id": "pet-default"
+      "avatarId": "pet-default",
+      "lastProcessedSeq": 42
     }
   ]
 }
 ```
 
-The first version can use JSON messages for simplicity. If message volume becomes a problem later, the protocol can move to protobuf binary messages without changing the service boundary.
+The `lastProcessedSeq` value lets the client reconcile local prediction against authoritative server snapshots. The first version uses JSON messages for simplicity. If message volume becomes a problem later, the protocol can move to protobuf binary messages without changing the service boundary.
 
 ## Simulation Model
 
@@ -188,7 +189,7 @@ The server should be authoritative over:
 - map boundaries
 - interaction eligibility
 
-The client may perform local prediction for the current player so movement feels immediate. Remote players should be interpolated between server snapshots.
+The client performs local prediction for the current player so movement feels immediate. When authoritative snapshots arrive, the client drops acknowledged inputs, replays unacknowledged inputs, and eases small corrections to avoid visible rubber-banding. Remote players are interpolated between server snapshots.
 
 Initial tick settings:
 
@@ -286,6 +287,7 @@ Useful counters:
 - players per room
 - input messages per second
 - snapshots sent per second
+- local prediction corrections by distance bucket
 - disconnect reasons
 - tick duration
 

@@ -2,6 +2,8 @@
 
 This plan builds Sunny Town as a new Go realtime service that launches from the existing student Pet page.
 
+Current status: the first movement MVP is implemented. Sunny Town now runs as a separate Go WebSocket service, Docker Compose includes the `sunny-town` container, HQ issues short-lived join tokens, the Pet page opens a dedicated Sunny Town route, and the client uses local prediction for the current player with interpolation for remote players.
+
 ## Phase 0: Decisions to Lock
 
 - Service name: `sunny-town`
@@ -202,7 +204,7 @@ Server-to-client:
 
 ```json
 { "type": "hello", "selfId": "123", "roomId": "sunny-town-main", "mapId": "sunny-town-v1" }
-{ "type": "snapshot", "tick": 10, "players": [] }
+{ "type": "snapshot", "tick": 10, "players": [{ "id": "123", "lastProcessedSeq": 12 }] }
 { "type": "playerJoined", "playerId": "456" }
 { "type": "playerLeft", "playerId": "456" }
 { "type": "ping", "serverTimeMs": 123456 }
@@ -214,6 +216,7 @@ Rules:
 - clients send intent only
 - clients never send authoritative `x` or `y`
 - server snapshots are authoritative
+- server snapshots include `lastProcessedSeq` so the local client can reconcile prediction
 - unknown message types are ignored or rejected with a small error
 - message size is capped
 
@@ -240,6 +243,8 @@ go run ./cmd/sunny-town
 ```
 
 Later, add a `sunny-town` service to `deploy/docker-compose.yml` once the command is stable.
+
+Current Docker status: `deploy/docker-compose.yml` includes `sunny-town`, built from `deploy/sunny-town/Dockerfile`, and exposes host port `18082`.
 
 ## Phase 9: Tests
 
@@ -297,3 +302,5 @@ The first milestone is complete when:
 - two browser windows can see each other move on one shared map
 - leaving the Pet/Sunny Town route closes the connection cleanly
 - no permanent student or pet state is written by Sunny Town directly
+
+This milestone is complete. The next implementation slice should load shared map data into the frontend instead of duplicating collision rectangles in the Vue component.
