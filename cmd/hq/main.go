@@ -495,7 +495,34 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 
 	category := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("category")))
 	suffixArgs := []any{}
-	categoryClause := ""
+	assignmentSuffix := `
+		where not exists (
+			select 1
+			from assignment_attempt aa
+			where aa.assignment_id = a.id
+				and aa.student_user_id = $1
+				and aa.reset_at is null
+		)
+		and a.category = (
+			select eligible_categories.category
+			from (
+				select c.category
+				from assignment c
+				where not exists (
+					select 1
+					from assignment_attempt caa
+					where caa.assignment_id = c.id
+						and caa.student_user_id = $1
+						and caa.reset_at is null
+				)
+				group by c.category
+			) eligible_categories
+			order by random()
+			limit 1
+		)
+		order by a.id asc
+		limit 1
+	`
 	if category != "" {
 		if !isValidCategory(category) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -504,13 +531,7 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 			return
 		}
 
-		categoryClause = "and a.category = $2"
-		suffixArgs = append(suffixArgs, category)
-	}
-
-	assignments, err := app.loadAssignments(
-		r.Context(),
-		`
+		assignmentSuffix = `
 			where not exists (
 				select 1
 				from assignment_attempt aa
@@ -518,10 +539,16 @@ func (app *app) handleNextStudentAssignment(w http.ResponseWriter, r *http.Reque
 					and aa.student_user_id = $1
 					and aa.reset_at is null
 			)
-			`+categoryClause+`
+			and a.category = $2
 			order by a.id asc
 			limit 1
-		`,
+		`
+		suffixArgs = append(suffixArgs, category)
+	}
+
+	assignments, err := app.loadAssignments(
+		r.Context(),
+		assignmentSuffix,
 		append([]any{user.ID}, suffixArgs...)...,
 	)
 	if err != nil {
