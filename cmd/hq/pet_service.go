@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -17,6 +19,7 @@ const (
 	petDecayTickInterval     = 5 * time.Minute
 	petGameTargetScore       = 10
 	petGameEnergyCost        = 5
+	petGameMaxStarReward     = 100
 )
 
 type petService struct {
@@ -74,7 +77,13 @@ func (service *petService) ApplyGameResult(ctx context.Context, request *connect
 		return nil, connect.NewError(connect.CodePermissionDenied, err)
 	}
 
-	profile, err := service.app.applyGameResult(ctx, user.ID, int(request.Msg.GetScore()))
+	profile, err := service.app.applyGameResult(
+		ctx,
+		user.ID,
+		int(request.Msg.GetScore()),
+		int(request.Msg.GetStarsCollected()),
+		request.Msg.GetRoundId(),
+	)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -353,13 +362,22 @@ func (app *app) playWithStudentPet(ctx context.Context, userID int64) (studentPr
 	return app.loadStudentProfile(ctx, userID)
 }
 
-func (app *app) applyGameResult(ctx context.Context, userID int64, score int) (studentProfileResponse, error) {
+func (app *app) applyGameResult(ctx context.Context, userID int64, score int, starsCollected int, roundID string) (studentProfileResponse, error) {
 	if err := app.applyPetDecay(ctx, userID); err != nil {
 		return studentProfileResponse{}, err
 	}
 
 	if score < 0 {
 		score = 0
+	}
+	if starsCollected < 0 {
+		starsCollected = 0
+	}
+	if starsCollected > petGameMaxStarReward {
+		starsCollected = petGameMaxStarReward
+	}
+	if score > starsCollected {
+		score = starsCollected
 	}
 
 	won := score >= petGameTargetScore
@@ -373,24 +391,87 @@ func (app *app) applyGameResult(ctx context.Context, userID int64, score int) (s
 		happinessDelta = 8
 	}
 
-	_, err := app.db.Exec(
+	tx, err := app.db.Begin(ctx)
+	if err != nil {
+		return studentProfileResponse{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	var sleeping bool
+	if err := tx.QueryRow(
 		ctx,
 		`
-			update pet_state
-			set happiness = least(happiness + $1, 100),
-				energy = greatest(energy - $2, 0),
-				sleeping = case when energy <= $2 then true else false end,
-				sleep_started_at = case when energy <= $2 then now() else null end,
-				sleep_started_energy = case when energy <= $2 then 0 else null end,
-				updated_at = now()
-			where user_id = $3
-				and not sleeping
+			select sleeping
+			from pet_state
+			where user_id = $1
+			for update
 		`,
-		happinessDelta,
-		petGameEnergyCost,
 		userID,
-	)
-	if err != nil {
+	).Scan(&sleeping); err != nil {
+		return studentProfileResponse{}, err
+	}
+	if sleeping {
+		if err := tx.Commit(ctx); err != nil {
+			return studentProfileResponse{}, err
+		}
+		return app.loadStudentProfile(ctx, userID)
+	}
+
+	applyPetResult := true
+	if starsCollected > 0 {
+		roundID = strings.TrimSpace(roundID)
+		if roundID == "" {
+			roundID = fmt.Sprintf("legacy-%d", time.Now().UTC().UnixNano())
+		}
+		inserted, _, err := commitStudentStarReward(ctx, tx, starRewardRequest{
+			EventID:       fmt.Sprintf("pet-falling-stars:%d:%s", userID, roundID),
+			AppUserID:     userID,
+			Source:        "pet_falling_stars",
+			Delta:         starsCollected,
+			CollectibleID: roundID,
+		})
+		if err != nil {
+			return studentProfileResponse{}, err
+		}
+		applyPetResult = inserted
+	} else if _, err := tx.Exec(
+		ctx,
+		`
+			insert into student_wallet (app_user_id)
+			values ($1)
+			on conflict (app_user_id) do nothing
+		`,
+		userID,
+	); err != nil {
+		return studentProfileResponse{}, err
+	}
+
+	if applyPetResult {
+		_, err = tx.Exec(
+			ctx,
+			`
+				update pet_state
+				set happiness = least(happiness + $1, 100),
+					energy = greatest(energy - $2, 0),
+					sleeping = case when energy <= $2 then true else false end,
+					sleep_started_at = case when energy <= $2 then now() else null end,
+					sleep_started_energy = case when energy <= $2 then 0 else null end,
+					updated_at = now()
+				where user_id = $3
+					and not sleeping
+			`,
+			happinessDelta,
+			petGameEnergyCost,
+			userID,
+		)
+		if err != nil {
+			return studentProfileResponse{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return studentProfileResponse{}, err
 	}
 
@@ -470,6 +551,7 @@ func (profile studentProfileResponse) toProto() *petv1.PetStateResponse {
 		UserId:      profile.ID,
 		DisplayName: profile.DisplayName,
 		Cookies:     int32(profile.Cookies),
+		StarBalance: int32(profile.StarBalance),
 		PetState: &petv1.PetState{
 			Hunger:      int32(profile.PetState.Hunger),
 			Happiness:   int32(profile.PetState.Happiness),

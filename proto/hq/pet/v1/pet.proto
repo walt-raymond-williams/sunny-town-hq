@@ -40,6 +40,7 @@ message PetStateResponse {
   string display_name = 2;
   int32 cookies = 3;
   PetState pet_state = 4;
+  int32 star_balance = 5;
 }
 
 message GetPetStateRequest {}
@@ -50,6 +51,8 @@ message PlayWithPetRequest {}
 
 message ApplyGameResultRequest {
   int32 score = 1;
+  int32 stars_collected = 2;
+  string round_id = 3;
 }
 
 message PutPetToSleepRequest {}

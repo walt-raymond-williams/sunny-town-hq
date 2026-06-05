@@ -56,6 +56,11 @@ defineEmits({
         <p class="summary-category">Cookies</p>
         <p class="cookie-display__count">{{ studentPetStore.cookies }}</p>
       </div>
+      <v-divider vertical />
+      <div>
+        <p class="summary-category">Stars</p>
+        <p class="cookie-display__count">{{ studentPetStore.starBalance }}</p>
+      </div>
       <div class="pet-actions">
         <v-chip :color="studentPetStore.sleeping ? 'primary' : 'success'" size="small" variant="tonal">
           {{ studentPetStore.sleeping ? 'Sleeping' : 'Awake' }}
@@ -121,7 +126,8 @@ defineEmits({
       }}
       Final score: {{ lastFallingStarsResult.score }} / 10. Happiness gained:
       +{{ lastFallingStarsResult.happinessDelta }}. Energy spent:
-      {{ lastFallingStarsResult.energyDelta }}.
+      {{ lastFallingStarsResult.energyDelta }}. Wallet stars gained:
+      +{{ lastFallingStarsResult.starsCollected }}.
     </v-alert>
 
     <div class="pet-stat-list">

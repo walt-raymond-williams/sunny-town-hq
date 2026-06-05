@@ -22,6 +22,7 @@ export interface StudentPetState {
   id: number
   displayName: string
   cookies: number
+  starBalance: number
   hunger: number
   happiness: number
   energy: number
@@ -54,6 +55,7 @@ export const useStudentPetStore = defineStore('studentPet', {
     id: 1,
     displayName: 'Student',
     cookies: 0,
+    starBalance: 0,
     hunger: 50,
     happiness: 50,
     energy: 50,
@@ -70,6 +72,7 @@ export const useStudentPetStore = defineStore('studentPet', {
       this.id = Number(body.userId)
       this.displayName = body.displayName
       this.cookies = body.cookies
+      this.starBalance = body.starBalance
       this.hunger = body.petState?.hunger ?? 50
       this.happiness = body.petState?.happiness ?? 50
       this.energy = body.petState?.energy ?? 50
@@ -173,6 +176,8 @@ export const useStudentPetStore = defineStore('studentPet', {
         const body = await petClient.applyGameResult(
           create(ApplyGameResultRequestSchema, {
             score: result.score,
+            starsCollected: result.starsCollected,
+            roundId: result.roundId,
           }),
         )
         this.applyProfile(body)

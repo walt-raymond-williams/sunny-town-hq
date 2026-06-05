@@ -178,6 +178,7 @@ type PetStateResponse struct {
 	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	Cookies       int32                  `protobuf:"varint,3,opt,name=cookies,proto3" json:"cookies,omitempty"`
 	PetState      *PetState              `protobuf:"bytes,4,opt,name=pet_state,json=petState,proto3" json:"pet_state,omitempty"`
+	StarBalance   int32                  `protobuf:"varint,5,opt,name=star_balance,json=starBalance,proto3" json:"star_balance,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -238,6 +239,13 @@ func (x *PetStateResponse) GetPetState() *PetState {
 		return x.PetState
 	}
 	return nil
+}
+
+func (x *PetStateResponse) GetStarBalance() int32 {
+	if x != nil {
+		return x.StarBalance
+	}
+	return 0
 }
 
 type GetPetStateRequest struct {
@@ -349,10 +357,12 @@ func (*PlayWithPetRequest) Descriptor() ([]byte, []int) {
 }
 
 type ApplyGameResultRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Score         int32                  `protobuf:"varint,1,opt,name=score,proto3" json:"score,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Score          int32                  `protobuf:"varint,1,opt,name=score,proto3" json:"score,omitempty"`
+	StarsCollected int32                  `protobuf:"varint,2,opt,name=stars_collected,json=starsCollected,proto3" json:"stars_collected,omitempty"`
+	RoundId        string                 `protobuf:"bytes,3,opt,name=round_id,json=roundId,proto3" json:"round_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ApplyGameResultRequest) Reset() {
@@ -390,6 +400,20 @@ func (x *ApplyGameResultRequest) GetScore() int32 {
 		return x.Score
 	}
 	return 0
+}
+
+func (x *ApplyGameResultRequest) GetStarsCollected() int32 {
+	if x != nil {
+		return x.StarsCollected
+	}
+	return 0
+}
+
+func (x *ApplyGameResultRequest) GetRoundId() string {
+	if x != nil {
+		return x.RoundId
+	}
+	return ""
 }
 
 type PutPetToSleepRequest struct {
@@ -513,17 +537,20 @@ const file_hq_pet_v1_pet_proto_rawDesc = "" +
 	"\x04mood\x18\x05 \x01(\x0e2\x12.hq.pet.v1.PetMoodR\x04mood\x129\n" +
 	"\n" +
 	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12>\n" +
-	"\rlast_decay_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vlastDecayAt\"\x9a\x01\n" +
+	"\rlast_decay_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\vlastDecayAt\"\xbd\x01\n" +
 	"\x10PetStateResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x03R\x06userId\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x18\n" +
 	"\acookies\x18\x03 \x01(\x05R\acookies\x120\n" +
-	"\tpet_state\x18\x04 \x01(\v2\x13.hq.pet.v1.PetStateR\bpetState\"\x14\n" +
+	"\tpet_state\x18\x04 \x01(\v2\x13.hq.pet.v1.PetStateR\bpetState\x12!\n" +
+	"\fstar_balance\x18\x05 \x01(\x05R\vstarBalance\"\x14\n" +
 	"\x12GetPetStateRequest\"\x10\n" +
 	"\x0eFeedPetRequest\"\x14\n" +
-	"\x12PlayWithPetRequest\".\n" +
+	"\x12PlayWithPetRequest\"r\n" +
 	"\x16ApplyGameResultRequest\x12\x14\n" +
-	"\x05score\x18\x01 \x01(\x05R\x05score\"\x16\n" +
+	"\x05score\x18\x01 \x01(\x05R\x05score\x12'\n" +
+	"\x0fstars_collected\x18\x02 \x01(\x05R\x0estarsCollected\x12\x19\n" +
+	"\bround_id\x18\x03 \x01(\tR\aroundId\"\x16\n" +
 	"\x14PutPetToSleepRequest\"\x10\n" +
 	"\x0eWakePetRequest\"\x16\n" +
 	"\x14WatchPetStateRequest*\x88\x01\n" +

@@ -54,6 +54,40 @@ func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
 	}
 }
 
+func TestApplyGameResultCreditsPetStarsOnce(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	first, err := app.applyGameResult(ctx, 123, 7, 9, "round-1")
+	if err != nil {
+		t.Fatalf("first game result error = %v", err)
+	}
+	if first.StarBalance != 9 || first.PetState.Happiness != 57 || first.PetState.Energy != 45 {
+		t.Fatalf("first profile = %#v, want balance 9 happiness 57 energy 45", first)
+	}
+
+	second, err := app.applyGameResult(ctx, 123, 7, 9, "round-1")
+	if err != nil {
+		t.Fatalf("second game result error = %v", err)
+	}
+	if second.StarBalance != 9 || second.PetState.Happiness != 57 || second.PetState.Energy != 45 {
+		t.Fatalf("second profile = %#v, want duplicate to keep balance and pet stats unchanged", second)
+	}
+
+	var ledgerRows int
+	var source string
+	if err := app.db.QueryRow(ctx, "select count(*) from student_star_ledger").Scan(&ledgerRows); err != nil {
+		t.Fatalf("count ledger rows: %v", err)
+	}
+	if err := app.db.QueryRow(ctx, "select source from student_star_ledger where event_id = 'pet-falling-stars:123:round-1'").Scan(&source); err != nil {
+		t.Fatalf("load pet star ledger source: %v", err)
+	}
+	if ledgerRows != 1 || source != "pet_falling_stars" {
+		t.Fatalf("ledgerRows=%d source=%q, want 1 pet_falling_stars", ledgerRows, source)
+	}
+}
+
 func testRewardApp(t *testing.T) (*app, func()) {
 	t.Helper()
 
@@ -111,7 +145,19 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			created_at timestamptz not null default now(),
 			constraint student_star_ledger_delta_nonzero check (delta <> 0)
 		)`,
+		`create table pet_state (
+			user_id bigint primary key references app_user(id) on delete cascade,
+			hunger integer not null default 50,
+			happiness integer not null default 50,
+			energy integer not null default 50,
+			sleeping boolean not null default false,
+			updated_at timestamptz not null default now(),
+			last_decay_at timestamptz not null default now(),
+			sleep_started_at timestamptz null,
+			sleep_started_energy integer null
+		)`,
 		`insert into app_user (id, display_name) values (123, 'Student')`,
+		`insert into pet_state (user_id, hunger, happiness, energy) values (123, 50, 50, 50)`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(ctx, statement); err != nil {

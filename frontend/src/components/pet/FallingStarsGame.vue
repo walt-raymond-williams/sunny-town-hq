@@ -12,6 +12,7 @@ const roundLength = 30
 const playAreaRef = ref<HTMLElement | null>(null)
 const gameState = ref<'idle' | 'countdown' | 'playing' | 'complete'>('idle')
 const score = ref(0)
+const starsCollected = ref(0)
 const timeRemaining = ref(roundLength)
 const petX = ref(50)
 const fallingObjects = ref<FallingObject[]>([])
@@ -27,13 +28,16 @@ let movementDirection = 0
 let objectId = 0
 let feedbackTimer = 0
 let completionEmitted = false
+let roundId = ''
 
 const scoreLabel = computed(() => `Score: ${score.value} / ${targetScore}`)
 const hasActiveRound = computed(() => gameState.value === 'countdown' || gameState.value === 'playing')
 
 function startGame() {
   stopLoop()
+  roundId = createRoundId()
   score.value = 0
+  starsCollected.value = 0
   timeRemaining.value = roundLength
   petX.value = 50
   fallingObjects.value = []
@@ -133,6 +137,7 @@ function isCaught(object: FallingObject): boolean {
 function applyCatch(object: FallingObject) {
   if (object.type === 'star') {
     score.value += 1
+    starsCollected.value += 1
     feedback.value = 'sparkle'
   } else {
     score.value = Math.max(0, score.value - 1)
@@ -150,7 +155,9 @@ function completeGame() {
 
   const won = score.value >= targetScore
   const gameResult = {
+    roundId,
     score: score.value,
+    starsCollected: starsCollected.value,
     won,
     happinessDelta: won ? Math.min(score.value * 2, 20) : Math.min(score.value, 8),
     energyDelta: -5,
@@ -238,6 +245,20 @@ function randomBetween(min: number, max: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+function createRoundId(): string {
+  if (window.crypto?.randomUUID) {
+    return window.crypto.randomUUID()
+  }
+
+  if (!window.crypto?.getRandomValues) {
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+
+  const random = new Uint32Array(4)
+  window.crypto.getRandomValues(random)
+  return Array.from(random, (value) => value.toString(16).padStart(8, '0')).join('')
 }
 
 onBeforeUnmount(() => {

@@ -67,6 +67,7 @@ type studentProfileResponse struct {
 	ID          int64            `json:"id"`
 	DisplayName string           `json:"display_name"`
 	Cookies     int              `json:"cookies"`
+	StarBalance int              `json:"star_balance"`
 	PetState    petStateResponse `json:"pet_state"`
 }
 
@@ -98,6 +99,16 @@ type sunnyTownRewardEventResponse struct {
 	Accepted       bool `json:"accepted"`
 	Duplicate      bool `json:"duplicate"`
 	NewStarBalance int  `json:"new_star_balance"`
+}
+
+type starRewardRequest struct {
+	EventID       string
+	AppUserID     int64
+	Source        string
+	Delta         int
+	RoomID        string
+	MapID         string
+	CollectibleID string
 }
 
 type assignmentAttemptResponse struct {
@@ -1076,9 +1087,40 @@ func (app *app) commitSunnyTownReward(ctx context.Context, request sunnyTownRewa
 		return sunnyTownRewardEventResponse{}, errors.New("unsupported sunny town reward")
 	}
 
+	inserted, balance, err := commitStudentStarReward(ctx, app.db, starRewardRequest{
+		EventID:       request.EventID,
+		AppUserID:     request.AppUserID,
+		Source:        "sunny_town_star_collect",
+		Delta:         request.Amount,
+		RoomID:        request.RoomID,
+		MapID:         request.MapID,
+		CollectibleID: request.CollectibleID,
+	})
+	if err != nil {
+		return sunnyTownRewardEventResponse{}, err
+	}
+
+	return sunnyTownRewardEventResponse{
+		Accepted:       true,
+		Duplicate:      !inserted,
+		NewStarBalance: balance,
+	}, nil
+}
+
+type starRewardQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func commitStudentStarReward(ctx context.Context, querier starRewardQuerier, request starRewardRequest) (bool, int, error) {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.Source = strings.TrimSpace(request.Source)
+	if request.EventID == "" || request.AppUserID < 1 || request.Source == "" || request.Delta == 0 {
+		return false, 0, errors.New("star reward is missing required fields")
+	}
+
 	var inserted bool
 	var balance int
-	err := app.db.QueryRow(
+	err := querier.QueryRow(
 		ctx,
 		`
 			with inserted as (
@@ -1091,7 +1133,7 @@ func (app *app) commitSunnyTownReward(ctx context.Context, request sunnyTownRewa
 					map_id,
 					collectible_id
 				)
-				values ($1, $2, 'sunny_town_star_collect', $3, $4, $5, $6)
+				values ($1, $2, $3, $4, nullif($5, ''), nullif($6, ''), nullif($7, ''))
 				on conflict (event_id) do nothing
 				returning app_user_id, delta
 			),
@@ -1112,20 +1154,13 @@ func (app *app) commitSunnyTownReward(ctx context.Context, request sunnyTownRewa
 		`,
 		request.AppUserID,
 		request.EventID,
-		request.Amount,
+		request.Source,
+		request.Delta,
 		request.RoomID,
 		request.MapID,
 		request.CollectibleID,
 	).Scan(&inserted, &balance)
-	if err != nil {
-		return sunnyTownRewardEventResponse{}, err
-	}
-
-	return sunnyTownRewardEventResponse{
-		Accepted:       true,
-		Duplicate:      !inserted,
-		NewStarBalance: balance,
-	}, nil
+	return inserted, balance, err
 }
 
 func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64) (studentProfileResponse, error) {
@@ -1136,6 +1171,7 @@ func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64
 			select u.id,
 				u.display_name,
 				u.cookies,
+				coalesce(sw.star_balance, 0),
 				ps.hunger,
 				ps.happiness,
 				ps.energy,
@@ -1150,6 +1186,7 @@ func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64
 				end as mood
 			from app_user u
 			join pet_state ps on ps.user_id = u.id
+			left join student_wallet sw on sw.app_user_id = u.id
 			where u.id = $1
 		`,
 		userID,
@@ -1157,6 +1194,7 @@ func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64
 		&profile.ID,
 		&profile.DisplayName,
 		&profile.Cookies,
+		&profile.StarBalance,
 		&profile.PetState.Hunger,
 		&profile.PetState.Happiness,
 		&profile.PetState.Energy,
