@@ -18,6 +18,10 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
     cookieQuantity: (state) => state.items.find((item) => item.key === 'cookie')?.quantity ?? 0,
   },
   actions: {
+    setItems(items: InventoryItem[]) {
+      this.items = items
+      this.error = ''
+    },
     async loadInventory() {
       this.isLoading = true
       this.error = ''

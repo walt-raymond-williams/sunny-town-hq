@@ -56,6 +56,7 @@ type gameMap struct {
 	BlockedRects []rect   `json:"blockedRects"`
 	StarSpawns   []point  `json:"starSpawns"`
 	Portals      []portal `json:"portals"`
+	NPCs         []npc    `json:"npcs"`
 }
 
 type point struct {
@@ -80,6 +81,29 @@ type portal struct {
 	TargetX      float64 `json:"targetX"`
 	TargetY      float64 `json:"targetY"`
 	TargetFacing string  `json:"targetFacing"`
+}
+
+type npc struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	X         float64  `json:"x"`
+	Y         float64  `json:"y"`
+	Facing    string   `json:"facing"`
+	SpriteKey string   `json:"spriteKey"`
+	Dialogue  []string `json:"dialogue"`
+	Shop      *shop    `json:"shop,omitempty"`
+}
+
+type shop struct {
+	ID    string     `json:"id"`
+	Items []shopItem `json:"items"`
+}
+
+type shopItem struct {
+	ItemKey     string `json:"itemKey"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	PriceStars  int    `json:"priceStars"`
 }
 
 type clientMessage struct {
@@ -918,6 +942,39 @@ func loadMap(path string) (gameMap, error) {
 		}
 		if !isFacing(portal.TargetFacing) {
 			return gameMap{}, fmt.Errorf("map %q portal %q has invalid target facing", loaded.ID, portal.ID)
+		}
+	}
+	npcIDs := map[string]bool{}
+	for _, loadedNPC := range loaded.NPCs {
+		if loadedNPC.ID == "" || loadedNPC.Name == "" || len(loadedNPC.Dialogue) == 0 {
+			return gameMap{}, fmt.Errorf("map %q has an invalid npc", loaded.ID)
+		}
+		if npcIDs[loadedNPC.ID] {
+			return gameMap{}, fmt.Errorf("map %q has duplicate npc id %q", loaded.ID, loadedNPC.ID)
+		}
+		npcIDs[loadedNPC.ID] = true
+		if loadedNPC.Facing != "" && !isFacing(loadedNPC.Facing) {
+			return gameMap{}, fmt.Errorf("map %q npc %q has invalid facing", loaded.ID, loadedNPC.ID)
+		}
+		for _, line := range loadedNPC.Dialogue {
+			if strings.TrimSpace(line) == "" {
+				return gameMap{}, fmt.Errorf("map %q npc %q has blank dialogue", loaded.ID, loadedNPC.ID)
+			}
+		}
+		if loadedNPC.Shop != nil {
+			if loadedNPC.Shop.ID == "" || len(loadedNPC.Shop.Items) == 0 {
+				return gameMap{}, fmt.Errorf("map %q npc %q has an invalid shop", loaded.ID, loadedNPC.ID)
+			}
+			shopItemKeys := map[string]bool{}
+			for _, item := range loadedNPC.Shop.Items {
+				if item.ItemKey == "" || item.Name == "" || item.PriceStars < 1 {
+					return gameMap{}, fmt.Errorf("map %q npc %q has an invalid shop item", loaded.ID, loadedNPC.ID)
+				}
+				if shopItemKeys[item.ItemKey] {
+					return gameMap{}, fmt.Errorf("map %q npc %q has duplicate shop item %q", loaded.ID, loadedNPC.ID, item.ItemKey)
+				}
+				shopItemKeys[item.ItemKey] = true
+			}
 		}
 	}
 	return loaded, nil

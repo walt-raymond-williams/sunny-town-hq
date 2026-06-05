@@ -30,7 +30,10 @@ type app struct {
 	sunnyTownWebSocketURL  string
 }
 
-var errNoCookies = errors.New("no cookies available")
+var (
+	errInsufficientStars = errors.New("not enough stars")
+	errNoCookies         = errors.New("no cookies available")
+)
 
 type createAssignmentRequest struct {
 	Category       string `json:"category"`
@@ -99,6 +102,17 @@ type sunnyTownRewardEventResponse struct {
 	Accepted       bool `json:"accepted"`
 	Duplicate      bool `json:"duplicate"`
 	NewStarBalance int  `json:"new_star_balance"`
+}
+
+type shopPurchaseRequest struct {
+	ShopID   string `json:"shopId"`
+	ItemKey  string `json:"itemKey"`
+	Quantity int    `json:"quantity"`
+}
+
+type shopPurchaseResponse struct {
+	StarBalance int                      `json:"starBalance"`
+	Inventory   studentInventoryResponse `json:"inventory"`
 }
 
 type starRewardRequest struct {
@@ -186,6 +200,7 @@ func main() {
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
 	apiMux.HandleFunc("/api/student/inventory", app.handleStudentInventory)
+	apiMux.HandleFunc("/api/student/shop/purchase", app.handleStudentShopPurchase)
 	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	apiMux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
@@ -386,6 +401,42 @@ func (app *app) handleStudentInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, inventory)
+}
+
+func (app *app) handleStudentShopPurchase(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request shopPurchaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := app.purchaseStudentShopItem(r.Context(), user.ID, request)
+	if errors.Is(err, errInsufficientStars) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "not enough stars",
+		})
+		return
+	}
+	if err != nil {
+		log.Printf("purchase student shop item: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "shop purchase could not be completed",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
@@ -1124,6 +1175,91 @@ func (app *app) ensureStudentWallet(ctx context.Context, userID int64) (int, err
 		userID,
 	).Scan(&balance)
 	return balance, err
+}
+
+func (app *app) purchaseStudentShopItem(ctx context.Context, userID int64, request shopPurchaseRequest) (shopPurchaseResponse, error) {
+	request.ShopID = strings.TrimSpace(request.ShopID)
+	request.ItemKey = strings.TrimSpace(request.ItemKey)
+	if userID < 1 || request.Quantity < 1 {
+		return shopPurchaseResponse{}, errors.New("shop purchase is missing required fields")
+	}
+	if request.ShopID != "cookie-keeper-shop" || request.ItemKey != cookieInventoryKey {
+		return shopPurchaseResponse{}, errors.New("unsupported shop purchase")
+	}
+
+	totalPrice := 50 * request.Quantity
+	tx, err := app.db.Begin(ctx)
+	if err != nil {
+		return shopPurchaseResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(
+		ctx,
+		`insert into student_wallet (app_user_id) values ($1) on conflict (app_user_id) do nothing`,
+		userID,
+	); err != nil {
+		return shopPurchaseResponse{}, err
+	}
+
+	var starBalance int
+	err = tx.QueryRow(
+		ctx,
+		`
+			update student_wallet
+			set star_balance = star_balance - $2,
+				updated_at = now()
+			where app_user_id = $1
+				and star_balance >= $2
+			returning star_balance
+		`,
+		userID,
+		totalPrice,
+	).Scan(&starBalance)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return shopPurchaseResponse{}, errInsufficientStars
+	}
+	if err != nil {
+		return shopPurchaseResponse{}, err
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`
+			insert into student_star_ledger (
+				app_user_id,
+				event_id,
+				source,
+				delta,
+				metadata
+			)
+			values ($1, $2, 'shop_purchase', $3, jsonb_build_object('shop_id', $4, 'item_key', $5, 'quantity', $6))
+		`,
+		userID,
+		fmt.Sprintf("shop-purchase:%d:%d", userID, time.Now().UnixNano()),
+		-totalPrice,
+		request.ShopID,
+		request.ItemKey,
+		request.Quantity,
+	); err != nil {
+		return shopPurchaseResponse{}, err
+	}
+
+	if err := incrementStudentInventoryItem(ctx, tx, userID, request.ItemKey, request.Quantity); err != nil {
+		return shopPurchaseResponse{}, err
+	}
+	inventory, err := loadStudentInventory(ctx, tx, userID)
+	if err != nil {
+		return shopPurchaseResponse{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return shopPurchaseResponse{}, err
+	}
+
+	return shopPurchaseResponse{
+		StarBalance: starBalance,
+		Inventory:   inventory,
+	}, nil
 }
 
 func (app *app) commitSunnyTownReward(ctx context.Context, request sunnyTownRewardEventRequest) (sunnyTownRewardEventResponse, error) {

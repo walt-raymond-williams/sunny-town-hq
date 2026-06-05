@@ -29,6 +29,21 @@
       "targetFacing": "up"
     }
   ],
+  "npcs": [
+    {
+      "id": "mayor-sunny",
+      "name": "Mayor Sunny",
+      "x": 736,
+      "y": 512,
+      "facing": "down",
+      "spriteKey": "mayor",
+      "dialogue": [
+        "Welcome to Sunny Town.",
+        "That house to the south is shared by everyone who steps inside.",
+        "Stars stay in your wallet, but cookies live in your inventory."
+      ]
+    }
+  ],
   "blockedRects": [
     { "x": 0, "y": 0, "width": 1280, "height": 32 },
     { "x": 0, "y": 928, "width": 1280, "height": 32 },

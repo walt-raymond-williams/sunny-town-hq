@@ -1,14 +1,14 @@
 import { authJson } from './http'
 import type { InventoryItem, StudentInventory } from '../types/inventory'
 
-interface InventoryItemResponse {
+export interface InventoryItemResponse {
   key?: string
   name?: string
   description?: string
   quantity?: number
 }
 
-interface StudentInventoryResponse {
+export interface StudentInventoryResponse {
   items?: InventoryItemResponse[]
 }
 

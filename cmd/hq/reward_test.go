@@ -116,6 +116,102 @@ func TestFeedStudentPetRequiresCookieInventory(t *testing.T) {
 	}
 }
 
+func TestPurchaseStudentShopItemBuysCookie(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if _, err := app.db.Exec(ctx, "insert into student_wallet (app_user_id, star_balance) values (123, 125)"); err != nil {
+		t.Fatalf("seed wallet: %v", err)
+	}
+
+	response, err := app.purchaseStudentShopItem(ctx, 123, shopPurchaseRequest{
+		ShopID:   "cookie-keeper-shop",
+		ItemKey:  cookieInventoryKey,
+		Quantity: 1,
+	})
+	if err != nil {
+		t.Fatalf("purchase error = %v", err)
+	}
+	if response.StarBalance != 75 {
+		t.Fatalf("star balance = %d, want 75", response.StarBalance)
+	}
+	if len(response.Inventory.Items) != 1 || response.Inventory.Items[0].Key != cookieInventoryKey || response.Inventory.Items[0].Quantity != 1 {
+		t.Fatalf("inventory = %#v, want 1 cookie", response.Inventory)
+	}
+
+	var walletBalance int
+	var cookieQuantity int
+	var ledgerDelta int
+	if err := app.db.QueryRow(ctx, "select star_balance from student_wallet where app_user_id = 123").Scan(&walletBalance); err != nil {
+		t.Fatalf("load wallet: %v", err)
+	}
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select sii.quantity
+			from student_inventory_item sii
+			join inventory_item_type iit on iit.id = sii.item_type_id
+			where sii.app_user_id = 123 and iit.key = 'cookie'
+		`,
+	).Scan(&cookieQuantity); err != nil {
+		t.Fatalf("load cookie quantity: %v", err)
+	}
+	if err := app.db.QueryRow(ctx, "select delta from student_star_ledger where source = 'shop_purchase'").Scan(&ledgerDelta); err != nil {
+		t.Fatalf("load shop ledger: %v", err)
+	}
+	if walletBalance != 75 || cookieQuantity != 1 || ledgerDelta != -50 {
+		t.Fatalf("wallet=%d cookies=%d ledgerDelta=%d, want 75, 1, -50", walletBalance, cookieQuantity, ledgerDelta)
+	}
+}
+
+func TestPurchaseStudentShopItemRequiresStars(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if _, err := app.db.Exec(ctx, "insert into student_wallet (app_user_id, star_balance) values (123, 49)"); err != nil {
+		t.Fatalf("seed wallet: %v", err)
+	}
+
+	_, err := app.purchaseStudentShopItem(ctx, 123, shopPurchaseRequest{
+		ShopID:   "cookie-keeper-shop",
+		ItemKey:  cookieInventoryKey,
+		Quantity: 1,
+	})
+	if err != errInsufficientStars {
+		t.Fatalf("purchase error = %v, want errInsufficientStars", err)
+	}
+
+	var walletBalance int
+	var inventoryRows int
+	if err := app.db.QueryRow(ctx, "select star_balance from student_wallet where app_user_id = 123").Scan(&walletBalance); err != nil {
+		t.Fatalf("load wallet: %v", err)
+	}
+	if err := app.db.QueryRow(ctx, "select count(*) from student_inventory_item").Scan(&inventoryRows); err != nil {
+		t.Fatalf("count inventory rows: %v", err)
+	}
+	if walletBalance != 49 || inventoryRows != 0 {
+		t.Fatalf("wallet=%d inventoryRows=%d, want 49 and 0", walletBalance, inventoryRows)
+	}
+}
+
+func TestPurchaseStudentShopItemRejectsInvalidPurchase(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	invalidRequests := []shopPurchaseRequest{
+		{ShopID: "other-shop", ItemKey: cookieInventoryKey, Quantity: 1},
+		{ShopID: "cookie-keeper-shop", ItemKey: "star", Quantity: 1},
+		{ShopID: "cookie-keeper-shop", ItemKey: cookieInventoryKey, Quantity: 0},
+	}
+	for _, request := range invalidRequests {
+		if _, err := app.purchaseStudentShopItem(context.Background(), 123, request); err == nil {
+			t.Fatalf("purchase %#v succeeded, want error", request)
+		}
+	}
+}
+
 func testRewardApp(t *testing.T) (*app, func()) {
 	t.Helper()
 

@@ -21,6 +21,32 @@
       "targetFacing": "down"
     }
   ],
+  "npcs": [
+    {
+      "id": "cookie-keeper",
+      "name": "Cookie Keeper",
+      "x": 224,
+      "y": 256,
+      "facing": "down",
+      "spriteKey": "keeper",
+      "dialogue": [
+        "This room is part of Sunny Town too.",
+        "If another student walks through the same door, you will see them here.",
+        "Press E anytime to check your cookies."
+      ],
+      "shop": {
+        "id": "cookie-keeper-shop",
+        "items": [
+          {
+            "itemKey": "cookie",
+            "name": "Cookie",
+            "description": "A treat for your pet.",
+            "priceStars": 50
+          }
+        ]
+      }
+    }
+  ],
   "blockedRects": [
     { "x": 0, "y": 0, "width": 640, "height": 32 },
     { "x": 0, "y": 448, "width": 304, "height": 32 },

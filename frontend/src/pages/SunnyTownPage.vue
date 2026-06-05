@@ -2,11 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { createSunnyTownSession } from '../api/sunnyTownApi'
+import { purchaseShopItem } from '../api/shopApi'
 import { useStudentInventoryStore } from '../stores/studentInventory'
 import type {
   SunnyTownCollectible,
   SunnyTownMap,
   SunnyTownMoveMessage,
+  SunnyTownNpc,
   SunnyTownPlayer,
   SunnyTownServerMessage,
   SunnyTownSession,
@@ -26,6 +28,7 @@ const playerSize = 28
 const moveSendIntervalMs = 50
 const remoteInterpolationDelayMs = 150
 const maxRemoteHistoryFrames = 12
+const npcInteractionRadius = 54
 const movementInputEventOptions = { capture: true }
 
 const router = useRouter()
@@ -42,6 +45,14 @@ const connected = ref(false)
 const starBalance = ref(0)
 const gameToast = ref('')
 const inventoryOpen = ref(false)
+const nearbyNpc = ref<SunnyTownNpc | null>(null)
+const activeDialogueNpc = ref<SunnyTownNpc | null>(null)
+const activeDialogueLineIndex = ref(0)
+const activeShopNpc = ref<SunnyTownNpc | null>(null)
+const shopOpen = ref(false)
+const shopError = ref('')
+const shopNotice = ref('')
+const isPurchasing = ref(false)
 
 const pressedDirections = new Set<MovementDirection>()
 const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
@@ -55,6 +66,14 @@ let lastSentMoveJson = ''
 let lastRenderTime = 0
 
 const playerCount = computed(() => players.value.length)
+const activeDialogueLine = computed(() => activeDialogueNpc.value?.dialogue[activeDialogueLineIndex.value] || '')
+const dialogueProgress = computed(() => {
+  if (!activeDialogueNpc.value) {
+    return ''
+  }
+  return `${activeDialogueLineIndex.value + 1}/${activeDialogueNpc.value.dialogue.length}`
+})
+const shopItems = computed(() => activeShopNpc.value?.shop?.items || [])
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown, movementInputEventOptions)
@@ -171,6 +190,19 @@ function handleKeyDown(event: KeyboardEvent) {
     toggleInventory()
     return
   }
+  if (event.code === 'Escape') {
+    if (activeDialogueNpc.value || activeShopNpc.value || inventoryOpen.value) {
+      event.preventDefault()
+      closeNpcOverlays()
+      inventoryOpen.value = false
+    }
+    return
+  }
+  if (event.code === 'KeyF' || event.key.toLowerCase() === 'f') {
+    event.preventDefault()
+    interactWithNearbyNpc()
+    return
+  }
 
   const direction = movementDirectionForEvent(event)
   if (!direction) {
@@ -224,6 +256,7 @@ function applyMapState(message: SunnyTownServerMessage) {
     activeMap.value = {
       ...message.map,
       portals: message.map.portals || [],
+      npcs: message.map.npcs || [],
       blockedRects: message.map.blockedRects || [],
       starSpawns: message.map.starSpawns || [],
       spawns: message.map.spawns || [],
@@ -236,8 +269,93 @@ function applyMapState(message: SunnyTownServerMessage) {
   renderedSelf = null
   lastSentMoveJson = ''
   pressedDirections.clear()
+  closeNpcOverlays()
+  nearbyNpc.value = null
   syncLocalSelfFromSnapshot()
   draw()
+}
+
+function interactWithNearbyNpc() {
+  if (!activeMap.value) {
+    return
+  }
+  if (activeDialogueNpc.value) {
+    if (activeDialogueLineIndex.value < activeDialogueNpc.value.dialogue.length - 1) {
+      activeDialogueLineIndex.value++
+    } else {
+      closeDialogue()
+    }
+    return
+  }
+
+  const npc = nearestNpcToSelf()
+  if (!npc) {
+    return
+  }
+  if (npc.shop) {
+    openShopMenu(npc)
+    return
+  }
+  activeDialogueNpc.value = npc
+  activeDialogueLineIndex.value = 0
+}
+
+function closeDialogue() {
+  activeDialogueNpc.value = null
+  activeDialogueLineIndex.value = 0
+}
+
+function openShopMenu(npc: SunnyTownNpc) {
+  activeDialogueNpc.value = null
+  activeDialogueLineIndex.value = 0
+  activeShopNpc.value = npc
+  shopOpen.value = false
+  shopError.value = ''
+  shopNotice.value = ''
+}
+
+async function openTrade() {
+  if (!activeShopNpc.value?.shop) {
+    return
+  }
+  shopOpen.value = true
+  shopError.value = ''
+  shopNotice.value = ''
+  await inventoryStore.loadInventory()
+}
+
+function closeNpcOverlays() {
+  closeDialogue()
+  activeShopNpc.value = null
+  shopOpen.value = false
+  shopError.value = ''
+  shopNotice.value = ''
+  isPurchasing.value = false
+}
+
+async function buyShopItem(itemKey: string) {
+  const shop = activeShopNpc.value?.shop
+  if (!shop || isPurchasing.value) {
+    return
+  }
+  isPurchasing.value = true
+  shopError.value = ''
+  shopNotice.value = ''
+
+  try {
+    const purchase = await purchaseShopItem({
+      shopId: shop.id,
+      itemKey,
+      quantity: 1,
+    })
+    starBalance.value = purchase.starBalance
+    inventoryStore.setItems(purchase.inventory.items)
+    shopNotice.value = 'Purchased.'
+  } catch (caught) {
+    shopError.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    isPurchasing.value = false
+  }
 }
 
 function refreshLocalMovementState() {
@@ -285,6 +403,7 @@ function renderLoop() {
   const deltaSeconds = lastRenderTime ? (now - lastRenderTime) / 1000 : 0
   lastRenderTime = now
   predictSelf(deltaSeconds)
+  refreshNpcInteractionState()
   draw()
   animationFrame = window.requestAnimationFrame(renderLoop)
 }
@@ -332,9 +451,42 @@ function draw() {
       drawCollectible(context, collectible, cameraX, cameraY)
     }
   }
+  for (const npc of map.npcs) {
+    drawNpc(context, npc, cameraX, cameraY)
+  }
   for (const player of renderedPlayers) {
     drawPlayer(context, player, cameraX, cameraY)
   }
+}
+
+function refreshNpcInteractionState() {
+  const nextNearbyNpc = nearestNpcToSelf()
+  nearbyNpc.value = nextNearbyNpc
+  if (activeDialogueNpc.value && nextNearbyNpc?.id !== activeDialogueNpc.value.id) {
+    closeDialogue()
+  }
+  if (activeShopNpc.value && nextNearbyNpc?.id !== activeShopNpc.value.id) {
+    closeNpcOverlays()
+  }
+}
+
+function nearestNpcToSelf(): SunnyTownNpc | null {
+  const map = activeMap.value
+  const self = localSelf || players.value.find((player) => player.id === selfId.value)
+  if (!map || !self) {
+    return null
+  }
+
+  let nearest: SunnyTownNpc | null = null
+  let nearestDistance = npcInteractionRadius
+  for (const npc of map.npcs) {
+    const distance = Math.hypot(self.x - npc.x, self.y - npc.y)
+    if (distance <= nearestDistance) {
+      nearest = npc
+      nearestDistance = distance
+    }
+  }
+  return nearest
 }
 
 function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
@@ -644,6 +796,44 @@ function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, 
   context.fillText(player.displayName, x, y - 24)
 }
 
+function drawNpc(context: CanvasRenderingContext2D, npc: SunnyTownNpc, cameraX: number, cameraY: number) {
+  const x = npc.x - cameraX
+  const y = npc.y - cameraY
+  const isNearby = nearbyNpc.value?.id === npc.id
+
+  context.fillStyle = 'rgba(0, 0, 0, 0.18)'
+  context.beginPath()
+  context.ellipse(x, y + 16, 18, 7, 0, 0, Math.PI * 2)
+  context.fill()
+
+  context.fillStyle = npc.spriteKey === 'keeper' ? '#8b4f9f' : '#b96b4f'
+  context.beginPath()
+  context.arc(x, y, 16, 0, Math.PI * 2)
+  context.fill()
+
+  context.fillStyle = '#f7d7b5'
+  context.beginPath()
+  context.arc(x, y - 4, 9, 0, Math.PI * 2)
+  context.fill()
+
+  context.fillStyle = '#17212b'
+  context.beginPath()
+  context.arc(x - 3, y - 6, 1.5, 0, Math.PI * 2)
+  context.arc(x + 3, y - 6, 1.5, 0, Math.PI * 2)
+  context.fill()
+
+  context.strokeStyle = isNearby ? '#f1d28f' : 'rgba(255, 255, 255, 0.38)'
+  context.lineWidth = isNearby ? 3 : 2
+  context.beginPath()
+  context.arc(x, y, 19, 0, Math.PI * 2)
+  context.stroke()
+
+  context.fillStyle = '#17212b'
+  context.font = '700 12px Inter, sans-serif'
+  context.textAlign = 'center'
+  context.fillText(npc.name, x, y - 28)
+}
+
 function drawCollectible(
   context: CanvasRenderingContext2D,
   collectible: SunnyTownCollectible,
@@ -752,7 +942,86 @@ function backToPet() {
       </div>
       <div class="sunny-town-help">
         <v-icon icon="mdi-keyboard" size="small" />
-        <span>Move with arrow keys or WASD - E inventory</span>
+        <span>Move with arrow keys or WASD - E inventory - F talk</span>
+      </div>
+      <div v-if="nearbyNpc && !activeDialogueNpc && !inventoryOpen" class="sunny-town-talk-hint">
+        <v-icon icon="mdi-chat" size="small" />
+        <span>F {{ nearbyNpc.name }}</span>
+      </div>
+      <div v-if="activeDialogueNpc" class="sunny-town-dialogue" role="dialog" :aria-label="activeDialogueNpc.name">
+        <div class="sunny-town-dialogue__header">
+          <strong>{{ activeDialogueNpc.name }}</strong>
+          <span>{{ dialogueProgress }}</span>
+        </div>
+        <p>{{ activeDialogueLine }}</p>
+        <div class="sunny-town-dialogue__footer">
+          <span>F continue</span>
+          <v-btn icon="mdi-close" size="x-small" variant="text" @click="closeDialogue" />
+        </div>
+      </div>
+      <div v-if="activeShopNpc && !shopOpen" class="sunny-town-npc-menu" role="dialog" :aria-label="activeShopNpc.name">
+        <strong>{{ activeShopNpc.name }}</strong>
+        <p>{{ activeShopNpc.dialogue[0] }}</p>
+        <div class="sunny-town-npc-menu__actions">
+          <v-btn color="warning" prepend-icon="mdi-store" variant="flat" @click="openTrade">
+            Trade
+          </v-btn>
+          <v-btn prepend-icon="mdi-close" variant="tonal" @click="closeNpcOverlays">
+            Exit
+          </v-btn>
+        </div>
+      </div>
+      <div v-if="activeShopNpc && shopOpen" class="sunny-town-shop" role="dialog" :aria-label="`${activeShopNpc.name} shop`">
+        <div class="sunny-town-shop__header">
+          <div>
+            <strong>{{ activeShopNpc.name }}</strong>
+            <span>{{ starBalance }} stars</span>
+          </div>
+          <v-btn icon="mdi-close" size="x-small" variant="text" @click="closeNpcOverlays" />
+        </div>
+        <v-alert v-if="shopError" class="mb-3" density="compact" type="error" variant="tonal">
+          {{ shopError }}
+        </v-alert>
+        <v-alert v-if="shopNotice" class="mb-3" density="compact" type="success" variant="tonal">
+          {{ shopNotice }}
+        </v-alert>
+        <div class="sunny-town-shop__columns">
+          <section class="sunny-town-shop__column" aria-label="Your inventory">
+            <h2>Your Inventory</h2>
+            <div v-if="inventoryStore.items.length === 0" class="sunny-town-shop__empty">
+              Nothing here yet.
+            </div>
+            <div v-for="item in inventoryStore.items" :key="item.key" class="sunny-town-shop__item">
+              <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
+              <div>
+                <p>{{ item.name }}</p>
+                <small>{{ item.description }}</small>
+              </div>
+              <strong>{{ item.quantity }}</strong>
+            </div>
+          </section>
+          <section class="sunny-town-shop__column" aria-label="Shop inventory">
+            <h2>Shop Inventory</h2>
+            <div v-for="item in shopItems" :key="item.itemKey" class="sunny-town-shop__item">
+              <span class="inventory-item__icon" :class="`inventory-item__icon--${item.itemKey}`" aria-hidden="true" />
+              <div>
+                <p>{{ item.name }}</p>
+                <small>{{ item.description }}</small>
+                <small>{{ item.priceStars }} stars</small>
+              </div>
+              <v-btn
+                color="warning"
+                :disabled="starBalance < item.priceStars || isPurchasing"
+                :loading="isPurchasing"
+                size="small"
+                variant="flat"
+                @click="buyShopItem(item.itemKey)"
+              >
+                Buy
+              </v-btn>
+            </div>
+          </section>
+        </div>
       </div>
       <div v-if="inventoryOpen" class="sunny-town-inventory" role="dialog" aria-label="Inventory">
         <div class="sunny-town-inventory__header">

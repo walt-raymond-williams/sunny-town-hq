@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -26,7 +27,15 @@ type inventoryQuerier interface {
 }
 
 func (app *app) loadStudentInventory(ctx context.Context, userID int64) (studentInventoryResponse, error) {
-	rows, err := app.db.Query(
+	return loadStudentInventory(ctx, app.db, userID)
+}
+
+type inventoryLoader interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func loadStudentInventory(ctx context.Context, querier inventoryLoader, userID int64) (studentInventoryResponse, error) {
+	rows, err := querier.Query(
 		ctx,
 		`
 			select iit.key,

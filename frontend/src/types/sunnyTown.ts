@@ -35,6 +35,29 @@ export interface SunnyTownPortal {
   targetFacing: SunnyTownPlayer['facing']
 }
 
+export interface SunnyTownNpc {
+  id: string
+  name: string
+  x: number
+  y: number
+  facing: SunnyTownPlayer['facing']
+  spriteKey: string
+  dialogue: string[]
+  shop?: SunnyTownShop
+}
+
+export interface SunnyTownShop {
+  id: string
+  items: SunnyTownShopItem[]
+}
+
+export interface SunnyTownShopItem {
+  itemKey: string
+  name: string
+  description: string
+  priceStars: number
+}
+
 export interface SunnyTownMap {
   id: string
   name: string
@@ -45,6 +68,7 @@ export interface SunnyTownMap {
   blockedRects: Array<{ x: number; y: number; width: number; height: number }>
   starSpawns: Array<{ x: number; y: number }>
   portals: SunnyTownPortal[]
+  npcs: SunnyTownNpc[]
 }
 
 export interface SunnyTownCollectible {

@@ -222,8 +222,29 @@ func TestWorldTransfersPlayerThroughPortal(t *testing.T) {
 		if message.Type != "map_changed" || message.MapID != "test-house" || message.Map == nil {
 			t.Fatalf("transition message = %#v", message)
 		}
+		if len(message.Map.NPCs) != 1 || message.Map.NPCs[0].ID != "indoor-npc" {
+			t.Fatalf("transition npcs = %#v, want indoor-npc", message.Map.NPCs)
+		}
 	default:
 		t.Fatal("expected map_changed message")
+	}
+}
+
+func TestJoinHelloIncludesMapNPCs(t *testing.T) {
+	room := testRoom(testMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42))
+
+	select {
+	case message := <-client.send:
+		if message.Type != "hello" || message.Map == nil {
+			t.Fatalf("hello message = %#v", message)
+		}
+		if len(message.Map.NPCs) != 1 || message.Map.NPCs[0].ID != "guide" {
+			t.Fatalf("hello npcs = %#v, want guide", message.Map.NPCs)
+		}
+	default:
+		t.Fatal("expected hello message")
 	}
 }
 
@@ -244,6 +265,35 @@ func TestWorldSnapshotsStayWithinCurrentCell(t *testing.T) {
 	indoorSnapshots := world.rooms["test-house"].snapshotsLocked()
 	if len(indoorSnapshots) != 1 || indoorSnapshots[0].ID != "42" {
 		t.Fatalf("indoor snapshots = %#v, want only player 42", indoorSnapshots)
+	}
+}
+
+func TestMapNPCsStayScopedToCurrentCell(t *testing.T) {
+	world := testWorld(outdoorTestMap(), indoorTestMap())
+	client := testClient(nil, "42")
+	world.join(client, testClaims(42))
+
+	select {
+	case message := <-client.send:
+		if message.Map == nil || len(message.Map.NPCs) != 1 || message.Map.NPCs[0].ID != "outdoor-npc" {
+			t.Fatalf("outdoor hello npcs = %#v, want outdoor-npc", message.Map)
+		}
+	default:
+		t.Fatal("expected hello message")
+	}
+
+	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "down", true, time.Now())
+
+	select {
+	case message := <-client.send:
+		if message.Type != "map_changed" || message.Map == nil {
+			t.Fatalf("transition message = %#v", message)
+		}
+		if len(message.Map.NPCs) != 1 || message.Map.NPCs[0].ID != "indoor-npc" {
+			t.Fatalf("indoor map npcs = %#v, want indoor-npc", message.Map.NPCs)
+		}
+	default:
+		t.Fatal("expected map_changed message")
 	}
 }
 
@@ -320,6 +370,58 @@ func TestLoadMapsRejectsUnknownPortalTarget(t *testing.T) {
 	}
 }
 
+func TestLoadMapsAcceptsNPCDefinitions(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"Guide","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."]}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	maps, err := loadMaps(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(maps["one"].NPCs) != 1 || maps["one"].NPCs[0].ID != "guide" {
+		t.Fatalf("loaded npcs = %#v, want guide", maps["one"].NPCs)
+	}
+}
+
+func TestLoadMapsRejectsDuplicateNPCIDs(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"Guide","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."]},{"id":"guide","name":"Guide Again","x":96,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hi."]}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected duplicate npc ID to be rejected")
+	}
+}
+
+func TestLoadMapsRejectsInvalidNPCs(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."]}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected invalid npc to be rejected")
+	}
+}
+
+func TestLoadMapsRejectsInvalidNPCShop(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"Guide","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."],"shop":{"id":"guide-shop","items":[{"itemKey":"cookie","name":"Cookie","description":"A treat.","priceStars":0}]}}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected invalid npc shop to be rejected")
+	}
+}
+
 func testClient(room *room, id string) *client {
 	client := &client{
 		send: make(chan serverMessage, 4),
@@ -366,6 +468,15 @@ func testMap() gameMap {
 		Width:    10,
 		Height:   10,
 		Spawns:   []point{{X: 100, Y: 100}},
+		NPCs: []npc{{
+			ID:        "guide",
+			Name:      "Guide",
+			X:         160,
+			Y:         160,
+			Facing:    "down",
+			SpriteKey: "guide",
+			Dialogue:  []string{"Hello."},
+		}},
 	}
 }
 
@@ -382,6 +493,15 @@ func outdoorTestMap() gameMap {
 		TargetY:      160,
 		TargetFacing: "up",
 	}}
+	gameMap.NPCs = []npc{{
+		ID:        "outdoor-npc",
+		Name:      "Outdoor NPC",
+		X:         140,
+		Y:         140,
+		Facing:    "down",
+		SpriteKey: "guide",
+		Dialogue:  []string{"Outside."},
+	}}
 	return gameMap
 }
 
@@ -393,5 +513,23 @@ func indoorTestMap() gameMap {
 		Width:    10,
 		Height:   10,
 		Spawns:   []point{{X: 160, Y: 160}},
+		NPCs: []npc{{
+			ID:        "indoor-npc",
+			Name:      "Indoor NPC",
+			X:         200,
+			Y:         200,
+			Facing:    "down",
+			SpriteKey: "keeper",
+			Dialogue:  []string{"Inside."},
+			Shop: &shop{
+				ID: "cookie-keeper-shop",
+				Items: []shopItem{{
+					ItemKey:     "cookie",
+					Name:        "Cookie",
+					Description: "A treat.",
+					PriceStars:  50,
+				}},
+			},
+		}},
 	}
 }
