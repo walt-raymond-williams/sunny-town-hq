@@ -2,6 +2,42 @@
 
 This plan tracks the repository restructure work identified in the project review. It is intentionally split so Sunny Town and general collaboration improvements can proceed while AI service work happens separately.
 
+## Resume Snapshot
+
+Last updated: 2026-06-06.
+
+Current state:
+
+- All changes through `3ef39c5 Split Sunny Town client gameplay` are committed.
+- `git status --short` should show only known untracked local logs unless new work has started:
+  - `hq-local.err.log`
+  - `hq-local.out.log`
+- Phase 2 preparatory file splits are complete. `cmd/sunny-town/main.go` is now a thin 143-line entrypoint plus `room.step`, `newRewardRunID`, and `validateJoinTarget`.
+- Current Sunny Town command-package file shape:
+  - `cmd/sunny-town/main.go`
+  - `cmd/sunny-town/server.go`
+  - `cmd/sunny-town/server_workers.go`
+  - `cmd/sunny-town/client_io.go`
+  - `cmd/sunny-town/client_gameplay.go`
+  - `cmd/sunny-town/world_types.go`
+  - `cmd/sunny-town/world_lifecycle.go`
+  - `cmd/sunny-town/world_movement.go`
+  - `cmd/sunny-town/world_objects.go`
+  - `cmd/sunny-town/world_snapshots.go`
+  - `cmd/sunny-town/room_test.go`
+
+Recommended next work:
+
+1. Promote the package-local world files into `internal/sunnytown/world`.
+2. Promote server/client wiring into `internal/sunnytown/server`.
+3. Update Sunny Town tests so world behavior tests live with or import the new world package.
+4. Keep each promotion behavior-preserving and run:
+
+```powershell
+go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth
+go test ./...
+```
+
 ## Coordination Rules
 
 - Do not touch AI service implementation while another agent is refactoring it.
@@ -72,7 +108,7 @@ Tasks:
 Verification:
 
 - [x] `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth`
-- [ ] `go test ./...`
+- [x] `go test ./...`
 
 ## Phase 3: Sunny Town Frontend Split
 
