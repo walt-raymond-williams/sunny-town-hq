@@ -129,7 +129,7 @@ Slice plan:
 - [x] Slice 3.4: Extract canvas rendering lifecycle into `frontend/src/composables/useSunnyTownRenderer.ts` and canvas DOM/events into `SunnyTownCanvas.vue`.
 - [x] Slice 3.5: Extract HUD/status and hotbar controls into `SunnyTownHud.vue`.
 - [x] Slice 3.6: Extract inventory and crafting panels into `SunnyTownInventoryPanel.vue`.
-- [ ] Slice 3.7: Extract dialogue, shop, and schoolwork panels into `SunnyTownDialogue.vue`, `SunnyTownShop.vue`, and `SunnyTownSchoolworkPanel.vue`.
+- [x] Slice 3.7: Extract dialogue, shop, and schoolwork panels into `SunnyTownDialogue.vue`, `SunnyTownShop.vue`, and `SunnyTownSchoolworkPanel.vue`.
 - [ ] Slice 3.8: Final Phase 3 review pass: remove dead code, verify layout, update docs, and commit the final frontend split.
 
 Original task coverage:
@@ -139,8 +139,8 @@ Original task coverage:
 - [x] Extract canvas rendering.
 - [x] Extract HUD and status UI.
 - [x] Extract inventory and crafting panels.
-- [ ] Extract dialogue and shop panels.
-- [ ] Extract schoolwork panel.
+- [x] Extract dialogue and shop panels.
+- [x] Extract schoolwork panel.
 - [x] Update router import if the page moves from `pages/` to `features/sunny-town/`.
 
 Verification:
@@ -294,3 +294,5 @@ Verification:
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.5. Vite still reported the large chunk warning.
 - 2026-06-06: Phase 3 Slice 3.6 extracted Sunny Town inventory, equipment, hotbar editor, and crafting tray into `SunnyTownInventoryPanel.vue`.
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.6. Vite still reported the large chunk warning.
+- 2026-06-06: Phase 3 Slice 3.7 extracted Sunny Town dialogue, shop, and schoolwork overlays into focused components.
+- 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.7. Vite still reported the large chunk warning.

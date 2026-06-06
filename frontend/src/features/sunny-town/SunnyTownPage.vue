@@ -31,8 +31,11 @@ import type {
   SunnyTownWorldObject,
 } from '../../types/sunnyTown'
 import SunnyTownCanvas from './SunnyTownCanvas.vue'
+import SunnyTownDialogue from './SunnyTownDialogue.vue'
 import SunnyTownHud from './SunnyTownHud.vue'
 import SunnyTownInventoryPanel from './SunnyTownInventoryPanel.vue'
+import SunnyTownSchoolworkPanel from './SunnyTownSchoolworkPanel.vue'
+import SunnyTownShop from './SunnyTownShop.vue'
 
 interface ToolUseAnimation {
   toolKey: string
@@ -123,7 +126,6 @@ const dialogueProgress = computed(() => {
   }
   return `${activeDialogueLineIndex.value + 1}/${activeDialogueNpc.value.dialogue.length}`
 })
-const shopItems = computed(() => activeShopNpc.value?.shop?.items || [])
 const stoneBlockQuantity = computed(() => inventoryStore.items.find((item) => item.key === 'stone_block')?.quantity || 0)
 const selectedHotbarSlot = computed(() => inventoryStore.hotbarSlots[selectedHotbarIndex.value] || null)
 const selectedHotbarItem = computed(() => selectedHotbarSlot.value?.item || null)
@@ -1500,160 +1502,40 @@ function backToPet() {
         <v-icon icon="mdi-chat" size="small" />
         <span>F {{ nearbyNpc.name }}</span>
       </div>
-      <div v-if="activeDialogueNpc" class="sunny-town-dialogue" role="dialog" :aria-label="activeDialogueNpc.name">
-        <div class="sunny-town-dialogue__header">
-          <strong>{{ activeDialogueNpc.name }}</strong>
-          <span>{{ dialogueProgress }}</span>
-        </div>
-        <p>{{ activeDialogueLine }}</p>
-        <div class="sunny-town-dialogue__footer">
-          <span>F continue</span>
-          <v-btn icon="mdi-close" size="x-small" variant="text" @click="closeDialogue" />
-        </div>
-      </div>
-      <div v-if="activeShopNpc && !shopOpen" class="sunny-town-npc-menu" role="dialog" :aria-label="activeShopNpc.name">
-        <strong>{{ activeShopNpc.name }}</strong>
-        <p>{{ activeShopNpc.dialogue[0] }}</p>
-        <div class="sunny-town-npc-menu__actions">
-          <v-btn color="warning" prepend-icon="mdi-store" variant="flat" @click="openTrade">
-            Trade
-          </v-btn>
-          <v-btn prepend-icon="mdi-close" variant="tonal" @click="closeNpcOverlays">
-            Exit
-          </v-btn>
-        </div>
-      </div>
-      <div
-        v-if="activeSchoolworkNpc && !schoolworkOpen"
-        class="sunny-town-npc-menu"
-        role="dialog"
-        :aria-label="activeSchoolworkNpc.name"
-      >
-        <strong>{{ activeSchoolworkNpc.name }}</strong>
-        <p>{{ activeSchoolworkNpc.dialogue[0] }}</p>
-        <div class="sunny-town-npc-menu__actions">
-          <v-btn color="primary" prepend-icon="mdi-school" variant="flat" @click="startSchoolwork">
-            Do School Work
-          </v-btn>
-          <v-btn prepend-icon="mdi-close" variant="tonal" @click="closeNpcOverlays">
-            Exit
-          </v-btn>
-        </div>
-      </div>
-      <div
-        v-if="activeSchoolworkNpc && schoolworkOpen"
-        class="sunny-town-schoolwork"
-        role="dialog"
-        :aria-label="`${activeSchoolworkNpc.name} school work`"
-      >
-        <div class="sunny-town-schoolwork__header">
-          <div>
-            <strong>{{ activeSchoolworkNpc.name }}</strong>
-            <span>School Work</span>
-          </div>
-          <v-btn icon="mdi-close" size="x-small" variant="text" @click="closeNpcOverlays" />
-        </div>
-        <v-progress-linear
-          v-if="isLoadingSchoolwork"
-          class="mb-3"
-          color="primary"
-          indeterminate
-        />
-        <v-alert v-if="schoolworkError" class="mb-3" density="compact" type="error" variant="tonal">
-          {{ schoolworkError }}
-        </v-alert>
-        <v-alert v-if="schoolworkNotice" class="mb-3" density="compact" type="success" variant="tonal">
-          {{ schoolworkNotice }}
-        </v-alert>
-        <v-alert
-          v-if="!isLoadingSchoolwork && !schoolworkAssignment && !schoolworkError"
-          density="compact"
-          type="success"
-          variant="tonal"
-        >
-          You have finished all assignments.
-        </v-alert>
-        <v-form
-          v-if="schoolworkAssignment"
-          class="sunny-town-schoolwork__form"
-          @submit.prevent="submitSchoolworkAnswer"
-        >
-          <div class="sunny-town-schoolwork__question">
-            <v-chip color="primary" size="small" variant="tonal">
-              {{ schoolworkAssignment.category }}
-            </v-chip>
-            <p>{{ schoolworkAssignment.prompt }}</p>
-          </div>
-          <v-textarea
-            v-model="schoolworkAnswer"
-            label="Your answer"
-            rows="4"
-            variant="outlined"
-          />
-          <v-btn
-            :disabled="schoolworkAnswer.trim().length === 0"
-            :loading="isSubmittingSchoolwork"
-            color="primary"
-            prepend-icon="mdi-send"
-            type="submit"
-            variant="flat"
-          >
-            Submit Answer
-          </v-btn>
-        </v-form>
-      </div>
-      <div v-if="activeShopNpc && shopOpen" class="sunny-town-shop" role="dialog" :aria-label="`${activeShopNpc.name} shop`">
-        <div class="sunny-town-shop__header">
-          <div>
-            <strong>{{ activeShopNpc.name }}</strong>
-            <span>{{ starBalance }} stars</span>
-          </div>
-          <v-btn icon="mdi-close" size="x-small" variant="text" @click="closeNpcOverlays" />
-        </div>
-        <v-alert v-if="shopError" class="mb-3" density="compact" type="error" variant="tonal">
-          {{ shopError }}
-        </v-alert>
-        <v-alert v-if="shopNotice" class="mb-3" density="compact" type="success" variant="tonal">
-          {{ shopNotice }}
-        </v-alert>
-        <div class="sunny-town-shop__columns">
-          <section class="sunny-town-shop__column" aria-label="Your inventory">
-            <h2>Your Inventory</h2>
-            <div v-if="inventoryStore.items.length === 0" class="sunny-town-shop__empty">
-              Nothing here yet.
-            </div>
-            <div v-for="item in inventoryStore.items" :key="item.key" class="sunny-town-shop__item">
-              <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
-              <div>
-                <p>{{ item.name }}</p>
-                <small>{{ item.description }}</small>
-              </div>
-              <strong>{{ item.quantity }}</strong>
-            </div>
-          </section>
-          <section class="sunny-town-shop__column" aria-label="Shop inventory">
-            <h2>Shop Inventory</h2>
-            <div v-for="item in shopItems" :key="item.itemKey" class="sunny-town-shop__item">
-              <span class="inventory-item__icon" :class="`inventory-item__icon--${item.itemKey}`" aria-hidden="true" />
-              <div>
-                <p>{{ item.name }}</p>
-                <small>{{ item.description }}</small>
-                <small>{{ item.priceStars }} stars</small>
-              </div>
-              <v-btn
-                color="warning"
-                :disabled="starBalance < item.priceStars || isPurchasing"
-                :loading="isPurchasing"
-                size="small"
-                variant="flat"
-                @click="buyShopItem(item.itemKey)"
-              >
-                Buy
-              </v-btn>
-            </div>
-          </section>
-        </div>
-      </div>
+      <SunnyTownDialogue
+        v-if="activeDialogueNpc"
+        :line="activeDialogueLine"
+        :npc="activeDialogueNpc"
+        :progress="dialogueProgress"
+        @close="closeDialogue"
+      />
+      <SunnyTownShop
+        v-if="activeShopNpc"
+        :is-purchasing="isPurchasing"
+        :npc="activeShopNpc"
+        :open="shopOpen"
+        :shop-error="shopError"
+        :shop-notice="shopNotice"
+        :star-balance="starBalance"
+        @buy="buyShopItem"
+        @close="closeNpcOverlays"
+        @open-trade="openTrade"
+      />
+      <SunnyTownSchoolworkPanel
+        v-if="activeSchoolworkNpc"
+        :answer="schoolworkAnswer"
+        :assignment="schoolworkAssignment"
+        :is-loading="isLoadingSchoolwork"
+        :is-submitting="isSubmittingSchoolwork"
+        :notice="schoolworkNotice"
+        :npc="activeSchoolworkNpc"
+        :open="schoolworkOpen"
+        :schoolwork-error="schoolworkError"
+        @close="closeNpcOverlays"
+        @start="startSchoolwork"
+        @submit="submitSchoolworkAnswer"
+        @update-answer="schoolworkAnswer = $event"
+      />
       <SunnyTownInventoryPanel
         v-if="inventoryOpen"
         :crafting-panel-open="craftingPanelOpen"
