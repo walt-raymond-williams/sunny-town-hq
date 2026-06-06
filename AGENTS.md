@@ -12,6 +12,7 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 - Sunny Town realtime service code lives in `cmd/sunny-town`.
 - Sunny Town map JSON lives in `sunny-town/maps`.
 - Vue frontend code lives in `frontend/src`.
+- Project docs, plans, setup notes, and testing guidance live in `docs/`.
 - Production frontend assets are emitted into `web/` by `npm run build`.
 - Integration/runtime configuration lives under `deploy/`.
 
