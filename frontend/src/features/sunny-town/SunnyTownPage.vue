@@ -2,8 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getNextStudentAssignment, submitStudentAnswer } from '../../api/studentAssignmentsApi'
-import { createSunnyTownSession } from '../../api/sunnyTownApi'
 import { purchaseShopItem } from '../../api/shopApi'
+import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { Assignment } from '../../types/assignment'
 import type { EquipmentSlot } from '../../types/inventory'
@@ -18,7 +18,6 @@ import type {
   SunnyTownPlayer,
   SunnyTownResourceNode,
   SunnyTownServerMessage,
-  SunnyTownSession,
   SunnyTownToolUseMessage,
   SunnyTownWorldObject,
 } from '../../types/sunnyTown'
@@ -46,14 +45,11 @@ const remoteInterpolationDelayMs = 150
 const maxRemoteHistoryFrames = 12
 const npcInteractionRadius = 54
 const toolUseDurationMs = 360
-const reconnectInitialDelayMs = 500
-const reconnectMaxDelayMs = 8_000
 const movementInputEventOptions = { capture: true }
 
 const router = useRouter()
 const inventoryStore = useStudentInventoryStore()
 const canvas = ref<HTMLCanvasElement | null>(null)
-const session = ref<SunnyTownSession | null>(null)
 const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
 const collectibles = ref<SunnyTownCollectible[]>([])
@@ -61,9 +57,6 @@ const resourceNodes = ref<SunnyTownResourceNode[]>([])
 const placedObjects = ref<SunnyTownPlacedObject[]>([])
 const worldObjects = ref<SunnyTownWorldObject[]>([])
 const selfId = ref('')
-const status = ref('Entering Sunny Town...')
-const error = ref('')
-const connected = ref(false)
 const starBalance = ref(0)
 const gameToast = ref('')
 const inventoryOpen = ref(false)
@@ -92,16 +85,29 @@ const pressedDirections = new Set<MovementDirection>()
 const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
 let localSelf: SunnyTownPlayer | null = null
 let renderedSelf: SunnyTownPlayer | null = null
-let socket: WebSocket | null = null
 let animationFrame = 0
 let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
 let lastRenderTime = 0
 let activeToolUse: ToolUseAnimation | null = null
-let reconnectTimer = 0
-let reconnectAttempts = 0
-let shuttingDown = false
+
+const {
+  connected,
+  error,
+  isOpen: isSunnyTownSocketOpen,
+  send: sendSunnyTownMessage,
+  start: startSunnyTownSocket,
+  status,
+  stop: stopSunnyTownSocket,
+} = useSunnyTownSocket({
+  async onSession(nextSession) {
+    starBalance.value = nextSession.wallet.starBalance
+    inventoryStore.setSessionInventory(nextSession.inventory, nextSession.hotbar)
+    await nextTick()
+  },
+  onMessage: handleServerMessage,
+})
 
 const playerCount = computed(() => players.value.length)
 const activeDialogueLine = computed(() => activeDialogueNpc.value?.dialogue[activeDialogueLineIndex.value] || '')
@@ -128,240 +134,130 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', handleResize)
   animationFrame = window.requestAnimationFrame(renderLoop)
-
-  try {
-    session.value = await createSunnyTownSession()
-    starBalance.value = session.value.wallet.starBalance
-    inventoryStore.setSessionInventory(session.value.inventory, session.value.hotbar)
-    status.value = 'Connecting...'
-    await nextTick()
-    connect(session.value)
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : String(caught)
-    status.value = 'Could not enter Sunny Town'
-  }
+  await startSunnyTownSocket()
 })
 
 onBeforeUnmount(() => {
-  shuttingDown = true
   window.removeEventListener('keydown', handleKeyDown, movementInputEventOptions)
   window.removeEventListener('keyup', handleKeyUp, movementInputEventOptions)
   window.removeEventListener('blur', handleInputCancel)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', handleResize)
   window.cancelAnimationFrame(animationFrame)
-  clearReconnectTimer()
-  socket?.close()
-  socket = null
+  stopSunnyTownSocket()
   localSelf = null
   renderedSelf = null
   remotePlayerHistories.clear()
 })
 
-function connect(activeSession: SunnyTownSession) {
-  const url = new URL(activeSession.websocketUrl)
-  url.searchParams.set('token', activeSession.joinToken)
-  const nextSocket = new WebSocket(url.toString())
-  socket = nextSocket
-
-  nextSocket.addEventListener('open', () => {
-    if (socket !== nextSocket) {
+function handleServerMessage(message: SunnyTownServerMessage) {
+  if (message.type === 'hello') {
+    selfId.value = message.selfId || ''
+    applyMapState(message)
+    return
+  }
+  if (message.type === 'snapshot') {
+    if (message.mapId && activeMap.value && message.mapId !== activeMap.value.id) {
       return
     }
-    reconnectAttempts = 0
-    connected.value = true
-    status.value = 'Connected'
-    error.value = ''
-  })
-
-  nextSocket.addEventListener('message', (event) => {
-    if (socket !== nextSocket) {
-      return
+    players.value = message.players || []
+    collectibles.value = message.collectibles || []
+    resourceNodes.value = message.resourceNodes || []
+    placedObjects.value = message.placedObjects || placedObjects.value
+    worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
+    recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
+    syncLocalSelfFromSnapshot()
+    return
+  }
+  if (message.type === 'map_changed') {
+    applyMapState(message)
+    return
+  }
+  if (message.type === 'reward_committed') {
+    starBalance.value = message.newStarBalance ?? starBalance.value + (message.amount || 0)
+    gameToast.value = `+${message.amount || 1} star`
+    window.setTimeout(() => {
+      gameToast.value = ''
+    }, 1200)
+    return
+  }
+  if (message.type === 'reward_failed') {
+    error.value = 'That star could not be saved. Try again in a moment.'
+    return
+  }
+  if (message.type === 'resource_committed') {
+    const amount = message.amount || 1
+    const resourceKey = message.resourceKey || 'rock'
+    gameToast.value = `+${amount} ${resourceKey}`
+    if (message.quantity !== undefined) {
+      inventoryStore.setItemQuantity(resourceKey, message.quantity)
     }
-    const message = parseServerMessage(event.data)
-    if (!message) {
-      return
+    if (craftingPanelOpen.value) {
+      void inventoryStore.loadCraftingRecipes()
     }
-    if (message.type === 'hello') {
-      selfId.value = message.selfId || ''
-      applyMapState(message)
-      return
+    window.setTimeout(() => {
+      gameToast.value = ''
+    }, 1200)
+    return
+  }
+  if (message.type === 'map_object_placed') {
+    if (message.placedObject) {
+      placedObjects.value = [
+        ...placedObjects.value.filter((object) => object.id !== message.placedObject?.id),
+        message.placedObject,
+      ]
     }
-    if (message.type === 'snapshot') {
-      if (message.mapId && activeMap.value && message.mapId !== activeMap.value.id) {
-        return
-      }
-      players.value = message.players || []
-      collectibles.value = message.collectibles || []
-      resourceNodes.value = message.resourceNodes || []
-      placedObjects.value = message.placedObjects || placedObjects.value
-      worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
-      recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
-      syncLocalSelfFromSnapshot()
-      return
+    const placedWorldObject = message.worldObject
+    if (placedWorldObject) {
+      worldObjects.value = [
+        ...worldObjects.value.filter((object) => !sameWorldObject(object, placedWorldObject)),
+        placedWorldObject,
+      ]
+    } else if (message.placedObject) {
+      worldObjects.value = [
+        ...worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id),
+        placedObjectToWorldObject(message.placedObject),
+      ]
     }
-    if (message.type === 'map_changed') {
-      applyMapState(message)
-      return
-    }
-    if (message.type === 'reward_committed') {
-      starBalance.value = message.newStarBalance ?? starBalance.value + (message.amount || 0)
-      gameToast.value = `+${message.amount || 1} star`
+    if (message.resourceKey && message.quantity !== undefined) {
+      inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
+      gameToast.value = 'Stone block placed'
       window.setTimeout(() => {
         gameToast.value = ''
       }, 1200)
-      return
     }
-    if (message.type === 'reward_failed') {
-      error.value = 'That star could not be saved. Try again in a moment.'
-      return
+    draw()
+    return
+  }
+  if (message.type === 'map_object_removed') {
+    if (message.placedObject) {
+      placedObjects.value = placedObjects.value.filter((object) => object.id !== message.placedObject?.id)
     }
-    if (message.type === 'resource_committed') {
-      const amount = message.amount || 1
-      const resourceKey = message.resourceKey || 'rock'
-      gameToast.value = `+${amount} ${resourceKey}`
-      if (message.quantity !== undefined) {
-        inventoryStore.setItemQuantity(resourceKey, message.quantity)
-      }
-      if (craftingPanelOpen.value) {
-        void inventoryStore.loadCraftingRecipes()
-      }
+    const removedWorldObject = message.worldObject
+    if (removedWorldObject) {
+      worldObjects.value = worldObjects.value.filter((object) => !sameWorldObject(object, removedWorldObject))
+    } else if (message.placedObject) {
+      worldObjects.value = worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id)
+    }
+    if (message.resourceKey && message.quantity !== undefined) {
+      inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
+      gameToast.value = '+1 stone_block'
       window.setTimeout(() => {
         gameToast.value = ''
       }, 1200)
-      return
     }
-    if (message.type === 'map_object_placed') {
-      if (message.placedObject) {
-        placedObjects.value = [
-          ...placedObjects.value.filter((object) => object.id !== message.placedObject?.id),
-          message.placedObject,
-        ]
-      }
-      const placedWorldObject = message.worldObject
-      if (placedWorldObject) {
-        worldObjects.value = [
-          ...worldObjects.value.filter((object) => !sameWorldObject(object, placedWorldObject)),
-          placedWorldObject,
-        ]
-      } else if (message.placedObject) {
-        worldObjects.value = [
-          ...worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id),
-          placedObjectToWorldObject(message.placedObject),
-        ]
-      }
-      if (message.resourceKey && message.quantity !== undefined) {
-        inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
-        gameToast.value = 'Stone block placed'
-        window.setTimeout(() => {
-          gameToast.value = ''
-        }, 1200)
-      }
-      draw()
-      return
+    if (craftingPanelOpen.value) {
+      void inventoryStore.loadCraftingRecipes()
     }
-    if (message.type === 'map_object_removed') {
-      if (message.placedObject) {
-        placedObjects.value = placedObjects.value.filter((object) => object.id !== message.placedObject?.id)
-      }
-      const removedWorldObject = message.worldObject
-      if (removedWorldObject) {
-        worldObjects.value = worldObjects.value.filter((object) => !sameWorldObject(object, removedWorldObject))
-      } else if (message.placedObject) {
-        worldObjects.value = worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id)
-      }
-      if (message.resourceKey && message.quantity !== undefined) {
-        inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
-        gameToast.value = '+1 stone_block'
-        window.setTimeout(() => {
-          gameToast.value = ''
-        }, 1200)
-      }
-      if (craftingPanelOpen.value) {
-        void inventoryStore.loadCraftingRecipes()
-      }
-      draw()
-      return
-    }
-    if (message.type === 'resource_failed') {
-      error.value = 'That resource could not be saved. Try again in a moment.'
-      return
-    }
-    if (message.type === 'error') {
-      error.value = message.code || 'Sunny Town received an invalid message'
-    }
-  })
-
-  nextSocket.addEventListener('close', () => {
-    if (socket !== nextSocket) {
-      return
-    }
-    connected.value = false
-    socket = null
-    if (shuttingDown) {
-      status.value = 'Disconnected'
-      return
-    }
-    scheduleReconnect()
-  })
-
-  nextSocket.addEventListener('error', () => {
-    if (socket !== nextSocket) {
-      return
-    }
-    error.value = 'Sunny Town connection failed'
-  })
-}
-
-function scheduleReconnect() {
-  if (shuttingDown || reconnectTimer) {
+    draw()
     return
   }
-
-  const delay = Math.min(reconnectMaxDelayMs, reconnectInitialDelayMs * 2 ** reconnectAttempts)
-  reconnectAttempts += 1
-  status.value = 'Reconnecting...'
-  reconnectTimer = window.setTimeout(() => {
-    reconnectTimer = 0
-    void reconnectSunnyTown()
-  }, delay)
-}
-
-async function reconnectSunnyTown() {
-  if (shuttingDown) {
+  if (message.type === 'resource_failed') {
+    error.value = 'That resource could not be saved. Try again in a moment.'
     return
   }
-
-  try {
-    const nextSession = await createSunnyTownSession()
-    session.value = nextSession
-    starBalance.value = nextSession.wallet.starBalance
-    inventoryStore.setSessionInventory(nextSession.inventory, nextSession.hotbar)
-    connect(nextSession)
-  } catch (caught) {
-    error.value = caught instanceof Error ? caught.message : String(caught)
-    scheduleReconnect()
-  }
-}
-
-function clearReconnectTimer() {
-  if (reconnectTimer) {
-    window.clearTimeout(reconnectTimer)
-    reconnectTimer = 0
-  }
-}
-
-function parseServerMessage(data: unknown): SunnyTownServerMessage | null {
-  if (typeof data !== 'string') {
-    error.value = 'Sunny Town sent an unsupported message'
-    return null
-  }
-
-  try {
-    return JSON.parse(data) as SunnyTownServerMessage
-  } catch {
-    error.value = 'Sunny Town sent an invalid message'
-    return null
+  if (message.type === 'error') {
+    error.value = message.code || 'Sunny Town received an invalid message'
   }
 }
 
@@ -503,7 +399,7 @@ function hotbarIndexForEvent(event: KeyboardEvent): number | null {
 
 function placeStoneBlockAtPointer(event: PointerEvent) {
   const grid = gridFromPointer(event)
-  if (!grid || stoneBlockQuantity.value < 1 || socket?.readyState !== WebSocket.OPEN) {
+  if (!grid || stoneBlockQuantity.value < 1 || !isSunnyTownSocketOpen()) {
     return
   }
   const message: SunnyTownPlaceObjectMessage = {
@@ -513,15 +409,15 @@ function placeStoneBlockAtPointer(event: PointerEvent) {
     gridY: grid.gridY,
     clientTimeMs: Date.now(),
   }
-  socket.send(JSON.stringify(message))
+  sendSunnyTownMessage(JSON.stringify(message))
 }
 
 function notifyEquipmentChanged() {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
+  if (!isSunnyTownSocketOpen()) {
     return
   }
   const message: SunnyTownEquipmentChangedMessage = { type: 'equipment_changed' }
-  socket.send(JSON.stringify(message))
+  sendSunnyTownMessage(JSON.stringify(message))
 }
 
 async function equipInventoryItem(itemKey: string, slot: EquipmentSlot | '') {
@@ -738,7 +634,7 @@ function useEquippedTool() {
     facing: player.facing,
   }
 
-  if (socket?.readyState === WebSocket.OPEN) {
+  if (isSunnyTownSocketOpen()) {
     const message: SunnyTownToolUseMessage = {
       type: 'tool_use',
       toolKey,
@@ -747,7 +643,7 @@ function useEquippedTool() {
       facing: player.facing,
       clientTimeMs: Date.now(),
     }
-    socket.send(JSON.stringify(message))
+    sendSunnyTownMessage(JSON.stringify(message))
   }
   draw()
 }
@@ -883,7 +779,7 @@ function refreshLocalMovementState() {
 }
 
 function sendMove(force = false) {
-  if (!socket || socket.readyState !== WebSocket.OPEN || !localSelf) {
+  if (!isSunnyTownSocketOpen() || !localSelf) {
     return
   }
 
@@ -912,7 +808,7 @@ function sendMove(force = false) {
   }
   lastMoveSendAtMs = now
   lastSentMoveJson = moveStateJson
-  socket.send(JSON.stringify(message))
+  sendSunnyTownMessage(JSON.stringify(message))
 }
 
 function renderLoop() {

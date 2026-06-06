@@ -124,7 +124,7 @@ Tasks:
 Slice plan:
 
 - [x] Slice 3.1: Move `SunnyTownPage.vue` from `pages/` to `features/sunny-town/` and update router imports without changing behavior.
-- [ ] Slice 3.2: Extract socket/session lifecycle into `frontend/src/composables/useSunnyTownSocket.ts`.
+- [x] Slice 3.2: Extract socket/session lifecycle into `frontend/src/composables/useSunnyTownSocket.ts`.
 - [ ] Slice 3.3: Extract movement input, client prediction, collision helpers, and placement validation into `frontend/src/composables/useSunnyTownMovement.ts`.
 - [ ] Slice 3.4: Extract canvas rendering into `frontend/src/composables/useSunnyTownRenderer.ts` and `SunnyTownCanvas.vue`.
 - [ ] Slice 3.5: Extract HUD/status and hotbar controls into `SunnyTownHud.vue`.
@@ -134,7 +134,7 @@ Slice plan:
 
 Original task coverage:
 
-- [ ] Extract Sunny Town socket/session lifecycle.
+- [x] Extract Sunny Town socket/session lifecycle.
 - [ ] Extract movement input and client prediction.
 - [ ] Extract canvas rendering.
 - [ ] Extract HUD and status UI.
@@ -284,3 +284,5 @@ Verification:
 - 2026-06-06: `cd frontend && npm run build` passed after the Sunny Town server package move. Vite still reported the large chunk warning.
 - 2026-06-06: Phase 3 Slice 3.1 moved `SunnyTownPage.vue` into `frontend/src/features/sunny-town/` and updated the router import.
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.1. Vite still reported the large chunk warning.
+- 2026-06-06: Phase 3 Slice 3.2 extracted Sunny Town WebSocket/session lifecycle into `frontend/src/composables/useSunnyTownSocket.ts`.
+- 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.2. Vite still reported the large chunk warning.
