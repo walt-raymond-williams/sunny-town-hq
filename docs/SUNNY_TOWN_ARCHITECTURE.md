@@ -19,7 +19,7 @@ HQ Service
   Keycloak bearer-token validation
   student role checks
   join-token issuer
-  wallet, inventory, equipment, and position persistence
+  wallet, inventory, equipment, map-edit, and position persistence
   service-authenticated internal Sunny Town endpoints
 
         |
@@ -38,7 +38,7 @@ Core ownership rule:
 
 ```text
 Sunny Town owns live realtime world state.
-HQ owns durable account, student, wallet, inventory, equipment, and persisted return-position state.
+HQ owns durable account, student, wallet, inventory, equipment, map-edit, and persisted return-position state.
 ```
 
 Sunny Town does not write the HQ database directly. It calls HQ internal HTTP endpoints with `X-HQ-Service-Secret`.
@@ -181,7 +181,34 @@ See [SUNNY_TOWN_MOVEMENT_MODEL.md](./SUNNY_TOWN_MOVEMENT_MODEL.md) for the detai
 
 ## Collision
 
-The frontend uses `blockedRects` for local movement feel. The server currently clamps accepted positions to map bounds and uses accepted positions for portals, collectibles, and mining. `blockedRects` are loaded as part of the map contract, but the server does not currently pathfind or choose collision fallback positions.
+The frontend uses `blockedRects` and placed map objects for local movement feel. The server also enforces both static `blockedRects` and live placed objects against accepted player positions. If a proposed movement sample would overlap collision geometry, the player remains at the previous accepted position.
+
+## Placed Map Objects
+
+Players can place crafted `stone_block` items into the map grid. The browser sends a grid coordinate, Sunny Town validates the request against map bounds, static blocked rectangles, portals, NPCs, resource nodes, players, and existing placed objects, then asks HQ to persist the object and consume one `stone_block`.
+
+HQ stores placed blocks in `sunny_town_map_object` with `(room_id, map_id, grid_x, grid_y)` uniqueness. The base JSON map remains unchanged; player edits are separate durable records. Sunny Town loads persisted objects at startup and refreshes the target map's object list when a player joins, so a restarted service can reconstruct the edited map state from HQ.
+
+Placed objects are included in `hello`, `snapshot`, and `map_changed` messages:
+
+```json
+{
+  "placedObjects": [
+    {
+      "id": "12",
+      "itemKey": "stone_block",
+      "gridX": 20,
+      "gridY": 14,
+      "x": 640,
+      "y": 448,
+      "width": 32,
+      "height": 32
+    }
+  ]
+}
+```
+
+Sunny Town also broadcasts immediate `map_object_placed` and `map_object_removed` events so other connected players see edits without waiting for the next snapshot. Inventory quantities from those mutations are sent only to the acting player.
 
 ## Collectibles and Stars
 
@@ -257,7 +284,9 @@ The client sends the existing tool-use message:
 }
 ```
 
-Sunny Town validates that the player is in a room, has the requested tool equipped, is using `pickaxe`, is within range of the nearest active resource node, and is not inside the tool cooldown. Mining currently requires three accepted pickaxe hits. On the third hit, Sunny Town depletes the node, schedules respawn, rolls a drop, and sends an idempotent resource event to HQ.
+Sunny Town validates that the player is in a room, has the requested tool equipped, is using `pickaxe`, and is not inside the tool cooldown. Pickaxe use first checks for a nearby placed `stone_block`; if found, Sunny Town asks HQ to delete that map object and refund one `stone_block` to the player's inventory, then broadcasts the removal.
+
+If no placed block is in range, Sunny Town checks for the nearest active resource node. Resource mining currently requires three accepted pickaxe hits. On the third hit, Sunny Town depletes the node, schedules respawn, rolls a drop, and sends an idempotent resource event to HQ.
 
 Current drop table:
 
@@ -296,6 +325,7 @@ Client-to-server:
 move
 equipment_changed
 tool_use
+place_object
 ping
 ```
 
@@ -309,6 +339,8 @@ reward_committed
 reward_failed
 resource_committed
 resource_failed
+map_object_placed
+map_object_removed
 error
 ```
 

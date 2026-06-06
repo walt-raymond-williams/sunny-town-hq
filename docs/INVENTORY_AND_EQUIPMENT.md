@@ -306,6 +306,65 @@ Response:
 
 The browser must not call this endpoint.
 
+### `GET /api/internal/sunny-town/map-objects?room_id=...&map_id=...`
+
+Service-authenticated endpoint used by Sunny Town to reload persisted player edits for a map.
+
+Response:
+
+```json
+{
+  "objects": [
+    {
+      "id": 12,
+      "room_id": "sunny-town-main",
+      "map_id": "sunny-town-v1",
+      "grid_x": 20,
+      "grid_y": 14,
+      "item_key": "stone_block",
+      "placed_by_app_user_id": 123
+    }
+  ]
+}
+```
+
+### `POST /api/internal/sunny-town/map-objects/place`
+
+Service-authenticated endpoint used after Sunny Town validates a placement request.
+
+Request:
+
+```json
+{
+  "app_user_id": 123,
+  "room_id": "sunny-town-main",
+  "map_id": "sunny-town-v1",
+  "grid_x": 20,
+  "grid_y": 14,
+  "item_key": "stone_block"
+}
+```
+
+The endpoint runs in a transaction, consumes 1 `stone_block`, inserts the placed object, rejects occupied grid cells, and rolls back inventory consumption if placement fails.
+
+### `POST /api/internal/sunny-town/map-objects/remove`
+
+Service-authenticated endpoint used after Sunny Town validates a pickaxe hit against a placed block.
+
+Request:
+
+```json
+{
+  "app_user_id": 123,
+  "room_id": "sunny-town-main",
+  "map_id": "sunny-town-v1",
+  "grid_x": 20,
+  "grid_y": 14
+}
+```
+
+The endpoint deletes the persisted object and refunds 1 `stone_block` to the acting player's inventory in the same transaction.
+
 ## Frontend Flow
 
 ### Shared Store
@@ -355,6 +414,7 @@ The overlay shows:
 - Equip/Unequip controls.
 - A session-persistent Crafting toggle.
 - A session-persistent All Recipes toggle inside the crafting panel.
+- A Stone Block placement action when the player owns crafted `stone_block` items.
 
 After equip or unequip succeeds:
 
@@ -426,6 +486,8 @@ The Sunny Town server validates that the player currently has the requested tool
 
 Mining currently requires three accepted pickaxe hits. On the third hit, Sunny Town depletes the node, schedules the node respawn, rolls the resource drop, and commits the resource event to HQ through `POST /api/internal/sunny-town/resource-events`. HQ writes `student_inventory_ledger` first and increments `student_inventory_item` only when the ledger event id is new.
 
+Pickaxe use checks placed `stone_block` objects before resource nodes. A nearby placed block is removed through HQ's map-object remove endpoint and returns 1 `stone_block` to the player's inventory.
+
 ## Important Rules
 
 - Stars are wallet currency, not inventory.
@@ -435,6 +497,7 @@ Mining currently requires three accepted pickaxe hits. On the third hit, Sunny T
 - Unequipping does not remove the item from inventory.
 - Inventory responses hide zero-quantity items.
 - Sunny Town is not the source of truth for equipment; HQ is.
+- Sunny Town validates map editing, but HQ persists placed blocks and performs the matching inventory consume/refund.
 
 ## Testing Checklist
 

@@ -49,6 +49,8 @@ For Sunny Town map, room, movement, collectible, resource, or inventory overlay 
 - Two students inside the same map can see each other.
 - Players in different maps do not appear in each other's snapshots.
 - Mining a Forest Crossing node requires an equipped pickaxe, advances node hit count, depletes after three hits, and sends a resource commit result.
+- Placing a crafted `stone_block` snaps to a grid tile, appears for other players in the same map, blocks movement, and remains after reconnect/restart.
+- Mining a placed `stone_block` with the pickaxe removes it for other players and returns one `stone_block` to the acting player's inventory.
 
 Backend tests should cover at least:
 
@@ -61,6 +63,8 @@ Backend tests should cover at least:
 - Resource node definitions are validated, including duplicate id rejection.
 - Mining rejects missing tools, wrong tools, inactive nodes, and out-of-range players.
 - HQ resource event commits are idempotent through `student_inventory_ledger`.
+- Placed object persistence rejects occupied grid cells and rolls back inventory consumption on failed placement.
+- Server collision rejects movement into static blocked rectangles and placed map objects.
 
 ## Inventory Testing
 
@@ -73,6 +77,7 @@ For inventory changes, verify:
 - Stars remain in `student_wallet` and are not represented as inventory items.
 - Mining resources appear as `rock` or `crystal` inventory items after HQ confirms the resource event.
 - Crafting a `stone_block` consumes 4 `rock`, creates 1 `stone_block`, and refreshes recipe availability.
+- Placing a `stone_block` consumes one block, and mining the placed block refunds one block.
 
 ## Manual Browser Notes
 

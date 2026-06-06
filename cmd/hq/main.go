@@ -267,6 +267,9 @@ func main() {
 	mux.HandleFunc("/api/internal/sunny-town/resource-events", app.handleSunnyTownResourceEvent)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", app.handleInternalSunnyTownStudentEquipment)
 	mux.HandleFunc("/api/internal/sunny-town/player-position", app.handleInternalSunnyTownPlayerPosition)
+	mux.HandleFunc("/api/internal/sunny-town/map-objects", app.handleInternalSunnyTownMapObjects)
+	mux.HandleFunc("/api/internal/sunny-town/map-objects/place", app.handleInternalSunnyTownPlaceMapObject)
+	mux.HandleFunc("/api/internal/sunny-town/map-objects/remove", app.handleInternalSunnyTownRemoveMapObject)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
 	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
@@ -873,6 +876,121 @@ func (app *app) handleInternalSunnyTownPlayerPosition(w http.ResponseWriter, r *
 		writeJSON(w, http.StatusOK, position)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (app *app) handleInternalSunnyTownMapObjects(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	response, err := app.loadSunnyTownMapObjects(
+		r.Context(),
+		r.URL.Query().Get("room_id"),
+		r.URL.Query().Get("map_id"),
+	)
+	if err != nil {
+		log.Printf("load internal sunny town map objects: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "map objects could not be loaded",
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (app *app) handleInternalSunnyTownPlaceMapObject(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	var request sunnyTownPlaceMapObjectRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := app.placeSunnyTownMapObject(r.Context(), request)
+	if err != nil {
+		log.Printf("place internal sunny town map object: %v", err)
+		writeJSON(w, statusForMapObjectError(err), map[string]string{
+			"error": mapObjectErrorMessage(err),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (app *app) handleInternalSunnyTownRemoveMapObject(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	var request sunnyTownRemoveMapObjectRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := app.removeSunnyTownMapObject(r.Context(), request)
+	if err != nil {
+		log.Printf("remove internal sunny town map object: %v", err)
+		writeJSON(w, statusForMapObjectError(err), map[string]string{
+			"error": mapObjectErrorMessage(err),
+		})
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func statusForMapObjectError(err error) int {
+	switch {
+	case errors.Is(err, errMapObjectNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, errMapObjectOccupied), errors.Is(err, errMapObjectNotOwned):
+		return http.StatusConflict
+	default:
+		return http.StatusBadRequest
+	}
+}
+
+func mapObjectErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, errMapObjectOccupied):
+		return "location is occupied"
+	case errors.Is(err, errMapObjectNotFound):
+		return "map object not found"
+	case errors.Is(err, errMapObjectNotOwned):
+		return "item is not in inventory"
+	case errors.Is(err, errUnsupportedMapObject):
+		return "unsupported map object"
+	default:
+		return "map object could not be updated"
 	}
 }
 

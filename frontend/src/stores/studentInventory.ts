@@ -49,6 +49,11 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       this.error = ''
     },
     setItemQuantity(itemKey: string, quantity: number) {
+      if (quantity <= 0) {
+        this.items = this.items.filter((item) => item.key !== itemKey)
+        this.markEquippedItems()
+        return
+      }
       const existing = this.items.find((item) => item.key === itemKey)
       if (existing) {
         this.items = this.items.map((item) => (

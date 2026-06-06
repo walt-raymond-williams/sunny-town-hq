@@ -13,6 +13,8 @@ import type {
   SunnyTownMap,
   SunnyTownMoveMessage,
   SunnyTownNpc,
+  SunnyTownPlaceObjectMessage,
+  SunnyTownPlacedObject,
   SunnyTownPlayer,
   SunnyTownResourceNode,
   SunnyTownServerMessage,
@@ -55,6 +57,7 @@ const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
 const collectibles = ref<SunnyTownCollectible[]>([])
 const resourceNodes = ref<SunnyTownResourceNode[]>([])
+const placedObjects = ref<SunnyTownPlacedObject[]>([])
 const selfId = ref('')
 const status = ref('Entering Sunny Town...')
 const error = ref('')
@@ -64,6 +67,8 @@ const gameToast = ref('')
 const inventoryOpen = ref(false)
 const craftingPanelOpen = ref(false)
 const showAllCraftingRecipes = ref(false)
+const placingStoneBlock = ref(false)
+const placementHoverGrid = ref<{ gridX: number; gridY: number } | null>(null)
 const nearbyNpc = ref<SunnyTownNpc | null>(null)
 const activeDialogueNpc = ref<SunnyTownNpc | null>(null)
 const activeDialogueLineIndex = ref(0)
@@ -108,6 +113,7 @@ const shopItems = computed(() => activeShopNpc.value?.shop?.items || [])
 const visibleCraftingRecipes = computed(() => (
   showAllCraftingRecipes.value ? inventoryStore.craftingRecipes : inventoryStore.craftableRecipes
 ))
+const stoneBlockQuantity = computed(() => inventoryStore.items.find((item) => item.key === 'stone_block')?.quantity || 0)
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown, movementInputEventOptions)
@@ -181,6 +187,7 @@ function connect(activeSession: SunnyTownSession) {
       players.value = message.players || []
       collectibles.value = message.collectibles || []
       resourceNodes.value = message.resourceNodes || []
+      placedObjects.value = message.placedObjects || placedObjects.value
       recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
       syncLocalSelfFromSnapshot()
       return
@@ -214,6 +221,40 @@ function connect(activeSession: SunnyTownSession) {
       window.setTimeout(() => {
         gameToast.value = ''
       }, 1200)
+      return
+    }
+    if (message.type === 'map_object_placed') {
+      if (message.placedObject) {
+        placedObjects.value = [
+          ...placedObjects.value.filter((object) => object.id !== message.placedObject?.id),
+          message.placedObject,
+        ]
+      }
+      if (message.resourceKey && message.quantity !== undefined) {
+        inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
+        gameToast.value = 'Stone block placed'
+        window.setTimeout(() => {
+          gameToast.value = ''
+        }, 1200)
+      }
+      draw()
+      return
+    }
+    if (message.type === 'map_object_removed') {
+      if (message.placedObject) {
+        placedObjects.value = placedObjects.value.filter((object) => object.id !== message.placedObject?.id)
+      }
+      if (message.resourceKey && message.quantity !== undefined) {
+        inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
+        gameToast.value = '+1 stone_block'
+        window.setTimeout(() => {
+          gameToast.value = ''
+        }, 1200)
+      }
+      if (craftingPanelOpen.value) {
+        void inventoryStore.loadCraftingRecipes()
+      }
+      draw()
       return
     }
     if (message.type === 'resource_failed') {
@@ -299,6 +340,13 @@ function parseServerMessage(data: unknown): SunnyTownServerMessage | null {
 
 function handleKeyDown(event: KeyboardEvent) {
   if (event.code === 'Escape') {
+    if (placingStoneBlock.value) {
+      event.preventDefault()
+      placingStoneBlock.value = false
+      placementHoverGrid.value = null
+      draw()
+      return
+    }
     if (activeDialogueNpc.value || activeShopNpc.value || activeSchoolworkNpc.value || inventoryOpen.value) {
       event.preventDefault()
       closeNpcOverlays()
@@ -366,11 +414,29 @@ function handleCanvasPointerDown(event: PointerEvent) {
   if (event.button !== 0) {
     return
   }
+  if (placingStoneBlock.value) {
+    event.preventDefault()
+    placeStoneBlockAtPointer(event)
+    return
+  }
   if (activeDialogueNpc.value || activeShopNpc.value || activeSchoolworkNpc.value || inventoryOpen.value) {
     return
   }
   event.preventDefault()
   useEquippedTool()
+}
+
+function handleCanvasPointerMove(event: PointerEvent) {
+  if (!placingStoneBlock.value || inventoryOpen.value) {
+    return
+  }
+  placementHoverGrid.value = gridFromPointer(event)
+  draw()
+}
+
+function handleCanvasPointerLeave() {
+  placementHoverGrid.value = null
+  draw()
 }
 
 async function toggleInventory() {
@@ -392,6 +458,31 @@ async function toggleCraftingPanel() {
 
 async function craftInventoryRecipe(recipeKey: string) {
   await inventoryStore.craftRecipe(recipeKey)
+}
+
+function toggleStoneBlockPlacement() {
+  placingStoneBlock.value = !placingStoneBlock.value
+  placementHoverGrid.value = null
+  if (placingStoneBlock.value) {
+    inventoryOpen.value = false
+    closeNpcOverlays()
+  }
+  draw()
+}
+
+function placeStoneBlockAtPointer(event: PointerEvent) {
+  const grid = gridFromPointer(event)
+  if (!grid || stoneBlockQuantity.value < 1 || socket?.readyState !== WebSocket.OPEN) {
+    return
+  }
+  const message: SunnyTownPlaceObjectMessage = {
+    type: 'place_object',
+    itemKey: 'stone_block',
+    gridX: grid.gridX,
+    gridY: grid.gridY,
+    clientTimeMs: Date.now(),
+  }
+  socket.send(JSON.stringify(message))
 }
 
 function notifyEquipmentChanged() {
@@ -431,6 +522,39 @@ function applyLocalEquipmentVisuals() {
   draw()
 }
 
+function gridFromPointer(event: PointerEvent): { gridX: number; gridY: number } | null {
+  const map = activeMap.value
+  const target = canvas.value
+  if (!map || !target) {
+    return null
+  }
+  const rect = target.getBoundingClientRect()
+  const camera = currentCamera(rect.width, rect.height)
+  const worldX = event.clientX - rect.left + camera.x
+  const worldY = event.clientY - rect.top + camera.y
+  const gridX = Math.floor(worldX / map.tileSize)
+  const gridY = Math.floor(worldY / map.tileSize)
+  if (gridX < 0 || gridY < 0 || gridX >= map.width || gridY >= map.height) {
+    return null
+  }
+  return { gridX, gridY }
+}
+
+function currentCamera(viewWidth: number, viewHeight: number): { x: number; y: number } {
+  const map = activeMap.value
+  if (!map) {
+    return { x: 0, y: 0 }
+  }
+  const renderedPlayers = renderedSunnyTownPlayers()
+  const self = renderedPlayers.find((player) => player.id === selfId.value) || renderedPlayers[0]
+  const worldWidth = map.width * map.tileSize
+  const worldHeight = map.height * map.tileSize
+  return {
+    x: clamp((self?.x || worldWidth / 2) - viewWidth / 2, 0, Math.max(0, worldWidth - viewWidth)),
+    y: clamp((self?.y || worldHeight / 2) - viewHeight / 2, 0, Math.max(0, worldHeight - viewHeight)),
+  }
+}
+
 function applyMapState(message: SunnyTownServerMessage) {
   if (message.map) {
     activeMap.value = {
@@ -446,11 +570,13 @@ function applyMapState(message: SunnyTownServerMessage) {
   players.value = message.players || []
   collectibles.value = message.collectibles || []
   resourceNodes.value = message.resourceNodes || []
+  placedObjects.value = message.placedObjects || []
   remotePlayerHistories.clear()
   localSelf = null
   renderedSelf = null
   lastSentMoveJson = ''
   activeToolUse = null
+  placementHoverGrid.value = null
   pressedDirections.clear()
   closeNpcOverlays()
   nearbyNpc.value = null
@@ -733,13 +859,15 @@ function draw() {
   }
 
   const renderedPlayers = renderedSunnyTownPlayers()
-  const self = renderedPlayers.find((player) => player.id === selfId.value) || renderedPlayers[0]
-  const worldWidth = map.width * map.tileSize
-  const worldHeight = map.height * map.tileSize
-  const cameraX = clamp((self?.x || worldWidth / 2) - rect.width / 2, 0, Math.max(0, worldWidth - rect.width))
-  const cameraY = clamp((self?.y || worldHeight / 2) - rect.height / 2, 0, Math.max(0, worldHeight - rect.height))
+  const camera = currentCamera(rect.width, rect.height)
+  const cameraX = camera.x
+  const cameraY = camera.y
 
   drawMap(context, map, cameraX, cameraY, rect.width, rect.height)
+  for (const object of placedObjects.value) {
+    drawPlacedObject(context, object, cameraX, cameraY)
+  }
+  drawPlacementPreview(context, map, cameraX, cameraY)
   for (const collectible of collectibles.value) {
     if (collectible.active) {
       drawCollectible(context, collectible, cameraX, cameraY)
@@ -995,7 +1123,46 @@ function collides(map: SunnyTownMap, x: number, y: number): boolean {
     width: playerSize,
     height: playerSize,
   }
-  return map.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked))
+  return (
+    map.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked)) ||
+    placedObjects.value.some((object) => rectsOverlap(playerRect, object))
+  )
+}
+
+function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): boolean {
+  if (gridX < 0 || gridY < 0 || gridX >= map.width || gridY >= map.height || stoneBlockQuantity.value < 1) {
+    return false
+  }
+  const tileRect = {
+    x: gridX * map.tileSize,
+    y: gridY * map.tileSize,
+    width: map.tileSize,
+    height: map.tileSize,
+  }
+  const self = localSelf || players.value.find((player) => player.id === selfId.value)
+  return !(
+    map.blockedRects.some((blocked) => rectsOverlap(tileRect, blocked)) ||
+    map.portals.some((portal) => rectsOverlap(tileRect, portal)) ||
+    map.npcs.some((npc) => rectsOverlap(tileRect, {
+      x: npc.x - playerSize / 2,
+      y: npc.y - playerSize / 2,
+      width: playerSize,
+      height: playerSize,
+    })) ||
+    resourceNodes.value.some((node) => rectsOverlap(tileRect, {
+      x: node.x - node.radius,
+      y: node.y - node.radius,
+      width: node.radius * 2,
+      height: node.radius * 2,
+    })) ||
+    placedObjects.value.some((object) => rectsOverlap(tileRect, object)) ||
+    (self && rectsOverlap(tileRect, {
+      x: self.x - playerSize / 2,
+      y: self.y - playerSize / 2,
+      width: playerSize,
+      height: playerSize,
+    }))
+  )
 }
 
 function clampPlayerX(map: SunnyTownMap, x: number): number {
@@ -1099,6 +1266,51 @@ function drawMap(
     context.lineWidth = 2
     context.strokeRect(portal.x - cameraX + 2, portal.y - cameraY + 2, portal.width - 4, portal.height - 4)
   }
+}
+
+function drawPlacedObject(
+  context: CanvasRenderingContext2D,
+  object: SunnyTownPlacedObject,
+  cameraX: number,
+  cameraY: number,
+) {
+  const x = object.x - cameraX
+  const y = object.y - cameraY
+  context.save()
+  context.fillStyle = '#69727c'
+  context.fillRect(x + 3, y + 3, object.width - 6, object.height - 6)
+  context.strokeStyle = '#353b42'
+  context.lineWidth = 2
+  context.strokeRect(x + 3, y + 3, object.width - 6, object.height - 6)
+  context.fillStyle = '#8d98a3'
+  context.fillRect(x + 7, y + 7, object.width - 14, 5)
+  context.fillStyle = '#4d555e'
+  context.fillRect(x + 7, y + object.height - 12, object.width - 14, 4)
+  context.restore()
+}
+
+function drawPlacementPreview(
+  context: CanvasRenderingContext2D,
+  map: SunnyTownMap,
+  cameraX: number,
+  cameraY: number,
+) {
+  if (!placingStoneBlock.value || !placementHoverGrid.value) {
+    return
+  }
+  const { gridX, gridY } = placementHoverGrid.value
+  const valid = canPlaceStoneBlock(map, gridX, gridY)
+  const x = gridX * map.tileSize - cameraX
+  const y = gridY * map.tileSize - cameraY
+  context.save()
+  context.globalAlpha = 0.72
+  context.fillStyle = valid ? '#8d98a3' : '#b94a48'
+  context.fillRect(x + 3, y + 3, map.tileSize - 6, map.tileSize - 6)
+  context.globalAlpha = 1
+  context.strokeStyle = valid ? '#f7e08a' : '#ffcbc7'
+  context.lineWidth = 2
+  context.strokeRect(x + 2, y + 2, map.tileSize - 4, map.tileSize - 4)
+  context.restore()
 }
 
 function drawResourceNode(
@@ -1438,7 +1650,13 @@ function backToPet() {
     </v-alert>
 
     <div class="sunny-town-stage">
-      <canvas ref="canvas" aria-label="Sunny Town map" @pointerdown="handleCanvasPointerDown" />
+      <canvas
+        ref="canvas"
+        aria-label="Sunny Town map"
+        @pointerdown="handleCanvasPointerDown"
+        @pointermove="handleCanvasPointerMove"
+        @pointerleave="handleCanvasPointerLeave"
+      />
       <div v-if="gameToast" class="sunny-town-toast" role="status">
         {{ gameToast }}
       </div>
@@ -1661,6 +1879,22 @@ function backToPet() {
             <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
           </div>
         </div>
+        <section class="sunny-town-build" aria-label="Build">
+          <div>
+            <p class="inventory-item__name">Stone Block</p>
+            <p class="inventory-item__description">Place a crafted block on the map grid.</p>
+          </div>
+          <v-btn
+            :color="placingStoneBlock ? 'warning' : 'primary'"
+            :disabled="stoneBlockQuantity < 1"
+            :prepend-icon="placingStoneBlock ? 'mdi-cancel' : 'mdi-cube-outline'"
+            size="x-small"
+            :variant="placingStoneBlock ? 'flat' : 'tonal'"
+            @click="toggleStoneBlockPlacement"
+          >
+            {{ placingStoneBlock ? 'Cancel' : `Place ${stoneBlockQuantity}` }}
+          </v-btn>
+        </section>
         <section v-if="craftingPanelOpen" class="sunny-town-crafting" aria-label="Crafting">
           <div class="sunny-town-crafting__header">
             <strong>Crafting</strong>

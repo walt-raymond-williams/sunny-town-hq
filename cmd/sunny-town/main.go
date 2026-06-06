@@ -11,6 +11,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -138,6 +139,9 @@ type clientMessage struct {
 	Facing       string  `json:"facing,omitempty"`
 	Moving       bool    `json:"moving,omitempty"`
 	ToolKey      string  `json:"toolKey,omitempty"`
+	ItemKey      string  `json:"itemKey,omitempty"`
+	GridX        int     `json:"gridX,omitempty"`
+	GridY        int     `json:"gridY,omitempty"`
 }
 
 type equipmentSnapshot map[string]string
@@ -153,6 +157,8 @@ type serverMessage struct {
 	Players        []playerSnapshot       `json:"players,omitempty"`
 	Collectibles   []collectibleSnapshot  `json:"collectibles,omitempty"`
 	ResourceNodes  []resourceNodeSnapshot `json:"resourceNodes,omitempty"`
+	PlacedObjects  []placedObjectSnapshot `json:"placedObjects,omitempty"`
+	PlacedObject   *placedObjectSnapshot  `json:"placedObject,omitempty"`
 	Code           string                 `json:"code,omitempty"`
 	EventID        string                 `json:"eventId,omitempty"`
 	Kind           string                 `json:"kind,omitempty"`
@@ -213,6 +219,7 @@ type room struct {
 	players        map[string]*player
 	collectibles   map[string]*collectible
 	resourceNodes  map[string]*resourceNode
+	placedObjects  map[string]*placedObject
 	tick           int64
 	rewardRunID    string
 	rewardEvents   chan rewardEvent
@@ -280,6 +287,31 @@ type resourceNodeSnapshot struct {
 	Needed int     `json:"needed"`
 }
 
+type placedObject struct {
+	id                string
+	itemKey           string
+	mapID             string
+	gridX             int
+	gridY             int
+	x                 float64
+	y                 float64
+	width             float64
+	height            float64
+	placedByAppUserID int64
+}
+
+type placedObjectSnapshot struct {
+	ID                string  `json:"id"`
+	ItemKey           string  `json:"itemKey"`
+	GridX             int     `json:"gridX"`
+	GridY             int     `json:"gridY"`
+	X                 float64 `json:"x"`
+	Y                 float64 `json:"y"`
+	Width             float64 `json:"width"`
+	Height            float64 `json:"height"`
+	PlacedByAppUserID int64   `json:"placedByAppUserId,omitempty"`
+}
+
 type rewardEvent struct {
 	eventID       string
 	appUserID     int64
@@ -336,6 +368,38 @@ type resourceCommitResponse struct {
 	Quantity    int    `json:"quantity"`
 }
 
+type mapObjectsResponse struct {
+	Objects []mapObjectResponse `json:"objects"`
+}
+
+type mapObjectResponse struct {
+	ID                  int64  `json:"id"`
+	RoomID              string `json:"room_id"`
+	MapID               string `json:"map_id"`
+	GridX               int    `json:"grid_x"`
+	GridY               int    `json:"grid_y"`
+	ItemKey             string `json:"item_key"`
+	PlacedByAppUserID   int64  `json:"placed_by_app_user_id"`
+	RemainingItemAmount int    `json:"remaining_item_amount"`
+}
+
+type placeMapObjectRequest struct {
+	AppUserID int64  `json:"app_user_id"`
+	RoomID    string `json:"room_id"`
+	MapID     string `json:"map_id"`
+	GridX     int    `json:"grid_x"`
+	GridY     int    `json:"grid_y"`
+	ItemKey   string `json:"item_key"`
+}
+
+type removeMapObjectRequest struct {
+	AppUserID int64  `json:"app_user_id"`
+	RoomID    string `json:"room_id"`
+	MapID     string `json:"map_id"`
+	GridX     int    `json:"grid_x"`
+	GridY     int    `json:"grid_y"`
+}
+
 type studentEquipmentResponse struct {
 	Slots []equipmentSlotResponse `json:"slots"`
 }
@@ -386,6 +450,9 @@ func main() {
 	}
 
 	srv := newServer(cfg, world)
+	if err := srv.loadInitialMapObjects(ctx); err != nil {
+		log.Printf("load initial sunny town map objects: %v", err)
+	}
 	go srv.runRewardWorker(ctx)
 	go srv.runResourceWorker(ctx)
 	mux := http.NewServeMux()
@@ -533,6 +600,108 @@ func (srv *server) saveStudentPosition(ctx context.Context, position studentPosi
 	return nil
 }
 
+func (srv *server) loadInitialMapObjects(ctx context.Context) error {
+	for _, room := range srv.world.rooms {
+		loadCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		objects, err := srv.loadMapObjects(loadCtx, room.id, room.gameMap.ID)
+		cancel()
+		if err != nil {
+			return err
+		}
+		room.mu.Lock()
+		room.placedObjects = objects
+		room.mu.Unlock()
+	}
+	return nil
+}
+
+func (srv *server) loadMapObjects(ctx context.Context, roomID string, mapID string) (map[string]*placedObject, error) {
+	query := url.Values{}
+	query.Set("room_id", roomID)
+	query.Set("map_id", mapID)
+	response, err := srv.internalRequest(ctx, http.MethodGet, "/api/internal/sunny-town/map-objects?"+query.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return nil, fmt.Errorf("map objects request failed status=%d", response.StatusCode)
+	}
+
+	var loaded mapObjectsResponse
+	if err := json.NewDecoder(response.Body).Decode(&loaded); err != nil {
+		return nil, err
+	}
+
+	room := srv.world.rooms[mapID]
+	if room == nil {
+		return nil, fmt.Errorf("unknown map %q", mapID)
+	}
+	objects := map[string]*placedObject{}
+	for _, object := range loaded.Objects {
+		placed := placedObjectFromResponse(room.gameMap, object)
+		objects[placed.id] = placed
+	}
+	return objects, nil
+}
+
+func (srv *server) refreshRoomMapObjects(ctx context.Context, mapID string) error {
+	room := srv.world.rooms[mapID]
+	if room == nil {
+		return fmt.Errorf("unknown map %q", mapID)
+	}
+	objects, err := srv.loadMapObjects(ctx, room.id, room.gameMap.ID)
+	if err != nil {
+		return err
+	}
+	room.mu.Lock()
+	room.placedObjects = objects
+	room.mu.Unlock()
+	return nil
+}
+
+func (srv *server) placeMapObject(ctx context.Context, request placeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
+	body, err := json.Marshal(request)
+	if err != nil {
+		return nil, 0, err
+	}
+	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/map-objects/place", body)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return nil, 0, fmt.Errorf("place map object failed status=%d", response.StatusCode)
+	}
+
+	var placed mapObjectResponse
+	if err := json.NewDecoder(response.Body).Decode(&placed); err != nil {
+		return nil, 0, err
+	}
+	return placedObjectFromResponse(gameMap, placed), placed.RemainingItemAmount, nil
+}
+
+func (srv *server) removeMapObject(ctx context.Context, request removeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
+	body, err := json.Marshal(request)
+	if err != nil {
+		return nil, 0, err
+	}
+	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/map-objects/remove", body)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return nil, 0, fmt.Errorf("remove map object failed status=%d", response.StatusCode)
+	}
+
+	var removed mapObjectResponse
+	if err := json.NewDecoder(response.Body).Decode(&removed); err != nil {
+		return nil, 0, err
+	}
+	return placedObjectFromResponse(gameMap, removed), removed.RemainingItemAmount, nil
+}
+
 func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	claims, err := sunnytownauth.Verify(r.URL.Query().Get("token"), srv.config.joinSecret, time.Now())
 	if err != nil {
@@ -571,6 +740,9 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("load sunny town position: %v", err)
 		position = studentPositionResponse{}
 	}
+	if err := srv.refreshRoomMapObjects(r.Context(), claims.MapID); err != nil {
+		log.Printf("refresh sunny town map objects map=%s: %v", claims.MapID, err)
+	}
 
 	srv.world.join(client, claims, equipment, position)
 	log.Printf("player joined room=%s map=%s player=%s", srv.world.roomID, claims.MapID, playerID)
@@ -602,6 +774,7 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resource
 		players:        map[string]*player{},
 		collectibles:   initialCollectibles(gameMap),
 		resourceNodes:  initialResourceNodes(gameMap),
+		placedObjects:  map[string]*placedObject{},
 		rewardRunID:    newRewardRunID(),
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
@@ -681,6 +854,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		Players:       room.snapshotsLocked(),
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
+		PlacedObjects: room.placedObjectSnapshotsLocked(),
 	}
 }
 
@@ -760,6 +934,7 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 		Players:       target.snapshotsLocked(),
 		Collectibles:  target.collectibleSnapshotsLocked(),
 		ResourceNodes: target.resourceNodeSnapshotsLocked(),
+		PlacedObjects: target.placedObjectSnapshotsLocked(),
 		ServerTimeMS:  now.UnixMilli(),
 		Tick:          target.tick,
 	}
@@ -843,6 +1018,10 @@ func (client *client) handleToolUse(message clientMessage) {
 		return
 	}
 
+	if client.handlePlacedObjectToolUse(room, toolKey) {
+		return
+	}
+
 	var event *resourceEvent
 	now := time.Now()
 	room.mu.Lock()
@@ -899,6 +1078,156 @@ func (client *client) handleToolUse(message clientMessage) {
 			Reason: "temporary_error",
 		})
 	}
+}
+
+func (client *client) handlePlacedObjectToolUse(room *room, toolKey string) bool {
+	if toolKey != "pickaxe" || client.server == nil {
+		return false
+	}
+
+	now := time.Now()
+	var request removeMapObjectRequest
+	var targetID string
+	room.mu.Lock()
+	player := room.players[client.id]
+	if player == nil {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
+		return true
+	}
+	if !player.lastToolUseAt.IsZero() && now.Sub(player.lastToolUseAt) < resourceToolCooldown {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "tool_cooldown"})
+		return true
+	}
+	target := room.nearestPlacedObjectLocked(player)
+	if target == nil {
+		room.mu.Unlock()
+		return false
+	}
+	player.lastToolUseAt = now
+	targetID = target.id
+	request = removeMapObjectRequest{
+		AppUserID: player.appUserID,
+		RoomID:    room.id,
+		MapID:     room.gameMap.ID,
+		GridX:     target.gridX,
+		GridY:     target.gridY,
+	}
+	room.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	removed, quantity, err := client.server.removeMapObject(ctx, request, room.gameMap)
+	cancel()
+	if err != nil {
+		log.Printf("remove placed object player=%s object=%s: %v", client.id, targetID, err)
+		client.trySend(serverMessage{Type: "error", Code: "map_object_remove_failed"})
+		return true
+	}
+
+	var snapshot placedObjectSnapshot
+	room.mu.Lock()
+	delete(room.placedObjects, removed.id)
+	snapshot = removed.snapshot()
+	room.mu.Unlock()
+
+	room.broadcastSnapshot(now)
+	room.broadcast(serverMessage{
+		Type:         "map_object_removed",
+		MapID:        room.gameMap.ID,
+		PlacedObject: &snapshot,
+	})
+	client.trySend(serverMessage{
+		Type:         "map_object_removed",
+		MapID:        room.gameMap.ID,
+		PlacedObject: &snapshot,
+		ResourceKey:  removed.itemKey,
+		Quantity:     quantity,
+	})
+	return true
+}
+
+func (client *client) handlePlaceObject(message clientMessage) {
+	itemKey := strings.TrimSpace(message.ItemKey)
+	if itemKey != "stone_block" {
+		client.trySend(serverMessage{Type: "error", Code: "unsupported_map_object"})
+		return
+	}
+	room := client.currentRoom()
+	if room == nil {
+		client.trySend(serverMessage{Type: "error", Code: "not_in_room"})
+		return
+	}
+	if client.server == nil {
+		client.trySend(serverMessage{Type: "error", Code: "map_object_place_failed"})
+		return
+	}
+
+	var request placeMapObjectRequest
+	room.mu.Lock()
+	player := room.players[client.id]
+	if player == nil {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
+		return
+	}
+	if !room.canPlaceObjectLocked(message.GridX, message.GridY, itemKey) {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "invalid_map_object_location"})
+		return
+	}
+	request = placeMapObjectRequest{
+		AppUserID: player.appUserID,
+		RoomID:    room.id,
+		MapID:     room.gameMap.ID,
+		GridX:     message.GridX,
+		GridY:     message.GridY,
+		ItemKey:   itemKey,
+	}
+	room.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	placed, quantity, err := client.server.placeMapObject(ctx, request, room.gameMap)
+	cancel()
+	if err != nil {
+		log.Printf("place object player=%s map=%s grid=(%d,%d): %v", client.id, room.gameMap.ID, message.GridX, message.GridY, err)
+		client.trySend(serverMessage{Type: "error", Code: "map_object_place_failed"})
+		return
+	}
+
+	room.mu.Lock()
+	if !room.canPlaceObjectLocked(placed.gridX, placed.gridY, placed.itemKey) {
+		deleteRequest := removeMapObjectRequest{
+			AppUserID: request.AppUserID,
+			RoomID:    request.RoomID,
+			MapID:     request.MapID,
+			GridX:     request.GridX,
+			GridY:     request.GridY,
+		}
+		room.mu.Unlock()
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_, _, _ = client.server.removeMapObject(cleanupCtx, deleteRequest, room.gameMap)
+		cleanupCancel()
+		client.trySend(serverMessage{Type: "error", Code: "invalid_map_object_location"})
+		return
+	}
+	room.placedObjects[placed.id] = placed
+	snapshot := placed.snapshot()
+	room.mu.Unlock()
+
+	room.broadcastSnapshot(time.Now())
+	room.broadcast(serverMessage{
+		Type:         "map_object_placed",
+		MapID:        room.gameMap.ID,
+		PlacedObject: &snapshot,
+	})
+	client.trySend(serverMessage{
+		Type:         "map_object_placed",
+		MapID:        room.gameMap.ID,
+		PlacedObject: &snapshot,
+		ResourceKey:  placed.itemKey,
+		Quantity:     quantity,
+	})
 }
 
 func (room *room) updateMove(playerID string, seq int64, x float64, y float64, facing string, moving bool, now time.Time) {
@@ -977,6 +1306,7 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		Players:       room.snapshotsLocked(),
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
+		PlacedObjects: room.placedObjectSnapshotsLocked(),
 	}
 	clients := make([]*client, 0, len(room.players))
 	for _, player := range room.players {
@@ -990,6 +1320,19 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		default:
 			room.leave(client)
 		}
+	}
+}
+
+func (room *room) broadcast(message serverMessage) {
+	room.mu.Lock()
+	clients := make([]*client, 0, len(room.players))
+	for _, player := range room.players {
+		clients = append(clients, player.client)
+	}
+	room.mu.Unlock()
+
+	for _, client := range clients {
+		client.trySend(message)
 	}
 }
 
@@ -1029,6 +1372,10 @@ func (room *room) acceptedMoveLocked(player *player, proposedX float64, proposed
 
 	x := room.clampXLocked(proposedX)
 	y := room.clampYLocked(proposedY)
+	if room.collidesLocked(x, y) {
+		x = player.x
+		y = player.y
+	}
 	return x, y, true
 }
 
@@ -1063,6 +1410,14 @@ func (room *room) resourceNodeSnapshotsLocked() []resourceNodeSnapshot {
 	return snapshots
 }
 
+func (room *room) placedObjectSnapshotsLocked() []placedObjectSnapshot {
+	snapshots := make([]placedObjectSnapshot, 0, len(room.placedObjects))
+	for _, object := range room.placedObjects {
+		snapshots = append(snapshots, object.snapshot())
+	}
+	return snapshots
+}
+
 func (room *room) nearestActiveResourceNodeLocked(player *player) *resourceNode {
 	var nearest *resourceNode
 	nearestDistance := math.MaxFloat64
@@ -1075,6 +1430,22 @@ func (room *room) nearestActiveResourceNodeLocked(player *player) *resourceNode 
 			continue
 		}
 		nearest = node
+		nearestDistance = distance
+	}
+	return nearest
+}
+
+func (room *room) nearestPlacedObjectLocked(player *player) *placedObject {
+	var nearest *placedObject
+	nearestDistance := math.MaxFloat64
+	for _, object := range room.placedObjects {
+		centerX := object.x + object.width/2
+		centerY := object.y + object.height/2
+		distance := math.Hypot(player.x-centerX, player.y-centerY)
+		if distance > 58 || distance >= nearestDistance {
+			continue
+		}
+		nearest = object
 		nearestDistance = distance
 	}
 	return nearest
@@ -1149,7 +1520,53 @@ func (room *room) collidesLocked(x float64, y float64) bool {
 			return true
 		}
 	}
+	for _, object := range room.placedObjects {
+		if rectsOverlap(playerRect, object.rect()) {
+			return true
+		}
+	}
 	return false
+}
+
+func (room *room) canPlaceObjectLocked(gridX int, gridY int, itemKey string) bool {
+	if itemKey != "stone_block" || gridX < 0 || gridY < 0 {
+		return false
+	}
+	if gridX >= room.gameMap.Width || gridY >= room.gameMap.Height {
+		return false
+	}
+	objectRect := gridRect(room.gameMap, gridX, gridY)
+	for _, blocked := range room.gameMap.BlockedRects {
+		if rectsOverlap(objectRect, blocked) {
+			return false
+		}
+	}
+	for _, portal := range room.gameMap.Portals {
+		if rectsOverlap(objectRect, rect{X: portal.X, Y: portal.Y, Width: portal.Width, Height: portal.Height}) {
+			return false
+		}
+	}
+	for _, npc := range room.gameMap.NPCs {
+		if rectsOverlap(objectRect, rect{X: npc.X - playerSize/2, Y: npc.Y - playerSize/2, Width: playerSize, Height: playerSize}) {
+			return false
+		}
+	}
+	for _, node := range room.resourceNodes {
+		if rectsOverlap(objectRect, rect{X: node.x - node.radius, Y: node.y - node.radius, Width: node.radius * 2, Height: node.radius * 2}) {
+			return false
+		}
+	}
+	for _, player := range room.players {
+		if rectsOverlap(objectRect, rect{X: player.x - playerSize/2, Y: player.y - playerSize/2, Width: playerSize, Height: playerSize}) {
+			return false
+		}
+	}
+	for _, object := range room.placedObjects {
+		if rectsOverlap(objectRect, object.rect()) {
+			return false
+		}
+	}
+	return true
 }
 
 func (room *room) clampXLocked(x float64) float64 {
@@ -1226,6 +1643,8 @@ func (client *client) readPump() {
 			client.refreshEquipment()
 		case "tool_use":
 			client.handleToolUse(message)
+		case "place_object":
+			client.handlePlaceObject(message)
 		case "ping":
 			_ = client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		default:
@@ -1535,6 +1954,55 @@ func initialResourceNodes(gameMap gameMap) map[string]*resourceNode {
 		}
 	}
 	return nodes
+}
+
+func placedObjectFromResponse(gameMap gameMap, response mapObjectResponse) *placedObject {
+	objectRect := gridRect(gameMap, response.GridX, response.GridY)
+	return &placedObject{
+		id:                strconv.FormatInt(response.ID, 10),
+		itemKey:           response.ItemKey,
+		mapID:             response.MapID,
+		gridX:             response.GridX,
+		gridY:             response.GridY,
+		x:                 objectRect.X,
+		y:                 objectRect.Y,
+		width:             objectRect.Width,
+		height:            objectRect.Height,
+		placedByAppUserID: response.PlacedByAppUserID,
+	}
+}
+
+func gridRect(gameMap gameMap, gridX int, gridY int) rect {
+	tileSize := float64(gameMap.TileSize)
+	return rect{
+		X:      float64(gridX) * tileSize,
+		Y:      float64(gridY) * tileSize,
+		Width:  tileSize,
+		Height: tileSize,
+	}
+}
+
+func (object *placedObject) rect() rect {
+	return rect{
+		X:      object.x,
+		Y:      object.y,
+		Width:  object.width,
+		Height: object.height,
+	}
+}
+
+func (object *placedObject) snapshot() placedObjectSnapshot {
+	return placedObjectSnapshot{
+		ID:                object.id,
+		ItemKey:           object.itemKey,
+		GridX:             object.gridX,
+		GridY:             object.gridY,
+		X:                 object.x,
+		Y:                 object.y,
+		Width:             object.width,
+		Height:            object.height,
+		PlacedByAppUserID: object.placedByAppUserID,
+	}
 }
 
 func rollMiningDrop() (string, int) {

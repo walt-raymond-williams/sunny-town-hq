@@ -62,7 +62,7 @@ func TestRoomMovement(t *testing.T) {
 	}
 }
 
-func TestRoomAcceptsClientPositionInsideBlockedGeometry(t *testing.T) {
+func TestRoomRejectsClientPositionInsideBlockedGeometry(t *testing.T) {
 	gameMap := testMap()
 	gameMap.BlockedRects = []rect{{X: 130, Y: 80, Width: 60, Height: 60}}
 	room := testRoom(gameMap)
@@ -74,8 +74,56 @@ func TestRoomAcceptsClientPositionInsideBlockedGeometry(t *testing.T) {
 	player.lastMoveAt = now.Add(-200 * time.Millisecond)
 	room.updateMove("42", 7, 150, 100, "right", true, now)
 
-	if player.x != 150 || player.y != 100 {
-		t.Fatalf("player position = (%v,%v), want accepted client position (150,100)", player.x, player.y)
+	if player.x != 100 || player.y != 100 {
+		t.Fatalf("player position = (%v,%v), want previous position (100,100)", player.x, player.y)
+	}
+}
+
+func TestRoomRejectsClientPositionInsidePlacedObject(t *testing.T) {
+	room := testRoom(testMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+	room.placedObjects["block-1"] = placedObjectFromResponse(room.gameMap, mapObjectResponse{
+		ID:                1,
+		MapID:             room.gameMap.ID,
+		GridX:             4,
+		GridY:             3,
+		ItemKey:           "stone_block",
+		PlacedByAppUserID: 42,
+	})
+
+	now := time.Now()
+	player := room.players["42"]
+	player.lastMoveAt = now.Add(-200 * time.Millisecond)
+	room.updateMove("42", 7, 144, 112, "right", true, now)
+
+	if player.x != 100 || player.y != 100 {
+		t.Fatalf("player position = (%v,%v), want previous position (100,100)", player.x, player.y)
+	}
+}
+
+func TestRoomCanPlaceObjectRejectsBlockedAndOccupiedTiles(t *testing.T) {
+	gameMap := testMap()
+	gameMap.BlockedRects = []rect{{X: 192, Y: 96, Width: 32, Height: 32}}
+	room := testRoom(gameMap)
+
+	if !room.canPlaceObjectLocked(2, 2, "stone_block") {
+		t.Fatal("expected empty tile to allow stone block placement")
+	}
+	if room.canPlaceObjectLocked(6, 3, "stone_block") {
+		t.Fatal("expected blocked tile to reject stone block placement")
+	}
+
+	room.placedObjects["block-1"] = placedObjectFromResponse(room.gameMap, mapObjectResponse{
+		ID:                1,
+		MapID:             room.gameMap.ID,
+		GridX:             2,
+		GridY:             2,
+		ItemKey:           "stone_block",
+		PlacedByAppUserID: 42,
+	})
+	if room.canPlaceObjectLocked(2, 2, "stone_block") {
+		t.Fatal("expected occupied tile to reject stone block placement")
 	}
 }
 

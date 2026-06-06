@@ -14,6 +14,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const (
+	testSunnyTownRoomID = "sunny-town-main"
+	testSunnyTownMapID  = "sunny-town-v1"
+)
+
 func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
@@ -442,6 +447,113 @@ func TestCraftStudentRecipeRejectsUnknownRecipe(t *testing.T) {
 	}
 }
 
+func TestPlaceSunnyTownMapObjectConsumesStoneBlock(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+
+	placed, err := app.placeSunnyTownMapObject(ctx, sunnyTownPlaceMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     4,
+		GridY:     5,
+		ItemKey:   stoneBlockItemKey,
+	})
+	if err != nil {
+		t.Fatalf("place map object error = %v", err)
+	}
+	if placed.ID == 0 || placed.ItemKey != stoneBlockItemKey || placed.GridX != 4 || placed.GridY != 5 || placed.RemainingItemAmount != 1 {
+		t.Fatalf("placed object = %#v, want stone block at 4,5 with 1 remaining", placed)
+	}
+
+	loaded, err := app.loadSunnyTownMapObjects(ctx, testSunnyTownRoomID, testSunnyTownMapID)
+	if err != nil {
+		t.Fatalf("load map objects error = %v", err)
+	}
+	if len(loaded.Objects) != 1 || loaded.Objects[0].ID != placed.ID {
+		t.Fatalf("loaded objects = %#v, want placed object", loaded.Objects)
+	}
+}
+
+func TestPlaceSunnyTownMapObjectRollsBackInventoryWhenOccupied(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+	request := sunnyTownPlaceMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     4,
+		GridY:     5,
+		ItemKey:   stoneBlockItemKey,
+	}
+	if _, err := app.placeSunnyTownMapObject(ctx, request); err != nil {
+		t.Fatalf("first place map object error = %v", err)
+	}
+	_, err := app.placeSunnyTownMapObject(ctx, request)
+	if err != errMapObjectOccupied {
+		t.Fatalf("second place map object error = %v, want errMapObjectOccupied", err)
+	}
+	quantity, err := loadStudentInventoryQuantity(ctx, app.db, 123, stoneBlockItemKey)
+	if err != nil {
+		t.Fatalf("load stone block quantity: %v", err)
+	}
+	if quantity != 1 {
+		t.Fatalf("stone block quantity = %d, want 1", quantity)
+	}
+}
+
+func TestRemoveSunnyTownMapObjectRefundsStoneBlock(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, stoneBlockItemKey, 1); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+	if _, err := app.placeSunnyTownMapObject(ctx, sunnyTownPlaceMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     4,
+		GridY:     5,
+		ItemKey:   stoneBlockItemKey,
+	}); err != nil {
+		t.Fatalf("place map object error = %v", err)
+	}
+
+	removed, err := app.removeSunnyTownMapObject(ctx, sunnyTownRemoveMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     4,
+		GridY:     5,
+	})
+	if err != nil {
+		t.Fatalf("remove map object error = %v", err)
+	}
+	if removed.ItemKey != stoneBlockItemKey || removed.RemainingItemAmount != 1 {
+		t.Fatalf("removed object = %#v, want refunded stone block", removed)
+	}
+
+	loaded, err := app.loadSunnyTownMapObjects(ctx, testSunnyTownRoomID, testSunnyTownMapID)
+	if err != nil {
+		t.Fatalf("load map objects error = %v", err)
+	}
+	if len(loaded.Objects) != 0 {
+		t.Fatalf("loaded objects = %#v, want empty", loaded.Objects)
+	}
+}
+
 func TestEquipStudentItemRequiresOwnedEquippableItem(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
@@ -674,6 +786,18 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			created_at timestamptz not null default now(),
 			updated_at timestamptz not null default now(),
 			constraint student_sunny_town_position_facing_check check (facing in ('up', 'down', 'left', 'right'))
+		)`,
+		`create table sunny_town_map_object (
+			id bigserial primary key,
+			room_id text not null,
+			map_id text not null,
+			grid_x integer not null,
+			grid_y integer not null,
+			item_key text not null references inventory_item_type(key) on delete restrict,
+			placed_by_app_user_id bigint not null references app_user(id) on delete cascade,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint sunny_town_map_object_location_key unique (room_id, map_id, grid_x, grid_y)
 		)`,
 		`insert into app_user (id, display_name) values (123, 'Student')`,
 		`insert into pet_state (user_id, hunger, happiness, energy) values (123, 50, 50, 50)`,

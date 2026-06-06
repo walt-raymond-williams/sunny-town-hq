@@ -84,6 +84,18 @@ export interface SunnyTownMap {
   resourceNodes: SunnyTownResourceNodeDefinition[]
 }
 
+export interface SunnyTownPlacedObject {
+  id: string
+  itemKey: 'stone_block'
+  gridX: number
+  gridY: number
+  x: number
+  y: number
+  width: number
+  height: number
+  placedByAppUserId?: number
+}
+
 export interface SunnyTownCollectible {
   id: string
   kind: 'star'
@@ -114,7 +126,7 @@ export interface SunnyTownResourceNode {
 }
 
 export interface SunnyTownServerMessage {
-  type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed' | 'resource_committed' | 'resource_failed'
+  type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed' | 'resource_committed' | 'resource_failed' | 'map_object_placed' | 'map_object_removed'
   selfId?: string
   roomId?: string
   mapId?: string
@@ -124,6 +136,8 @@ export interface SunnyTownServerMessage {
   players?: SunnyTownPlayer[]
   collectibles?: SunnyTownCollectible[]
   resourceNodes?: SunnyTownResourceNode[]
+  placedObjects?: SunnyTownPlacedObject[]
+  placedObject?: SunnyTownPlacedObject
   code?: string
   eventId?: string
   kind?: 'star'
@@ -131,7 +145,7 @@ export interface SunnyTownServerMessage {
   newStarBalance?: number
   collectibleId?: string
   nodeId?: string
-  resourceKey?: 'rock' | 'crystal'
+  resourceKey?: 'rock' | 'crystal' | 'stone_block'
   quantity?: number
   reason?: string
 }
@@ -156,5 +170,13 @@ export interface SunnyTownToolUseMessage {
   x: number
   y: number
   facing: 'up' | 'down' | 'left' | 'right'
+  clientTimeMs: number
+}
+
+export interface SunnyTownPlaceObjectMessage {
+  type: 'place_object'
+  itemKey: 'stone_block'
+  gridX: number
+  gridY: number
   clientTimeMs: number
 }
