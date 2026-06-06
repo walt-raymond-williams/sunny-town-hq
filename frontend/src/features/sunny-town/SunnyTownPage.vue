@@ -11,6 +11,7 @@ import {
   simulatePlayer,
   useSunnyTownMovement,
 } from '../../composables/useSunnyTownMovement'
+import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { Assignment } from '../../types/assignment'
@@ -29,6 +30,7 @@ import type {
   SunnyTownToolUseMessage,
   SunnyTownWorldObject,
 } from '../../types/sunnyTown'
+import SunnyTownCanvas from './SunnyTownCanvas.vue'
 
 interface ToolUseAnimation {
   toolKey: string
@@ -80,11 +82,9 @@ const isSubmittingSchoolwork = ref(false)
 const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
 let localSelf: SunnyTownPlayer | null = null
 let renderedSelf: SunnyTownPlayer | null = null
-let animationFrame = 0
 let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
-let lastRenderTime = 0
 let activeToolUse: ToolUseAnimation | null = null
 
 const {
@@ -103,6 +103,15 @@ const {
   },
   onMessage: handleServerMessage,
 })
+
+const renderer = useSunnyTownRenderer(canvas, {
+  drawScene,
+  onFrame(deltaSeconds) {
+    predictSelf(deltaSeconds)
+    refreshNpcInteractionState()
+  },
+})
+const draw = renderer.draw
 
 const playerCount = computed(() => players.value.length)
 const activeDialogueLine = computed(() => activeDialogueNpc.value?.dialogue[activeDialogueLineIndex.value] || '')
@@ -128,7 +137,7 @@ onMounted(async () => {
   window.addEventListener('blur', handleInputCancel)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('resize', handleResize)
-  animationFrame = window.requestAnimationFrame(renderLoop)
+  renderer.start()
   await startSunnyTownSocket()
 })
 
@@ -138,7 +147,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('blur', handleInputCancel)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', handleResize)
-  window.cancelAnimationFrame(animationFrame)
+  renderer.stop()
   stopSunnyTownSocket()
   localSelf = null
   renderedSelf = null
@@ -325,6 +334,11 @@ function handleInputCancel() {
 }
 
 function handleResize() {
+  draw()
+}
+
+function setCanvas(element: HTMLCanvasElement) {
+  canvas.value = element
   draw()
 }
 
@@ -806,52 +820,20 @@ function sendMove(force = false) {
   sendSunnyTownMessage(JSON.stringify(message))
 }
 
-function renderLoop() {
-  const now = performance.now()
-  const deltaSeconds = lastRenderTime ? (now - lastRenderTime) / 1000 : 0
-  lastRenderTime = now
-  predictSelf(deltaSeconds)
-  refreshNpcInteractionState()
-  draw()
-  animationFrame = window.requestAnimationFrame(renderLoop)
-}
-
-function draw() {
-  const target = canvas.value
-  if (!target) {
-    return
-  }
-
-  const context = target.getContext('2d')
-  if (!context) {
-    return
-  }
-
-  const rect = target.getBoundingClientRect()
-  const scale = window.devicePixelRatio || 1
-  const width = Math.max(1, Math.floor(rect.width * scale))
-  const height = Math.max(1, Math.floor(rect.height * scale))
-  if (target.width !== width || target.height !== height) {
-    target.width = width
-    target.height = height
-  }
-
-  context.setTransform(scale, 0, 0, scale, 0, 0)
-  context.clearRect(0, 0, rect.width, rect.height)
-
+function drawScene(context: CanvasRenderingContext2D, width: number, height: number) {
   const map = activeMap.value
   if (!map) {
     context.fillStyle = '#8fcf85'
-    context.fillRect(0, 0, rect.width, rect.height)
+    context.fillRect(0, 0, width, height)
     return
   }
 
   const renderedPlayers = renderedSunnyTownPlayers()
-  const camera = currentCamera(rect.width, rect.height)
+  const camera = currentCamera(width, height)
   const cameraX = camera.x
   const cameraY = camera.y
 
-  drawMap(context, map, cameraX, cameraY, rect.width, rect.height)
+  drawMap(context, map, cameraX, cameraY, width, height)
   drawWorldObjects(context, cameraX, cameraY)
   drawPlacementPreview(context, map, cameraX, cameraY)
   for (const collectible of collectibles.value) {
@@ -1522,12 +1504,11 @@ function backToPet() {
     </v-alert>
 
     <div class="sunny-town-stage">
-      <canvas
-        ref="canvas"
-        aria-label="Sunny Town map"
-        @pointerdown="handleCanvasPointerDown"
-        @pointermove="handleCanvasPointerMove"
-        @pointerleave="handleCanvasPointerLeave"
+      <SunnyTownCanvas
+        @pointer-down="handleCanvasPointerDown"
+        @pointer-leave="handleCanvasPointerLeave"
+        @pointer-move="handleCanvasPointerMove"
+        @ready="setCanvas"
       />
       <div v-if="gameToast" class="sunny-town-toast" role="status">
         {{ gameToast }}
