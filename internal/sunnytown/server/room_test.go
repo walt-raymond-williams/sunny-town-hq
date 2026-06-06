@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"os"
@@ -323,7 +323,7 @@ func TestWorldTransfersPlayerThroughPortal(t *testing.T) {
 }
 
 func TestWorldTransfersPlayerToForestCrossing(t *testing.T) {
-	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -728,7 +728,7 @@ func TestLoadMapsRejectsUnknownPortalTarget(t *testing.T) {
 }
 
 func TestLoadMapsAcceptsCheckedInMaps(t *testing.T) {
-	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
 	if err != nil {
 		t.Fatal(err)
 	}

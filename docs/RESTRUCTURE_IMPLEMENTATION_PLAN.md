@@ -1,6 +1,6 @@
 # Restructure Implementation Plan
 
-This plan tracks the repository restructure work identified in the project review. It is intentionally split so Sunny Town and general collaboration improvements can proceed while AI service work happens separately.
+This plan tracks the repository restructure work identified in the project review. The work is now being handled by one refactor owner, so phases can touch any needed project area as long as each slice is behavior-preserving and thoroughly verified before commit.
 
 ## Resume Snapshot
 
@@ -8,50 +8,35 @@ Last updated: 2026-06-06.
 
 Current state:
 
-- All changes through `3ef39c5 Split Sunny Town client gameplay` are committed.
-- `git status --short` should show only known untracked local logs unless new work has started:
+- All changes through `a77d7a1 Update restructure plan resume snapshot` are committed.
+- Active work has started on promoting Sunny Town backend code into `internal/sunnytown/server`.
+- Before commit, `git status --short` should show only the current Sunny Town move, this plan update, and known untracked local logs:
   - `hq-local.err.log`
   - `hq-local.out.log`
-- Phase 2 preparatory file splits are complete. `cmd/sunny-town/main.go` is now a thin 143-line entrypoint plus `room.step`, `newRewardRunID`, and `validateJoinTarget`.
-- Current Sunny Town command-package file shape:
+- Phase 2 preparatory file splits are complete.
+- Current Sunny Town backend package shape:
   - `cmd/sunny-town/main.go`
-  - `cmd/sunny-town/server.go`
-  - `cmd/sunny-town/server_workers.go`
-  - `cmd/sunny-town/client_io.go`
-  - `cmd/sunny-town/client_gameplay.go`
-  - `cmd/sunny-town/world_types.go`
-  - `cmd/sunny-town/world_lifecycle.go`
-  - `cmd/sunny-town/world_movement.go`
-  - `cmd/sunny-town/world_objects.go`
-  - `cmd/sunny-town/world_snapshots.go`
-  - `cmd/sunny-town/room_test.go`
+  - `internal/sunnytown/server/`
 
 Recommended next work:
 
-1. Promote the package-local world files into `internal/sunnytown/world`.
-2. Promote server/client wiring into `internal/sunnytown/server`.
-3. Update Sunny Town tests so world behavior tests live with or import the new world package.
-4. Keep each promotion behavior-preserving and run:
+1. Review the `internal/sunnytown/server` move and keep the public API narrow.
+2. Consider a later split from `internal/sunnytown/server` into `internal/sunnytown/world` only after explicit world/server interfaces are clear.
+3. Keep each promotion behavior-preserving and run:
 
 ```powershell
 go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth
 go test ./...
+cd frontend
+npm run build
 ```
 
 ## Coordination Rules
 
-- Do not touch AI service implementation while another agent is refactoring it.
-- Avoid AI integration files until the AI work lands:
-  - `cmd/ai/main.go`
-  - `internal/aiapi/grading.go`
-  - `cmd/hq/ai_grading.go`
-  - AI-related sections of `cmd/hq/schema.go`
-  - AI env vars in `deploy/docker-compose.yml`
-  - `docs/AI_SERVICE_IMPLEMENTATION_PLAN.md`
-  - `docs/AI_GRADING_HARDENING_PLAN.md`
-- Avoid broad HQ backend movement until AI/HQ integration changes are known.
+- Treat the repository as a single-owner refactor during this work.
 - Keep each phase behavior-preserving unless the task explicitly says otherwise.
-- Run scoped verification after each phase and record results in this file.
+- Run scoped verification after each meaningful slice, then full repository verification before commit.
+- Record verification results in this file.
 
 ## Phase 1: Collaboration Surface
 
@@ -68,7 +53,7 @@ Verification:
 
 - [x] `go test ./...`
 - [x] `cd frontend && npm run build`
-- [ ] Confirm `git status --short` contains only intentional docs/task-runner changes plus known local logs and known concurrent AI edits.
+- [x] Confirm `git status --short` contains only intentional docs/task-runner changes plus known local logs.
 
 ## Phase 2: Sunny Town Backend Split
 
@@ -83,7 +68,6 @@ internal/sunnytown/hqclient/
 internal/sunnytown/maps/
 internal/sunnytown/protocol/
 internal/sunnytown/server/
-internal/sunnytown/world/
 ```
 
 Tasks:
@@ -91,24 +75,25 @@ Tasks:
 - [x] Move config loading into `internal/sunnytown/config`.
 - [x] Move map structs, loading, and validation into `internal/sunnytown/maps`.
 - [x] Move WebSocket message structs into `internal/sunnytown/protocol`.
-- [ ] Move room, player, world, movement, portal, collectible, resource, and placement logic into `internal/sunnytown/world`.
+- [x] Move room, player, world, movement, portal, collectible, resource, and placement logic into `internal/sunnytown/server`.
 - [x] Split Sunny Town world data types into `cmd/sunny-town/world_types.go` as a preparatory step.
 - [x] Split Sunny Town world lifecycle methods into `cmd/sunny-town/world_lifecycle.go` as a preparatory step.
 - [x] Split Sunny Town movement, collision, clamping, and portal helpers into `cmd/sunny-town/world_movement.go` as a preparatory step.
 - [x] Split Sunny Town snapshot and broadcast helpers into `cmd/sunny-town/world_snapshots.go` as a preparatory step.
 - [x] Split Sunny Town collectibles, resources, placement geometry, and world object helpers into `cmd/sunny-town/world_objects.go` as a preparatory step.
 - [x] Move internal HQ HTTP calls into `internal/sunnytown/hqclient`.
-- [ ] Move WebSocket server setup and request handling into `internal/sunnytown/server`.
+- [x] Move WebSocket server setup and request handling into `internal/sunnytown/server`.
 - [x] Split Sunny Town server/WebSocket wiring into `cmd/sunny-town/server.go` as a preparatory step.
 - [x] Split Sunny Town client WebSocket pumps and send/rate-limit helpers into `cmd/sunny-town/client_io.go` as a preparatory step.
 - [x] Split Sunny Town client gameplay handlers into `cmd/sunny-town/client_gameplay.go` as a preparatory step.
 - [x] Split Sunny Town reward and resource commit workers into `cmd/sunny-town/server_workers.go` as a preparatory step.
-- [ ] Update Sunny Town tests to import/use the new packages.
+- [x] Move Sunny Town backend tests into `internal/sunnytown/server`.
 
 Verification:
 
 - [x] `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth`
 - [x] `go test ./...`
+- [x] `cd frontend && npm run build`
 
 ## Phase 3: Sunny Town Frontend Split
 
@@ -152,9 +137,7 @@ Verification:
 
 ## Phase 4: HQ Backend Split
 
-Goal: reduce `cmd/hq/main.go` after AI service work lands.
-
-Wait for the AI refactor before starting this phase.
+Goal: reduce `cmd/hq/main.go` after the Sunny Town backend and frontend splits are complete.
 
 Target structure:
 
@@ -179,7 +162,7 @@ Tasks:
 - [ ] Move inventory, equipment, hotbar, and crafting logic.
 - [ ] Move pet service logic.
 - [ ] Move Sunny Town bridge endpoints.
-- [ ] Move AI integration after reconciling with the other agent's refactor.
+- [ ] Move AI integration behind the chosen HQ package boundaries.
 - [ ] Keep `cmd/hq/main.go` as a thin binary entrypoint.
 
 Verification:
@@ -191,7 +174,7 @@ Verification:
 
 Goal: replace mixed Docker init SQL plus runtime schema patching with explicit migrations.
 
-Wait for AI schema changes to settle before starting this phase.
+Start after the HQ backend split is stable enough that schema ownership is clear.
 
 Target structure:
 
@@ -281,3 +264,7 @@ Verification:
 - 2026-06-06: Phase 2 split Sunny Town client gameplay handlers into `cmd/sunny-town/client_gameplay.go` as a preparatory step before moving server/world logic to internal packages.
 - 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town client gameplay split.
 - 2026-06-06: `go test ./...` passed after Sunny Town client gameplay split.
+- 2026-06-06: Phase 2 moved Sunny Town server, client, room, world, movement, placement, resource, snapshot, and backend tests into `internal/sunnytown/server`; `cmd/sunny-town/main.go` is now a thin entrypoint.
+- 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after the Sunny Town server package move.
+- 2026-06-06: `go test ./...` passed after the Sunny Town server package move.
+- 2026-06-06: `cd frontend && npm run build` passed after the Sunny Town server package move. Vite still reported the large chunk warning.

@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -15,17 +15,17 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type server struct {
+type Server struct {
 	config   stconfig.Config
 	world    *world
 	hq       *hqclient.Client
 	upgrader websocket.Upgrader
 }
 
-func newServer(cfg stconfig.Config, world *world) *server {
-	srv := &server{
+func New(cfg stconfig.Config, maps map[string]gameMap) *Server {
+	srv := &Server{
 		config: cfg,
-		world:  world,
+		world:  newWorld(defaultRoomID, maps),
 		hq:     hqclient.New(cfg.HQInternalURL, cfg.ServiceSecret, 3*time.Second),
 	}
 	srv.upgrader = websocket.Upgrader{
@@ -39,7 +39,13 @@ func newServer(cfg stconfig.Config, world *world) *server {
 	return srv
 }
 
-func (srv *server) loadInitialMapObjects(ctx context.Context) error {
+func (srv *Server) StartRooms(ctx context.Context) {
+	for _, room := range srv.world.rooms {
+		go room.run(ctx)
+	}
+}
+
+func (srv *Server) LoadInitialMapObjects(ctx context.Context) error {
 	for _, room := range srv.world.rooms {
 		loadCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		objects, err := srv.loadMapObjects(loadCtx, room.id, room.gameMap.ID)
@@ -54,7 +60,7 @@ func (srv *server) loadInitialMapObjects(ctx context.Context) error {
 	return nil
 }
 
-func (srv *server) loadMapObjects(ctx context.Context, roomID string, mapID string) (map[string]*placedObject, error) {
+func (srv *Server) loadMapObjects(ctx context.Context, roomID string, mapID string) (map[string]*placedObject, error) {
 	loaded, err := srv.hq.LoadMapObjects(ctx, roomID, mapID)
 	if err != nil {
 		return nil, err
@@ -72,7 +78,7 @@ func (srv *server) loadMapObjects(ctx context.Context, roomID string, mapID stri
 	return objects, nil
 }
 
-func (srv *server) refreshRoomMapObjects(ctx context.Context, mapID string) error {
+func (srv *Server) refreshRoomMapObjects(ctx context.Context, mapID string) error {
 	room := srv.world.rooms[mapID]
 	if room == nil {
 		return fmt.Errorf("unknown map %q", mapID)
@@ -87,7 +93,7 @@ func (srv *server) refreshRoomMapObjects(ctx context.Context, mapID string) erro
 	return nil
 }
 
-func (srv *server) placeMapObject(ctx context.Context, request placeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
+func (srv *Server) placeMapObject(ctx context.Context, request placeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
 	placed, err := srv.hq.PlaceMapObject(ctx, request)
 	if err != nil {
 		return nil, 0, err
@@ -95,7 +101,7 @@ func (srv *server) placeMapObject(ctx context.Context, request placeMapObjectReq
 	return placedObjectFromResponse(gameMap, placed), placed.RemainingItemAmount, nil
 }
 
-func (srv *server) removeMapObject(ctx context.Context, request removeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
+func (srv *Server) removeMapObject(ctx context.Context, request removeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
 	removed, err := srv.hq.RemoveMapObject(ctx, request)
 	if err != nil {
 		return nil, 0, err
@@ -103,7 +109,7 @@ func (srv *server) removeMapObject(ctx context.Context, request removeMapObjectR
 	return placedObjectFromResponse(gameMap, removed), removed.RemainingItemAmount, nil
 }
 
-func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (srv *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	claims, err := sunnytownauth.Verify(r.URL.Query().Get("token"), srv.config.JoinSecret, time.Now())
 	if err != nil {
 		log.Printf("sunny town auth failed: %v", err)
@@ -152,7 +158,7 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	client.readPump()
 }
 
-func logRequests(next http.Handler) http.Handler {
+func LogRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)

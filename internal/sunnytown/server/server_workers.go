@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func (srv *server) runRewardWorker(ctx context.Context) {
+func (srv *Server) RunRewardWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -34,7 +34,7 @@ func (srv *server) runRewardWorker(ctx context.Context) {
 	}
 }
 
-func (srv *server) commitRewardWithRetry(ctx context.Context, event rewardEvent) (rewardCommitResponse, error) {
+func (srv *Server) commitRewardWithRetry(ctx context.Context, event rewardEvent) (rewardCommitResponse, error) {
 	backoffs := []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond}
 	var lastErr error
 	for attempt := 0; attempt <= len(backoffs); attempt++ {
@@ -55,7 +55,7 @@ func (srv *server) commitRewardWithRetry(ctx context.Context, event rewardEvent)
 	return rewardCommitResponse{}, lastErr
 }
 
-func (srv *server) commitReward(ctx context.Context, event rewardEvent) (rewardCommitResponse, error) {
+func (srv *Server) commitReward(ctx context.Context, event rewardEvent) (rewardCommitResponse, error) {
 	return srv.hq.CommitReward(ctx, rewardCommitRequest{
 		EventID:       event.eventID,
 		AppUserID:     event.appUserID,
@@ -67,7 +67,7 @@ func (srv *server) commitReward(ctx context.Context, event rewardEvent) (rewardC
 	})
 }
 
-func (srv *server) runResourceWorker(ctx context.Context) {
+func (srv *Server) RunResourceWorker(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -96,7 +96,7 @@ func (srv *server) runResourceWorker(ctx context.Context) {
 	}
 }
 
-func (srv *server) commitResourceWithRetry(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
+func (srv *Server) commitResourceWithRetry(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
 	backoffs := []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond}
 	var lastErr error
 	for attempt := 0; attempt <= len(backoffs); attempt++ {
@@ -117,7 +117,7 @@ func (srv *server) commitResourceWithRetry(ctx context.Context, event resourceEv
 	return resourceCommitResponse{}, lastErr
 }
 
-func (srv *server) commitResource(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
+func (srv *Server) commitResource(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
 	return srv.hq.CommitResource(ctx, resourceCommitRequest{
 		EventID:     event.eventID,
 		AppUserID:   event.appUserID,

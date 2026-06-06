@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"sync"
@@ -48,7 +48,7 @@ type player struct {
 type client struct {
 	conn             *websocket.Conn
 	send             chan serverMessage
-	server           *server
+	server           *Server
 	mu               sync.Mutex
 	room             *room
 	id               string
