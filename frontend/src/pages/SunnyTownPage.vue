@@ -280,12 +280,28 @@ async function equipInventoryItem(itemKey: string, slot: 'gear' | 'accessory' | 
     return
   }
   await inventoryStore.equipItem(slot, itemKey)
+  applyLocalEquipmentVisuals()
   notifyEquipmentChanged()
 }
 
 async function unequipInventorySlot(slot: 'gear' | 'accessory') {
   await inventoryStore.unequipItem(slot)
+  applyLocalEquipmentVisuals()
   notifyEquipmentChanged()
+}
+
+function applyLocalEquipmentVisuals() {
+  const equipment = { ...inventoryStore.equippedVisuals }
+  if (localSelf) {
+    localSelf.equipment = equipment
+  }
+  if (renderedSelf) {
+    renderedSelf.equipment = equipment
+  }
+  players.value = players.value.map((player) => (
+    player.id === selfId.value ? { ...player, equipment } : player
+  ))
+  draw()
 }
 
 function applyMapState(message: SunnyTownServerMessage) {
@@ -623,6 +639,7 @@ function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
   renderedSelf.facing = target.facing
   renderedSelf.moving = target.moving
   renderedSelf.avatarId = target.avatarId
+  renderedSelf.equipment = target.equipment ? { ...target.equipment } : undefined
   renderedSelf.lastProcessedSeq = target.lastProcessedSeq
 
   return [...renderedRemotePlayers, renderedSelf]
@@ -741,6 +758,7 @@ function syncLocalSelfFromSnapshot() {
 
   localSelf.displayName = selfSnapshot.displayName
   localSelf.avatarId = selfSnapshot.avatarId
+  localSelf.equipment = selfSnapshot.equipment ? { ...selfSnapshot.equipment } : undefined
   localSelf.lastProcessedSeq = selfSnapshot.lastProcessedSeq
 }
 
@@ -1290,9 +1308,9 @@ function backToPet() {
             <v-btn
               v-if="slot.item"
               :loading="inventoryStore.isUpdatingEquipment"
-              color="secondary"
+              color="primary"
               size="x-small"
-              variant="tonal"
+              variant="flat"
               @click="unequipInventorySlot(slot.slot)"
             >
               Unequip
@@ -1300,7 +1318,7 @@ function backToPet() {
           </div>
         </section>
         <div class="inventory-list inventory-list--compact">
-          <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item inventory-item--dark">
+          <div v-for="item in inventoryStore.unequippedItems" :key="item.key" class="inventory-item inventory-item--dark">
             <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
             <div>
               <p class="inventory-item__name">{{ item.name }}</p>
@@ -1315,16 +1333,6 @@ function backToPet() {
               @click="equipInventoryItem(item.key, item.equipSlot)"
             >
               Equip
-            </v-btn>
-            <v-btn
-              v-else-if="item.equipped && item.equipSlot"
-              :loading="inventoryStore.isUpdatingEquipment"
-              color="secondary"
-              size="x-small"
-              variant="tonal"
-              @click="unequipInventorySlot(item.equipSlot)"
-            >
-              Unequip
             </v-btn>
             <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
           </div>

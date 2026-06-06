@@ -194,9 +194,9 @@ async function equipFromInventory(itemKey: string, slot: 'gear' | 'accessory' | 
             <v-btn
               v-if="slot.item"
               :loading="inventoryStore.isUpdatingEquipment"
-              color="secondary"
+              color="primary"
               size="small"
-              variant="tonal"
+              variant="flat"
               @click="inventoryStore.unequipItem(slot.slot)"
             >
               Unequip
@@ -204,7 +204,7 @@ async function equipFromInventory(itemKey: string, slot: 'gear' | 'accessory' | 
           </div>
         </section>
         <div class="inventory-list">
-          <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item">
+          <div v-for="item in inventoryStore.unequippedItems" :key="item.key" class="inventory-item">
             <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
             <div>
               <p class="inventory-item__name">{{ item.name }}</p>
@@ -219,16 +219,6 @@ async function equipFromInventory(itemKey: string, slot: 'gear' | 'accessory' | 
               @click="equipFromInventory(item.key, item.equipSlot)"
             >
               Equip
-            </v-btn>
-            <v-btn
-              v-else-if="item.equipped && item.equipSlot"
-              :loading="inventoryStore.isUpdatingEquipment"
-              color="secondary"
-              size="small"
-              variant="tonal"
-              @click="inventoryStore.unequipItem(item.equipSlot)"
-            >
-              Unequip
             </v-btn>
             <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
           </div>

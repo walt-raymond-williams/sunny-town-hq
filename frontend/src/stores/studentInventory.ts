@@ -26,6 +26,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
   }),
   getters: {
     cookieQuantity: (state) => state.items.find((item) => item.key === 'cookie')?.quantity ?? 0,
+    unequippedItems: (state) => state.items.filter((item) => !item.equipped),
     equippedVisuals: (state) => Object.fromEntries(
       state.equipmentSlots.map((slot) => [slot.slot, slot.item?.visualKey || '']),
     ) as Record<EquipmentSlot, string>,
