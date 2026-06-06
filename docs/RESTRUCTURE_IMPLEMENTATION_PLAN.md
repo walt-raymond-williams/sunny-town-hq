@@ -127,7 +127,7 @@ Slice plan:
 - [x] Slice 3.2: Extract socket/session lifecycle into `frontend/src/composables/useSunnyTownSocket.ts`.
 - [x] Slice 3.3: Extract movement input, client prediction, collision helpers, and placement validation into `frontend/src/composables/useSunnyTownMovement.ts`.
 - [x] Slice 3.4: Extract canvas rendering lifecycle into `frontend/src/composables/useSunnyTownRenderer.ts` and canvas DOM/events into `SunnyTownCanvas.vue`.
-- [ ] Slice 3.5: Extract HUD/status and hotbar controls into `SunnyTownHud.vue`.
+- [x] Slice 3.5: Extract HUD/status and hotbar controls into `SunnyTownHud.vue`.
 - [ ] Slice 3.6: Extract inventory and crafting panels into `SunnyTownInventoryPanel.vue` and `SunnyTownCraftingPanel.vue`.
 - [ ] Slice 3.7: Extract dialogue, shop, and schoolwork panels into `SunnyTownDialogue.vue`, `SunnyTownShop.vue`, and `SunnyTownSchoolworkPanel.vue`.
 - [ ] Slice 3.8: Final Phase 3 review pass: remove dead code, verify layout, update docs, and commit the final frontend split.
@@ -137,7 +137,7 @@ Original task coverage:
 - [x] Extract Sunny Town socket/session lifecycle.
 - [x] Extract movement input and client prediction.
 - [x] Extract canvas rendering.
-- [ ] Extract HUD and status UI.
+- [x] Extract HUD and status UI.
 - [ ] Extract inventory and crafting panels.
 - [ ] Extract dialogue and shop panels.
 - [ ] Extract schoolwork panel.
@@ -290,3 +290,5 @@ Verification:
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.3. Vite still reported the large chunk warning.
 - 2026-06-06: Phase 3 Slice 3.4 extracted Sunny Town canvas DOM/events into `SunnyTownCanvas.vue` and render-loop/canvas preparation into `frontend/src/composables/useSunnyTownRenderer.ts`.
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.4. Vite still reported the large chunk warning.
+- 2026-06-06: Phase 3 Slice 3.5 extracted Sunny Town toolbar/status, toast/help, and hotbar controls into `SunnyTownHud.vue`.
+- 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.5. Vite still reported the large chunk warning.
