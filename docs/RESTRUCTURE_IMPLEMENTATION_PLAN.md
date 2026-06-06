@@ -56,6 +56,7 @@ Tasks:
 - [x] Move map structs, loading, and validation into `internal/sunnytown/maps`.
 - [x] Move WebSocket message structs into `internal/sunnytown/protocol`.
 - [ ] Move room, player, world, movement, portal, collectible, resource, and placement logic into `internal/sunnytown/world`.
+- [x] Split Sunny Town world data types into `cmd/sunny-town/world_types.go` as a preparatory step.
 - [x] Move internal HQ HTTP calls into `internal/sunnytown/hqclient`.
 - [ ] Move WebSocket server setup and request handling into `internal/sunnytown/server`.
 - [x] Split Sunny Town server/WebSocket wiring into `cmd/sunny-town/server.go` as a preparatory step.
@@ -213,3 +214,6 @@ Verification:
 - 2026-06-06: Phase 2 split Sunny Town server/WebSocket wiring into `cmd/sunny-town/server.go` as a preparatory step before moving it to `internal/sunnytown/server`.
 - 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town server file split.
 - 2026-06-06: `go test ./...` passed after Sunny Town server file split.
+- 2026-06-06: Phase 2 split Sunny Town world data types into `cmd/sunny-town/world_types.go` as a preparatory step before moving world logic to `internal/sunnytown/world`.
+- 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town world type split.
+- 2026-06-06: `go test ./...` passed after Sunny Town world type split.
