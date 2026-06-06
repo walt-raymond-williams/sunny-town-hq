@@ -60,6 +60,7 @@ Tasks:
 - [x] Split Sunny Town world lifecycle methods into `cmd/sunny-town/world_lifecycle.go` as a preparatory step.
 - [x] Split Sunny Town movement, collision, clamping, and portal helpers into `cmd/sunny-town/world_movement.go` as a preparatory step.
 - [x] Split Sunny Town snapshot and broadcast helpers into `cmd/sunny-town/world_snapshots.go` as a preparatory step.
+- [x] Split Sunny Town collectibles, resources, placement geometry, and world object helpers into `cmd/sunny-town/world_objects.go` as a preparatory step.
 - [x] Move internal HQ HTTP calls into `internal/sunnytown/hqclient`.
 - [ ] Move WebSocket server setup and request handling into `internal/sunnytown/server`.
 - [x] Split Sunny Town server/WebSocket wiring into `cmd/sunny-town/server.go` as a preparatory step.
@@ -229,3 +230,6 @@ Verification:
 - 2026-06-06: Phase 2 split Sunny Town snapshot and broadcast helpers into `cmd/sunny-town/world_snapshots.go` as a preparatory step before moving world logic to `internal/sunnytown/world`.
 - 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town snapshot split.
 - 2026-06-06: `go test ./...` passed after Sunny Town snapshot split.
+- 2026-06-06: Phase 2 split Sunny Town collectibles, resources, placement geometry, and world object helpers into `cmd/sunny-town/world_objects.go` as a preparatory step before moving world logic to `internal/sunnytown/world`.
+- 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town world object split.
+- 2026-06-06: `go test ./...` passed after Sunny Town world object split.
