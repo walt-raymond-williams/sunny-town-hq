@@ -1,17 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -21,6 +18,7 @@ import (
 	"time"
 
 	stconfig "hq/internal/sunnytown/config"
+	"hq/internal/sunnytown/hqclient"
 	stmaps "hq/internal/sunnytown/maps"
 	stprotocol "hq/internal/sunnytown/protocol"
 	"hq/internal/sunnytownauth"
@@ -119,7 +117,7 @@ type room struct {
 type server struct {
 	config   stconfig.Config
 	world    *world
-	client   *http.Client
+	hq       *hqclient.Client
 	upgrader websocket.Upgrader
 }
 
@@ -200,108 +198,15 @@ type resourceEvent struct {
 	client      *client
 }
 
-type rewardCommitRequest struct {
-	EventID       string `json:"event_id"`
-	AppUserID     int64  `json:"app_user_id"`
-	RoomID        string `json:"room_id"`
-	MapID         string `json:"map_id"`
-	CollectibleID string `json:"collectible_id"`
-	RewardKind    string `json:"reward_kind"`
-	Amount        int    `json:"amount"`
-}
-
-type rewardCommitResponse struct {
-	Accepted       bool `json:"accepted"`
-	Duplicate      bool `json:"duplicate"`
-	NewStarBalance int  `json:"new_star_balance"`
-}
-
-type resourceCommitRequest struct {
-	EventID     string `json:"event_id"`
-	AppUserID   int64  `json:"app_user_id"`
-	Source      string `json:"source"`
-	RoomID      string `json:"room_id"`
-	MapID       string `json:"map_id"`
-	NodeID      string `json:"node_id"`
-	ResourceKey string `json:"resource_key"`
-	Amount      int    `json:"amount"`
-}
-
-type resourceCommitResponse struct {
-	Accepted    bool   `json:"accepted"`
-	Duplicate   bool   `json:"duplicate"`
-	ResourceKey string `json:"resource_key"`
-	Quantity    int    `json:"quantity"`
-}
-
-type mapObjectsResponse struct {
-	Objects []mapObjectResponse `json:"objects"`
-}
-
-type mapObjectResponse struct {
-	ID                  int64  `json:"id"`
-	RoomID              string `json:"room_id"`
-	MapID               string `json:"map_id"`
-	GridX               int    `json:"grid_x"`
-	GridY               int    `json:"grid_y"`
-	ItemKey             string `json:"item_key"`
-	PlacedByAppUserID   int64  `json:"placed_by_app_user_id"`
-	RemainingItemAmount int    `json:"remaining_item_amount"`
-}
-
-type placeMapObjectRequest struct {
-	AppUserID int64  `json:"app_user_id"`
-	RoomID    string `json:"room_id"`
-	MapID     string `json:"map_id"`
-	GridX     int    `json:"grid_x"`
-	GridY     int    `json:"grid_y"`
-	ItemKey   string `json:"item_key"`
-}
-
-type removeMapObjectRequest struct {
-	AppUserID int64  `json:"app_user_id"`
-	RoomID    string `json:"room_id"`
-	MapID     string `json:"map_id"`
-	GridX     int    `json:"grid_x"`
-	GridY     int    `json:"grid_y"`
-}
-
-type studentEquipmentResponse struct {
-	Slots []equipmentSlotResponse `json:"slots"`
-}
-
-type inventoryQuantityResponse struct {
-	ItemKey  string `json:"item_key"`
-	Quantity int    `json:"quantity"`
-}
-
-type studentPositionResponse struct {
-	Found     bool    `json:"found"`
-	AppUserID int64   `json:"app_user_id"`
-	RoomID    string  `json:"room_id"`
-	MapID     string  `json:"map_id"`
-	X         float64 `json:"x"`
-	Y         float64 `json:"y"`
-	Facing    string  `json:"facing"`
-}
-
-type studentPositionRequest struct {
-	AppUserID int64   `json:"app_user_id"`
-	RoomID    string  `json:"room_id"`
-	MapID     string  `json:"map_id"`
-	X         float64 `json:"x"`
-	Y         float64 `json:"y"`
-	Facing    string  `json:"facing"`
-}
-
-type equipmentSlotResponse struct {
-	Slot string                 `json:"slot"`
-	Item *equipmentItemResponse `json:"item"`
-}
-
-type equipmentItemResponse struct {
-	VisualKey string `json:"visualKey"`
-}
+type rewardCommitRequest = hqclient.RewardCommitRequest
+type rewardCommitResponse = hqclient.RewardCommitResponse
+type resourceCommitRequest = hqclient.ResourceCommitRequest
+type resourceCommitResponse = hqclient.ResourceCommitResponse
+type mapObjectResponse = hqclient.MapObjectResponse
+type placeMapObjectRequest = hqclient.PlaceMapObjectRequest
+type removeMapObjectRequest = hqclient.RemoveMapObjectRequest
+type studentPositionResponse = hqclient.StudentPositionResponse
+type studentPositionRequest = hqclient.StudentPositionRequest
 
 func main() {
 	cfg := stconfig.Load()
@@ -356,9 +261,7 @@ func newServer(cfg stconfig.Config, world *world) *server {
 	srv := &server{
 		config: cfg,
 		world:  world,
-		client: &http.Client{
-			Timeout: 3 * time.Second,
-		},
+		hq:     hqclient.New(cfg.HQInternalURL, cfg.ServiceSecret, 3*time.Second),
 	}
 	srv.upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -369,119 +272,6 @@ func newServer(cfg stconfig.Config, world *world) *server {
 		},
 	}
 	return srv
-}
-
-func (srv *server) internalRequest(ctx context.Context, method string, path string, body []byte) (*http.Response, error) {
-	request, err := http.NewRequestWithContext(
-		ctx,
-		method,
-		srv.config.HQInternalURL+path,
-		bytes.NewReader(body),
-	)
-	if err != nil {
-		return nil, err
-	}
-	if body != nil {
-		request.Header.Set("Content-Type", "application/json")
-	}
-	request.Header.Set("X-HQ-Service-Secret", srv.config.ServiceSecret)
-	return srv.client.Do(request)
-}
-
-func (srv *server) loadStudentEquipment(ctx context.Context, appUserID int64) (equipmentSnapshot, error) {
-	response, err := srv.internalRequest(
-		ctx,
-		http.MethodGet,
-		"/api/internal/sunny-town/student-equipment?app_user_id="+strconv.FormatInt(appUserID, 10),
-		nil,
-	)
-	if err != nil {
-		return equipmentSnapshot{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return equipmentSnapshot{}, fmt.Errorf("equipment request failed status=%d", response.StatusCode)
-	}
-
-	var equipment studentEquipmentResponse
-	if err := json.NewDecoder(response.Body).Decode(&equipment); err != nil {
-		return equipmentSnapshot{}, err
-	}
-
-	snapshot := equipmentSnapshot{}
-	for _, slot := range equipment.Slots {
-		if slot.Slot != equipmentSlotGear && slot.Slot != equipmentSlotAccessory && slot.Slot != equipmentSlotTool {
-			continue
-		}
-		if slot.Item == nil || strings.TrimSpace(slot.Item.VisualKey) == "" {
-			continue
-		}
-		snapshot[slot.Slot] = strings.TrimSpace(slot.Item.VisualKey)
-	}
-	return snapshot, nil
-}
-
-func (srv *server) loadStudentInventoryQuantity(ctx context.Context, appUserID int64, itemKey string) (int, error) {
-	query := url.Values{}
-	query.Set("app_user_id", strconv.FormatInt(appUserID, 10))
-	query.Set("item_key", itemKey)
-	response, err := srv.internalRequest(
-		ctx,
-		http.MethodGet,
-		"/api/internal/sunny-town/inventory-quantity?"+query.Encode(),
-		nil,
-	)
-	if err != nil {
-		return 0, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return 0, fmt.Errorf("inventory quantity request failed status=%d", response.StatusCode)
-	}
-
-	var quantity inventoryQuantityResponse
-	if err := json.NewDecoder(response.Body).Decode(&quantity); err != nil {
-		return 0, err
-	}
-	return quantity.Quantity, nil
-}
-
-func (srv *server) loadStudentPosition(ctx context.Context, appUserID int64) (studentPositionResponse, error) {
-	response, err := srv.internalRequest(
-		ctx,
-		http.MethodGet,
-		"/api/internal/sunny-town/player-position?app_user_id="+strconv.FormatInt(appUserID, 10),
-		nil,
-	)
-	if err != nil {
-		return studentPositionResponse{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return studentPositionResponse{}, fmt.Errorf("position request failed status=%d", response.StatusCode)
-	}
-
-	var position studentPositionResponse
-	if err := json.NewDecoder(response.Body).Decode(&position); err != nil {
-		return studentPositionResponse{}, err
-	}
-	return position, nil
-}
-
-func (srv *server) saveStudentPosition(ctx context.Context, position studentPositionRequest) error {
-	body, err := json.Marshal(position)
-	if err != nil {
-		return err
-	}
-	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/player-position", body)
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return fmt.Errorf("save position failed status=%d", response.StatusCode)
-	}
-	return nil
 }
 
 func (srv *server) loadInitialMapObjects(ctx context.Context) error {
@@ -500,20 +290,8 @@ func (srv *server) loadInitialMapObjects(ctx context.Context) error {
 }
 
 func (srv *server) loadMapObjects(ctx context.Context, roomID string, mapID string) (map[string]*placedObject, error) {
-	query := url.Values{}
-	query.Set("room_id", roomID)
-	query.Set("map_id", mapID)
-	response, err := srv.internalRequest(ctx, http.MethodGet, "/api/internal/sunny-town/map-objects?"+query.Encode(), nil)
+	loaded, err := srv.hq.LoadMapObjects(ctx, roomID, mapID)
 	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return nil, fmt.Errorf("map objects request failed status=%d", response.StatusCode)
-	}
-
-	var loaded mapObjectsResponse
-	if err := json.NewDecoder(response.Body).Decode(&loaded); err != nil {
 		return nil, err
 	}
 
@@ -545,42 +323,16 @@ func (srv *server) refreshRoomMapObjects(ctx context.Context, mapID string) erro
 }
 
 func (srv *server) placeMapObject(ctx context.Context, request placeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
-	body, err := json.Marshal(request)
+	placed, err := srv.hq.PlaceMapObject(ctx, request)
 	if err != nil {
-		return nil, 0, err
-	}
-	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/map-objects/place", body)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return nil, 0, fmt.Errorf("place map object failed status=%d", response.StatusCode)
-	}
-
-	var placed mapObjectResponse
-	if err := json.NewDecoder(response.Body).Decode(&placed); err != nil {
 		return nil, 0, err
 	}
 	return placedObjectFromResponse(gameMap, placed), placed.RemainingItemAmount, nil
 }
 
 func (srv *server) removeMapObject(ctx context.Context, request removeMapObjectRequest, gameMap gameMap) (*placedObject, int, error) {
-	body, err := json.Marshal(request)
+	removed, err := srv.hq.RemoveMapObject(ctx, request)
 	if err != nil {
-		return nil, 0, err
-	}
-	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/map-objects/remove", body)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return nil, 0, fmt.Errorf("remove map object failed status=%d", response.StatusCode)
-	}
-
-	var removed mapObjectResponse
-	if err := json.NewDecoder(response.Body).Decode(&removed); err != nil {
 		return nil, 0, err
 	}
 	return placedObjectFromResponse(gameMap, removed), removed.RemainingItemAmount, nil
@@ -613,13 +365,13 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		id:     playerID,
 	}
 
-	equipment, err := srv.loadStudentEquipment(r.Context(), claims.AppUserID)
+	equipment, err := srv.hq.LoadStudentEquipment(r.Context(), claims.AppUserID)
 	if err != nil {
 		log.Printf("load sunny town equipment: %v", err)
 		equipment = equipmentSnapshot{}
 	}
 
-	position, err := srv.loadStudentPosition(r.Context(), claims.AppUserID)
+	position, err := srv.hq.LoadStudentPosition(r.Context(), claims.AppUserID)
 	if err != nil {
 		log.Printf("load sunny town position: %v", err)
 		position = studentPositionResponse{}
@@ -769,7 +521,7 @@ func (room *room) leave(client *client) {
 	if saved != nil && client.server != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		if err := client.server.saveStudentPosition(ctx, *saved); err != nil {
+		if err := client.server.hq.SaveStudentPosition(ctx, *saved); err != nil {
 			log.Printf("save sunny town position player=%s map=%s: %v", client.id, saved.MapID, err)
 		}
 	}
@@ -865,7 +617,7 @@ func (client *client) refreshEquipment() {
 	userID := player.appUserID
 	room.mu.Unlock()
 
-	equipment, err := client.server.loadStudentEquipment(context.Background(), userID)
+	equipment, err := client.server.hq.LoadStudentEquipment(context.Background(), userID)
 	if err != nil {
 		log.Printf("refresh equipment player=%s: %v", client.id, err)
 		client.trySend(serverMessage{Type: "error", Code: "equipment_refresh_failed"})
@@ -886,7 +638,7 @@ func (client *client) ownsInventoryItem(ctx context.Context, appUserID int64, it
 		return false, nil
 	}
 	if client.server != nil {
-		quantity, err := client.server.loadStudentInventoryQuantity(ctx, appUserID, itemKey)
+		quantity, err := client.server.hq.LoadStudentInventoryQuantity(ctx, appUserID, itemKey)
 		if err != nil {
 			return false, err
 		}
@@ -1661,7 +1413,7 @@ func (srv *server) commitRewardWithRetry(ctx context.Context, event rewardEvent)
 }
 
 func (srv *server) commitReward(ctx context.Context, event rewardEvent) (rewardCommitResponse, error) {
-	body, err := json.Marshal(rewardCommitRequest{
+	return srv.hq.CommitReward(ctx, rewardCommitRequest{
 		EventID:       event.eventID,
 		AppUserID:     event.appUserID,
 		RoomID:        event.roomID,
@@ -1670,39 +1422,6 @@ func (srv *server) commitReward(ctx context.Context, event rewardEvent) (rewardC
 		RewardKind:    event.kind,
 		Amount:        event.amount,
 	})
-	if err != nil {
-		return rewardCommitResponse{}, err
-	}
-
-	request, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		srv.config.HQInternalURL+"/api/internal/sunny-town/reward-events",
-		bytes.NewReader(body),
-	)
-	if err != nil {
-		return rewardCommitResponse{}, err
-	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-HQ-Service-Secret", srv.config.ServiceSecret)
-
-	response, err := srv.client.Do(request)
-	if err != nil {
-		return rewardCommitResponse{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return rewardCommitResponse{}, fmt.Errorf("hq reward status %d", response.StatusCode)
-	}
-
-	var committed rewardCommitResponse
-	if err := json.NewDecoder(response.Body).Decode(&committed); err != nil {
-		return rewardCommitResponse{}, err
-	}
-	if !committed.Accepted {
-		return rewardCommitResponse{}, errors.New("hq rejected reward")
-	}
-	return committed, nil
 }
 
 func rectsOverlap(a rect, b rect) bool {
@@ -1949,7 +1668,7 @@ func (srv *server) commitResourceWithRetry(ctx context.Context, event resourceEv
 }
 
 func (srv *server) commitResource(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
-	body, err := json.Marshal(resourceCommitRequest{
+	return srv.hq.CommitResource(ctx, resourceCommitRequest{
 		EventID:     event.eventID,
 		AppUserID:   event.appUserID,
 		Source:      "sunny_town_mining",
@@ -1959,27 +1678,6 @@ func (srv *server) commitResource(ctx context.Context, event resourceEvent) (res
 		ResourceKey: event.resourceKey,
 		Amount:      event.amount,
 	})
-	if err != nil {
-		return resourceCommitResponse{}, err
-	}
-
-	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/resource-events", body)
-	if err != nil {
-		return resourceCommitResponse{}, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return resourceCommitResponse{}, fmt.Errorf("hq resource status %d", response.StatusCode)
-	}
-
-	var committed resourceCommitResponse
-	if err := json.NewDecoder(response.Body).Decode(&committed); err != nil {
-		return resourceCommitResponse{}, err
-	}
-	if !committed.Accepted {
-		return resourceCommitResponse{}, errors.New("hq rejected resource")
-	}
-	return committed, nil
 }
 
 func newRewardRunID() string {

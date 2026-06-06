@@ -56,7 +56,7 @@ Tasks:
 - [x] Move map structs, loading, and validation into `internal/sunnytown/maps`.
 - [x] Move WebSocket message structs into `internal/sunnytown/protocol`.
 - [ ] Move room, player, world, movement, portal, collectible, resource, and placement logic into `internal/sunnytown/world`.
-- [ ] Move internal HQ HTTP calls into `internal/sunnytown/hqclient`.
+- [x] Move internal HQ HTTP calls into `internal/sunnytown/hqclient`.
 - [ ] Move WebSocket server setup and request handling into `internal/sunnytown/server`.
 - [ ] Update Sunny Town tests to import/use the new packages.
 
@@ -206,3 +206,6 @@ Verification:
 - 2026-06-06: Phase 2 moved Sunny Town WebSocket protocol structs into `internal/sunnytown/protocol`.
 - 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town protocol extraction.
 - 2026-06-06: `go test ./...` passed after Sunny Town protocol extraction.
+- 2026-06-06: Phase 2 moved Sunny Town internal HQ HTTP calls into `internal/sunnytown/hqclient`.
+- 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town HQ client extraction.
+- 2026-06-06: `go test ./...` passed after Sunny Town HQ client extraction.
