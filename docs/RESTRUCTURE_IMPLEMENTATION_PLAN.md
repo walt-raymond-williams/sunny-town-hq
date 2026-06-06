@@ -121,6 +121,19 @@ frontend/src/composables/
 
 Tasks:
 
+Slice plan:
+
+- [x] Slice 3.1: Move `SunnyTownPage.vue` from `pages/` to `features/sunny-town/` and update router imports without changing behavior.
+- [ ] Slice 3.2: Extract socket/session lifecycle into `frontend/src/composables/useSunnyTownSocket.ts`.
+- [ ] Slice 3.3: Extract movement input, client prediction, collision helpers, and placement validation into `frontend/src/composables/useSunnyTownMovement.ts`.
+- [ ] Slice 3.4: Extract canvas rendering into `frontend/src/composables/useSunnyTownRenderer.ts` and `SunnyTownCanvas.vue`.
+- [ ] Slice 3.5: Extract HUD/status and hotbar controls into `SunnyTownHud.vue`.
+- [ ] Slice 3.6: Extract inventory and crafting panels into `SunnyTownInventoryPanel.vue` and `SunnyTownCraftingPanel.vue`.
+- [ ] Slice 3.7: Extract dialogue, shop, and schoolwork panels into `SunnyTownDialogue.vue`, `SunnyTownShop.vue`, and `SunnyTownSchoolworkPanel.vue`.
+- [ ] Slice 3.8: Final Phase 3 review pass: remove dead code, verify layout, update docs, and commit the final frontend split.
+
+Original task coverage:
+
 - [ ] Extract Sunny Town socket/session lifecycle.
 - [ ] Extract movement input and client prediction.
 - [ ] Extract canvas rendering.
@@ -128,12 +141,13 @@ Tasks:
 - [ ] Extract inventory and crafting panels.
 - [ ] Extract dialogue and shop panels.
 - [ ] Extract schoolwork panel.
-- [ ] Update router import if the page moves from `pages/` to `features/sunny-town/`.
+- [x] Update router import if the page moves from `pages/` to `features/sunny-town/`.
 
 Verification:
 
 - [ ] `cd frontend && npm run build`
 - [ ] Smoke-test Sunny Town in browser or container-served app when practical.
+- [ ] Run `go test ./...` after Phase 3 completion to catch cross-project regressions.
 
 ## Phase 4: HQ Backend Split
 
@@ -268,3 +282,5 @@ Verification:
 - 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after the Sunny Town server package move.
 - 2026-06-06: `go test ./...` passed after the Sunny Town server package move.
 - 2026-06-06: `cd frontend && npm run build` passed after the Sunny Town server package move. Vite still reported the large chunk warning.
+- 2026-06-06: Phase 3 Slice 3.1 moved `SunnyTownPage.vue` into `frontend/src/features/sunny-town/` and updated the router import.
+- 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.1. Vite still reported the large chunk warning.

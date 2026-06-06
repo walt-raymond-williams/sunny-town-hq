@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getNextStudentAssignment, submitStudentAnswer } from '../api/studentAssignmentsApi'
-import { createSunnyTownSession } from '../api/sunnyTownApi'
-import { purchaseShopItem } from '../api/shopApi'
-import { useStudentInventoryStore } from '../stores/studentInventory'
-import type { Assignment } from '../types/assignment'
-import type { EquipmentSlot } from '../types/inventory'
+import { getNextStudentAssignment, submitStudentAnswer } from '../../api/studentAssignmentsApi'
+import { createSunnyTownSession } from '../../api/sunnyTownApi'
+import { purchaseShopItem } from '../../api/shopApi'
+import { useStudentInventoryStore } from '../../stores/studentInventory'
+import type { Assignment } from '../../types/assignment'
+import type { EquipmentSlot } from '../../types/inventory'
 import type {
   SunnyTownCollectible,
   SunnyTownEquipmentChangedMessage,
@@ -21,7 +21,7 @@ import type {
   SunnyTownSession,
   SunnyTownToolUseMessage,
   SunnyTownWorldObject,
-} from '../types/sunnyTown'
+} from '../../types/sunnyTown'
 
 interface MovementInput {
   up: boolean
