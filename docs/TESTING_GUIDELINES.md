@@ -106,4 +106,4 @@ Before finalizing, check changed files:
 git status --short
 ```
 
-Do not revert unrelated changes. Built `web/` assets may change after local frontend builds; the Docker HQ image builds frontend assets internally, so local `web/` changes are not always required for container verification.
+Do not revert unrelated changes. Generated `web/` assets are ignored and should not be committed; rebuild them locally with `npm run build` or through the Docker HQ image when needed for verification.

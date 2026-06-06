@@ -12,7 +12,7 @@ HQ is a local-network homework app. A Go server serves the built Vue app, expose
 - Default port: `8080`
 - Common local-network port: `18080`
 - Serves:
-  - built frontend from `web/`
+  - generated frontend assets from local `web/`
   - JSON APIs under `/api/...`
   - Connect RPC pet APIs under `/hq.pet.v1.PetService/...`
   - health check at `/healthz`
