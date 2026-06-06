@@ -20,6 +20,7 @@ import type {
   SunnyTownServerMessage,
   SunnyTownSession,
   SunnyTownToolUseMessage,
+  SunnyTownWorldObject,
 } from '../types/sunnyTown'
 
 interface MovementInput {
@@ -58,6 +59,7 @@ const players = ref<SunnyTownPlayer[]>([])
 const collectibles = ref<SunnyTownCollectible[]>([])
 const resourceNodes = ref<SunnyTownResourceNode[]>([])
 const placedObjects = ref<SunnyTownPlacedObject[]>([])
+const worldObjects = ref<SunnyTownWorldObject[]>([])
 const selfId = ref('')
 const status = ref('Entering Sunny Town...')
 const error = ref('')
@@ -193,6 +195,7 @@ function connect(activeSession: SunnyTownSession) {
       collectibles.value = message.collectibles || []
       resourceNodes.value = message.resourceNodes || []
       placedObjects.value = message.placedObjects || placedObjects.value
+      worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
       recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
       syncLocalSelfFromSnapshot()
       return
@@ -235,6 +238,18 @@ function connect(activeSession: SunnyTownSession) {
           message.placedObject,
         ]
       }
+      const placedWorldObject = message.worldObject
+      if (placedWorldObject) {
+        worldObjects.value = [
+          ...worldObjects.value.filter((object) => !sameWorldObject(object, placedWorldObject)),
+          placedWorldObject,
+        ]
+      } else if (message.placedObject) {
+        worldObjects.value = [
+          ...worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id),
+          placedObjectToWorldObject(message.placedObject),
+        ]
+      }
       if (message.resourceKey && message.quantity !== undefined) {
         inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
         gameToast.value = 'Stone block placed'
@@ -248,6 +263,12 @@ function connect(activeSession: SunnyTownSession) {
     if (message.type === 'map_object_removed') {
       if (message.placedObject) {
         placedObjects.value = placedObjects.value.filter((object) => object.id !== message.placedObject?.id)
+      }
+      const removedWorldObject = message.worldObject
+      if (removedWorldObject) {
+        worldObjects.value = worldObjects.value.filter((object) => !sameWorldObject(object, removedWorldObject))
+      } else if (message.placedObject) {
+        worldObjects.value = worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id)
       }
       if (message.resourceKey && message.quantity !== undefined) {
         inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
@@ -592,6 +613,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   collectibles.value = message.collectibles || []
   resourceNodes.value = message.resourceNodes || []
   placedObjects.value = message.placedObjects || []
+  worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
   remotePlayerHistories.clear()
   localSelf = null
   renderedSelf = null
@@ -603,6 +625,58 @@ function applyMapState(message: SunnyTownServerMessage) {
   nearbyNpc.value = null
   syncLocalSelfFromSnapshot()
   draw()
+}
+
+function legacyWorldObjects(
+  nodes: SunnyTownResourceNode[],
+  objects: SunnyTownPlacedObject[],
+): SunnyTownWorldObject[] {
+  return [
+    ...nodes.map(resourceNodeToWorldObject),
+    ...objects.map(placedObjectToWorldObject),
+  ]
+}
+
+function resourceNodeToWorldObject(node: SunnyTownResourceNode): SunnyTownWorldObject {
+  return {
+    id: node.id,
+    kind: 'rock_node',
+    source: 'natural',
+    resourceKind: node.kind,
+    x: node.x,
+    y: node.y,
+    radius: node.radius,
+    active: node.active,
+    collision: true,
+    breakable: true,
+    reservesPlacement: true,
+    hits: node.hits,
+    needed: node.needed,
+  }
+}
+
+function placedObjectToWorldObject(object: SunnyTownPlacedObject): SunnyTownWorldObject {
+  return {
+    id: object.id,
+    kind: 'stone_block',
+    source: 'placed',
+    itemKey: object.itemKey,
+    x: object.x,
+    y: object.y,
+    width: object.width,
+    height: object.height,
+    active: true,
+    collision: true,
+    breakable: true,
+    reservesPlacement: true,
+    gridX: object.gridX,
+    gridY: object.gridY,
+    placedByAppUserId: object.placedByAppUserId,
+  }
+}
+
+function sameWorldObject(first: SunnyTownWorldObject, second: SunnyTownWorldObject): boolean {
+  return first.source === second.source && first.id === second.id
 }
 
 function handlePrimaryInteraction() {
@@ -888,18 +962,11 @@ function draw() {
   const cameraY = camera.y
 
   drawMap(context, map, cameraX, cameraY, rect.width, rect.height)
-  for (const object of placedObjects.value) {
-    drawPlacedObject(context, object, cameraX, cameraY)
-  }
+  drawWorldObjects(context, cameraX, cameraY)
   drawPlacementPreview(context, map, cameraX, cameraY)
   for (const collectible of collectibles.value) {
     if (collectible.active) {
       drawCollectible(context, collectible, cameraX, cameraY)
-    }
-  }
-  for (const node of resourceNodes.value) {
-    if (node.active) {
-      drawResourceNode(context, node, cameraX, cameraY)
     }
   }
   for (const npc of map.npcs) {
@@ -1151,17 +1218,24 @@ function collides(map: SunnyTownMap, x: number, y: number): boolean {
   }
   return (
     map.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked)) ||
-    placedObjects.value.some((object) => rectsOverlap(playerRect, object)) ||
-    resourceNodes.value.some((node) => node.active && rectsOverlap(playerRect, resourceNodeRect(node)))
+    worldObjects.value.some((object) => object.active && object.collision && rectsOverlap(playerRect, worldObjectRect(object)))
   )
 }
 
-function resourceNodeRect(node: SunnyTownResourceNode): { x: number; y: number; width: number; height: number } {
+function worldObjectRect(object: SunnyTownWorldObject): { x: number; y: number; width: number; height: number } {
+  if (object.radius && object.radius > 0) {
+    return {
+      x: object.x - object.radius,
+      y: object.y - object.radius,
+      width: object.radius * 2,
+      height: object.radius * 2,
+    }
+  }
   return {
-    x: node.x - node.radius,
-    y: node.y - node.radius,
-    width: node.radius * 2,
-    height: node.radius * 2,
+    x: object.x,
+    y: object.y,
+    width: object.width || 0,
+    height: object.height || 0,
   }
 }
 
@@ -1185,8 +1259,7 @@ function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): bo
       width: playerSize,
       height: playerSize,
     })) ||
-    resourceNodes.value.some((node) => rectsOverlap(tileRect, resourceNodeRect(node))) ||
-    placedObjects.value.some((object) => rectsOverlap(tileRect, object)) ||
+    worldObjects.value.some((object) => object.reservesPlacement && rectsOverlap(tileRect, worldObjectRect(object))) ||
     (self && rectsOverlap(tileRect, {
       x: self.x - playerSize / 2,
       y: self.y - playerSize / 2,
@@ -1318,6 +1391,48 @@ function drawPlacedObject(
   context.fillStyle = '#4d555e'
   context.fillRect(x + 7, y + object.height - 12, object.width - 14, 4)
   context.restore()
+}
+
+function drawWorldObjects(context: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
+  for (const object of worldObjects.value) {
+    if (!object.active) {
+      continue
+    }
+    if (object.kind === 'stone_block' && object.itemKey === 'stone_block') {
+      drawPlacedObject(context, worldObjectToPlacedObject(object), cameraX, cameraY)
+      continue
+    }
+    if (object.kind === 'rock_node' && object.resourceKind === 'rock') {
+      drawResourceNode(context, worldObjectToResourceNode(object), cameraX, cameraY)
+    }
+  }
+}
+
+function worldObjectToPlacedObject(object: SunnyTownWorldObject): SunnyTownPlacedObject {
+  return {
+    id: object.id,
+    itemKey: 'stone_block',
+    gridX: object.gridX || 0,
+    gridY: object.gridY || 0,
+    x: object.x,
+    y: object.y,
+    width: object.width || 0,
+    height: object.height || 0,
+    placedByAppUserId: object.placedByAppUserId,
+  }
+}
+
+function worldObjectToResourceNode(object: SunnyTownWorldObject): SunnyTownResourceNode {
+  return {
+    id: object.id,
+    kind: 'rock',
+    x: object.x,
+    y: object.y,
+    radius: object.radius || 0,
+    active: object.active,
+    hits: object.hits || 0,
+    needed: object.needed || 0,
+  }
 }
 
 function drawPlacementPreview(

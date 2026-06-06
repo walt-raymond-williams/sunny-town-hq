@@ -129,6 +129,28 @@ export interface SunnyTownResourceNode {
   needed: number
 }
 
+export interface SunnyTownWorldObject {
+  id: string
+  kind: 'rock_node' | 'stone_block'
+  source: 'natural' | 'placed'
+  itemKey?: 'stone_block'
+  resourceKind?: 'rock'
+  x: number
+  y: number
+  width?: number
+  height?: number
+  radius?: number
+  active: boolean
+  collision: boolean
+  breakable: boolean
+  reservesPlacement: boolean
+  hits?: number
+  needed?: number
+  gridX?: number
+  gridY?: number
+  placedByAppUserId?: number
+}
+
 export interface SunnyTownServerMessage {
   type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed' | 'resource_committed' | 'resource_failed' | 'map_object_placed' | 'map_object_removed'
   selfId?: string
@@ -142,6 +164,8 @@ export interface SunnyTownServerMessage {
   resourceNodes?: SunnyTownResourceNode[]
   placedObjects?: SunnyTownPlacedObject[]
   placedObject?: SunnyTownPlacedObject
+  worldObjects?: SunnyTownWorldObject[]
+  worldObject?: SunnyTownWorldObject
   code?: string
   eventId?: string
   kind?: 'star'

@@ -168,6 +168,8 @@ type serverMessage struct {
 	ResourceNodes  []resourceNodeSnapshot `json:"resourceNodes,omitempty"`
 	PlacedObjects  []placedObjectSnapshot `json:"placedObjects,omitempty"`
 	PlacedObject   *placedObjectSnapshot  `json:"placedObject,omitempty"`
+	WorldObjects   []worldObjectSnapshot  `json:"worldObjects,omitempty"`
+	WorldObject    *worldObjectSnapshot   `json:"worldObject,omitempty"`
 	Code           string                 `json:"code,omitempty"`
 	EventID        string                 `json:"eventId,omitempty"`
 	Kind           string                 `json:"kind,omitempty"`
@@ -323,6 +325,28 @@ type placedObjectSnapshot struct {
 	Y                 float64 `json:"y"`
 	Width             float64 `json:"width"`
 	Height            float64 `json:"height"`
+	PlacedByAppUserID int64   `json:"placedByAppUserId,omitempty"`
+}
+
+type worldObjectSnapshot struct {
+	ID                string  `json:"id"`
+	Kind              string  `json:"kind"`
+	Source            string  `json:"source"`
+	ItemKey           string  `json:"itemKey,omitempty"`
+	ResourceKind      string  `json:"resourceKind,omitempty"`
+	X                 float64 `json:"x"`
+	Y                 float64 `json:"y"`
+	Width             float64 `json:"width,omitempty"`
+	Height            float64 `json:"height,omitempty"`
+	Radius            float64 `json:"radius,omitempty"`
+	Active            bool    `json:"active"`
+	Collision         bool    `json:"collision"`
+	Breakable         bool    `json:"breakable"`
+	ReservesPlacement bool    `json:"reservesPlacement"`
+	Hits              int     `json:"hits,omitempty"`
+	Needed            int     `json:"needed,omitempty"`
+	GridX             int     `json:"gridX,omitempty"`
+	GridY             int     `json:"gridY,omitempty"`
 	PlacedByAppUserID int64   `json:"placedByAppUserId,omitempty"`
 }
 
@@ -906,6 +930,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 		PlacedObjects: room.placedObjectSnapshotsLocked(),
+		WorldObjects:  room.worldObjectSnapshotsLocked(),
 	}
 }
 
@@ -986,6 +1011,7 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 		Collectibles:  target.collectibleSnapshotsLocked(),
 		ResourceNodes: target.resourceNodeSnapshotsLocked(),
 		PlacedObjects: target.placedObjectSnapshotsLocked(),
+		WorldObjects:  target.worldObjectSnapshotsLocked(),
 		ServerTimeMS:  now.UnixMilli(),
 		Tick:          target.tick,
 	}
@@ -1193,9 +1219,11 @@ func (client *client) removePlacedWorldObject(room *room, request removeMapObjec
 	}
 
 	var snapshot placedObjectSnapshot
+	var worldSnapshot worldObjectSnapshot
 	room.mu.Lock()
 	room.removePlacedObjectLocked(removed.id)
 	snapshot = removed.snapshot()
+	worldSnapshot = removed.worldObjectSnapshot()
 	room.mu.Unlock()
 
 	room.broadcastSnapshot(now)
@@ -1203,11 +1231,13 @@ func (client *client) removePlacedWorldObject(room *room, request removeMapObjec
 		Type:         "map_object_removed",
 		MapID:        room.gameMap.ID,
 		PlacedObject: &snapshot,
+		WorldObject:  &worldSnapshot,
 	})
 	client.trySend(serverMessage{
 		Type:         "map_object_removed",
 		MapID:        room.gameMap.ID,
 		PlacedObject: &snapshot,
+		WorldObject:  &worldSnapshot,
 		ResourceKey:  removed.itemKey,
 		Quantity:     quantity,
 	})
@@ -1279,6 +1309,7 @@ func (client *client) handlePlaceObject(message clientMessage) {
 	}
 	room.addPlacedObjectLocked(placed)
 	snapshot := placed.snapshot()
+	worldSnapshot := placed.worldObjectSnapshot()
 	room.mu.Unlock()
 
 	room.broadcastSnapshot(time.Now())
@@ -1286,11 +1317,13 @@ func (client *client) handlePlaceObject(message clientMessage) {
 		Type:         "map_object_placed",
 		MapID:        room.gameMap.ID,
 		PlacedObject: &snapshot,
+		WorldObject:  &worldSnapshot,
 	})
 	client.trySend(serverMessage{
 		Type:         "map_object_placed",
 		MapID:        room.gameMap.ID,
 		PlacedObject: &snapshot,
+		WorldObject:  &worldSnapshot,
 		ResourceKey:  placed.itemKey,
 		Quantity:     quantity,
 	})
@@ -1373,6 +1406,7 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 		PlacedObjects: room.placedObjectSnapshotsLocked(),
+		WorldObjects:  room.worldObjectSnapshotsLocked(),
 	}
 	clients := make([]*client, 0, len(room.players))
 	for _, player := range room.players {
@@ -1488,6 +1522,14 @@ func (room *room) placedObjectSnapshotsLocked() []placedObjectSnapshot {
 	snapshots := make([]placedObjectSnapshot, 0, len(room.placedObjects))
 	for _, object := range room.placedObjects {
 		snapshots = append(snapshots, object.snapshot())
+	}
+	return snapshots
+}
+
+func (room *room) worldObjectSnapshotsLocked() []worldObjectSnapshot {
+	snapshots := make([]worldObjectSnapshot, 0, len(room.worldObjects))
+	for _, object := range room.worldObjects {
+		snapshots = append(snapshots, object.worldObjectSnapshot())
 	}
 	return snapshots
 }
@@ -2112,6 +2154,30 @@ func (object *placedObject) snapshot() placedObjectSnapshot {
 		Y:                 object.y,
 		Width:             object.width,
 		Height:            object.height,
+		PlacedByAppUserID: object.placedByAppUserID,
+	}
+}
+
+func (object *worldObject) worldObjectSnapshot() worldObjectSnapshot {
+	return worldObjectSnapshot{
+		ID:                object.id,
+		Kind:              object.kind,
+		Source:            object.source,
+		ItemKey:           object.itemKey,
+		ResourceKind:      object.resourceKind,
+		X:                 object.x,
+		Y:                 object.y,
+		Width:             object.width,
+		Height:            object.height,
+		Radius:            object.radius,
+		Active:            object.active,
+		Collision:         object.collision,
+		Breakable:         object.breakable,
+		ReservesPlacement: object.reservesPlacement,
+		Hits:              object.hitCount,
+		Needed:            object.hitsRequired,
+		GridX:             object.gridX,
+		GridY:             object.gridY,
 		PlacedByAppUserID: object.placedByAppUserID,
 	}
 }
