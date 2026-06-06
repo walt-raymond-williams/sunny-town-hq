@@ -67,7 +67,7 @@ const gameToast = ref('')
 const inventoryOpen = ref(false)
 const craftingPanelOpen = ref(false)
 const showAllCraftingRecipes = ref(false)
-const placingStoneBlock = ref(false)
+const selectedHotbarIndex = ref(0)
 const placementHoverGrid = ref<{ gridX: number; gridY: number } | null>(null)
 const nearbyNpc = ref<SunnyTownNpc | null>(null)
 const activeDialogueNpc = ref<SunnyTownNpc | null>(null)
@@ -114,6 +114,10 @@ const visibleCraftingRecipes = computed(() => (
   showAllCraftingRecipes.value ? inventoryStore.craftingRecipes : inventoryStore.craftableRecipes
 ))
 const stoneBlockQuantity = computed(() => inventoryStore.items.find((item) => item.key === 'stone_block')?.quantity || 0)
+const selectedHotbarSlot = computed(() => inventoryStore.hotbarSlots[selectedHotbarIndex.value] || null)
+const selectedHotbarItem = computed(() => selectedHotbarSlot.value?.item || null)
+const selectedHotbarItemKey = computed(() => selectedHotbarItem.value?.key || '')
+const placingStoneBlock = computed(() => selectedHotbarItemKey.value === 'stone_block' && stoneBlockQuantity.value > 0)
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown, movementInputEventOptions)
@@ -126,6 +130,7 @@ onMounted(async () => {
   try {
     session.value = await createSunnyTownSession()
     starBalance.value = session.value.wallet.starBalance
+    inventoryStore.setSessionInventory(session.value.inventory, session.value.hotbar)
     status.value = 'Connecting...'
     await nextTick()
     connect(session.value)
@@ -310,6 +315,7 @@ async function reconnectSunnyTown() {
     const nextSession = await createSunnyTownSession()
     session.value = nextSession
     starBalance.value = nextSession.wallet.starBalance
+    inventoryStore.setSessionInventory(nextSession.inventory, nextSession.hotbar)
     connect(nextSession)
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : String(caught)
@@ -340,13 +346,6 @@ function parseServerMessage(data: unknown): SunnyTownServerMessage | null {
 
 function handleKeyDown(event: KeyboardEvent) {
   if (event.code === 'Escape') {
-    if (placingStoneBlock.value) {
-      event.preventDefault()
-      placingStoneBlock.value = false
-      placementHoverGrid.value = null
-      draw()
-      return
-    }
     if (activeDialogueNpc.value || activeShopNpc.value || activeSchoolworkNpc.value || inventoryOpen.value) {
       event.preventDefault()
       closeNpcOverlays()
@@ -356,6 +355,13 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 
   if (isEditableKeyboardTarget(event.target)) {
+    return
+  }
+
+  const hotbarIndex = hotbarIndexForEvent(event)
+  if (hotbarIndex !== null) {
+    event.preventDefault()
+    selectHotbarSlot(hotbarIndex)
     return
   }
 
@@ -443,6 +449,7 @@ async function toggleInventory() {
   inventoryOpen.value = !inventoryOpen.value
   if (inventoryOpen.value) {
     await inventoryStore.loadInventory()
+    await inventoryStore.loadHotbar()
     if (craftingPanelOpen.value) {
       await inventoryStore.loadCraftingRecipes()
     }
@@ -458,16 +465,20 @@ async function toggleCraftingPanel() {
 
 async function craftInventoryRecipe(recipeKey: string) {
   await inventoryStore.craftRecipe(recipeKey)
+  await inventoryStore.loadHotbar()
 }
 
-function toggleStoneBlockPlacement() {
-  placingStoneBlock.value = !placingStoneBlock.value
+function selectHotbarSlot(index: number) {
+  selectedHotbarIndex.value = index
   placementHoverGrid.value = null
-  if (placingStoneBlock.value) {
-    inventoryOpen.value = false
-    closeNpcOverlays()
-  }
   draw()
+}
+
+function hotbarIndexForEvent(event: KeyboardEvent): number | null {
+  if (!/^Digit[1-5]$/.test(event.code)) {
+    return null
+  }
+  return Number(event.code.slice(5)) - 1
 }
 
 function placeStoneBlockAtPointer(event: PointerEvent) {
@@ -506,6 +517,16 @@ async function unequipInventorySlot(slot: EquipmentSlot) {
   await inventoryStore.unequipItem(slot)
   applyLocalEquipmentVisuals()
   notifyEquipmentChanged()
+}
+
+async function assignInventoryItemToSelectedHotbarSlot(itemKey: string) {
+  await inventoryStore.setHotbarSlot(selectedHotbarIndex.value + 1, itemKey)
+  draw()
+}
+
+async function clearSelectedHotbarSlot() {
+  await inventoryStore.setHotbarSlot(selectedHotbarIndex.value + 1, '')
+  draw()
 }
 
 function applyLocalEquipmentVisuals() {
@@ -629,8 +650,11 @@ function interactWithNearbyNpc(): boolean {
 
 function useEquippedTool() {
   const player = localSelf || players.value.find((candidate) => candidate.id === selfId.value)
-  const toolKey = player?.equipment?.tool || ''
+  const toolKey = selectedHotbarItemKey.value
   if (!player || !toolKey) {
+    return
+  }
+  if (toolKey !== 'pickaxe') {
     return
   }
 
@@ -1374,7 +1398,7 @@ function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, 
 
   const gearKey = player.equipment?.gear || ''
   const accessoryKey = player.equipment?.accessory || ''
-  const toolKey = player.equipment?.tool || ''
+  const toolKey = isSelf ? selectedHotbarItemKey.value : player.equipment?.tool || ''
   const toolProgress = isSelf ? currentToolUseProgress(toolKey) : null
 
   context.fillStyle = gearKey === 'sunny_hoodie' ? '#f06f38' : (isSelf ? '#27746f' : '#5c6bc0')
@@ -1662,7 +1686,32 @@ function backToPet() {
       </div>
       <div class="sunny-town-help">
         <v-icon icon="mdi-keyboard" size="small" />
-          <span>Move with arrow keys or WASD - E inventory - F/click use tool</span>
+          <span>Move with arrow keys or WASD - 1-5 select - E inventory - F/click use</span>
+      </div>
+      <div class="sunny-town-hotbar" aria-label="Hotbar">
+        <button
+          v-for="(slot, index) in inventoryStore.hotbarSlots"
+          :key="slot.slot"
+          class="sunny-town-hotbar__slot"
+          :class="{
+            'sunny-town-hotbar__slot--selected': selectedHotbarIndex === index,
+            'sunny-town-hotbar__slot--empty-item': slot.item && slot.item.quantity < 1,
+          }"
+          type="button"
+          @click="selectHotbarSlot(index)"
+        >
+          <span class="sunny-town-hotbar__number">{{ slot.slot }}</span>
+          <span
+            v-if="slot.item"
+            class="inventory-item__icon"
+            :class="`inventory-item__icon--${slot.item.key}`"
+            aria-hidden="true"
+          />
+          <span v-else class="sunny-town-hotbar__empty" aria-hidden="true" />
+          <strong v-if="slot.item && (slot.item.quantity > 1 || slot.item.quantity < 1)" class="sunny-town-hotbar__quantity">
+            {{ slot.item.quantity }}
+          </strong>
+        </button>
       </div>
       <div v-if="nearbyNpc && !activeDialogueNpc && !activeSchoolworkNpc && !inventoryOpen" class="sunny-town-talk-hint">
         <v-icon icon="mdi-chat" size="small" />
@@ -1918,39 +1967,50 @@ function backToPet() {
             </div>
           </section>
           <div class="inventory-list inventory-list--compact">
-            <div v-for="item in inventoryStore.unequippedItems" :key="item.key" class="inventory-item inventory-item--dark">
+            <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item inventory-item--dark">
               <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
               <div>
                 <p class="inventory-item__name">{{ item.name }}</p>
                 <p class="inventory-item__description">{{ item.description }}</p>
               </div>
-              <v-btn
-                v-if="item.equipSlot && !item.equipped"
-                :loading="inventoryStore.isUpdatingEquipment"
-                color="primary"
-                size="x-small"
-                variant="flat"
-                @click="equipInventoryItem(item.key, item.equipSlot)"
-              >
-                Equip
-              </v-btn>
-              <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
+              <div class="sunny-town-inventory__item-actions">
+                <v-btn
+                  v-if="item.equipSlot && !item.equipped"
+                  :loading="inventoryStore.isUpdatingEquipment"
+                  color="primary"
+                  size="x-small"
+                  variant="flat"
+                  @click="equipInventoryItem(item.key, item.equipSlot)"
+                >
+                  Wear
+                </v-btn>
+                <v-btn
+                  :loading="inventoryStore.isUpdatingHotbar"
+                  color="warning"
+                  size="x-small"
+                  variant="tonal"
+                  @click="assignInventoryItemToSelectedHotbarSlot(item.key)"
+                >
+                  Slot {{ selectedHotbarIndex + 1 }}
+                </v-btn>
+                <strong class="inventory-item__quantity">{{ item.quantity }}</strong>
+              </div>
             </div>
           </div>
-          <section class="sunny-town-build" aria-label="Build">
+          <section class="sunny-town-hotbar-editor" aria-label="Selected hotbar slot">
             <div>
-              <p class="inventory-item__name">Stone Block</p>
-              <p class="inventory-item__description">Place a crafted block on the map grid.</p>
+              <p class="inventory-item__name">Slot {{ selectedHotbarIndex + 1 }}</p>
+              <p class="inventory-item__description">{{ selectedHotbarItem?.name || 'Empty' }}</p>
             </div>
             <v-btn
-              :color="placingStoneBlock ? 'warning' : 'primary'"
-              :disabled="stoneBlockQuantity < 1"
-              :prepend-icon="placingStoneBlock ? 'mdi-cancel' : 'mdi-cube-outline'"
+              :disabled="!selectedHotbarItem"
+              :loading="inventoryStore.isUpdatingHotbar"
+              prepend-icon="mdi-close"
               size="x-small"
-              :variant="placingStoneBlock ? 'flat' : 'tonal'"
-              @click="toggleStoneBlockPlacement"
+              variant="tonal"
+              @click="clearSelectedHotbarSlot"
             >
-              {{ placingStoneBlock ? 'Cancel' : `Place ${stoneBlockQuantity}` }}
+              Clear
             </v-btn>
           </section>
         </div>

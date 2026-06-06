@@ -76,13 +76,15 @@ type studentProfileResponse struct {
 }
 
 type sunnyTownSessionResponse struct {
-	RoomID       string                  `json:"room_id"`
-	MapID        string                  `json:"map_id"`
-	AvatarID     string                  `json:"avatar_id"`
-	WebSocketURL string                  `json:"websocket_url"`
-	JoinToken    string                  `json:"join_token"`
-	ExpiresAt    time.Time               `json:"expires_at"`
-	Wallet       sunnyTownWalletResponse `json:"wallet"`
+	RoomID       string                   `json:"room_id"`
+	MapID        string                   `json:"map_id"`
+	AvatarID     string                   `json:"avatar_id"`
+	WebSocketURL string                   `json:"websocket_url"`
+	JoinToken    string                   `json:"join_token"`
+	ExpiresAt    time.Time                `json:"expires_at"`
+	Wallet       sunnyTownWalletResponse  `json:"wallet"`
+	Inventory    studentInventoryResponse `json:"inventory"`
+	Hotbar       studentHotbarResponse    `json:"hotbar"`
 }
 
 type sunnyTownWalletResponse struct {
@@ -250,6 +252,7 @@ func main() {
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
 	apiMux.HandleFunc("/api/student/inventory", app.handleStudentInventory)
+	apiMux.HandleFunc("/api/student/hotbar", app.handleStudentHotbar)
 	apiMux.HandleFunc("/api/student/crafting/recipes", app.handleStudentCraftingRecipes)
 	apiMux.HandleFunc("/api/student/crafting/craft", app.handleCraftStudentRecipe)
 	apiMux.HandleFunc("/api/student/equipment", app.handleStudentEquipment)
@@ -266,6 +269,7 @@ func main() {
 	mux.HandleFunc("/api/internal/sunny-town/reward-events", app.handleSunnyTownRewardEvent)
 	mux.HandleFunc("/api/internal/sunny-town/resource-events", app.handleSunnyTownResourceEvent)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", app.handleInternalSunnyTownStudentEquipment)
+	mux.HandleFunc("/api/internal/sunny-town/inventory-quantity", app.handleInternalSunnyTownInventoryQuantity)
 	mux.HandleFunc("/api/internal/sunny-town/player-position", app.handleInternalSunnyTownPlayerPosition)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects", app.handleInternalSunnyTownMapObjects)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects/place", app.handleInternalSunnyTownPlaceMapObject)
@@ -462,6 +466,49 @@ func (app *app) handleStudentInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, inventory)
+}
+
+func (app *app) handleStudentHotbar(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		hotbar, err := app.loadStudentHotbar(r.Context(), user.ID)
+		if err != nil {
+			log.Printf("load student hotbar: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "hotbar could not be loaded",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, hotbar)
+	case http.MethodPut:
+		var request hotbarSlotRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid hotbar request",
+			})
+			return
+		}
+		hotbar, err := app.setStudentHotbarSlot(r.Context(), user.ID, request)
+		if err != nil {
+			status := http.StatusBadRequest
+			if !errors.Is(err, errInvalidHotbarSlot) && !errors.Is(err, errHotbarItemNotOwned) {
+				status = http.StatusInternalServerError
+				log.Printf("set student hotbar: %v", err)
+			}
+			writeJSON(w, status, map[string]string{
+				"error": hotbarErrorMessage(err),
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, hotbar)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (app *app) handleStudentCraftingRecipes(w http.ResponseWriter, r *http.Request) {
@@ -723,6 +770,22 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	inventory, err := app.loadStudentInventory(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load sunny town inventory: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "sunny town session could not be created",
+		})
+		return
+	}
+	hotbar, err := app.loadStudentHotbar(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load sunny town hotbar: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "sunny town session could not be created",
+		})
+		return
+	}
 
 	writeJSON(w, http.StatusOK, sunnyTownSessionResponse{
 		RoomID:       roomID,
@@ -732,6 +795,8 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		JoinToken:    token,
 		ExpiresAt:    expiresAt,
 		Wallet:       sunnyTownWalletResponse{StarBalance: starBalance},
+		Inventory:    inventory,
+		Hotbar:       hotbar,
 	})
 }
 
@@ -829,6 +894,48 @@ func (app *app) handleInternalSunnyTownStudentEquipment(w http.ResponseWriter, r
 	}
 
 	writeJSON(w, http.StatusOK, equipment)
+}
+
+func (app *app) handleInternalSunnyTownInventoryQuantity(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	userID, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("app_user_id")), 10, 64)
+	if err != nil || userID < 1 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "app_user_id is required",
+		})
+		return
+	}
+	itemKey := strings.TrimSpace(r.URL.Query().Get("item_key"))
+	if itemKey == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "item_key is required",
+		})
+		return
+	}
+
+	quantity, err := loadStudentInventoryQuantity(r.Context(), app.db, userID, itemKey)
+	if err != nil {
+		log.Printf("load internal sunny town inventory quantity: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "inventory quantity could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"item_key": itemKey,
+		"quantity": quantity,
+	})
 }
 
 func (app *app) handleInternalSunnyTownPlayerPosition(w http.ResponseWriter, r *http.Request) {
@@ -1004,6 +1111,17 @@ func equipmentErrorMessage(err error) string {
 		return "item is not in your inventory"
 	default:
 		return "equipment could not be updated"
+	}
+}
+
+func hotbarErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, errInvalidHotbarSlot):
+		return "invalid hotbar slot"
+	case errors.Is(err, errHotbarItemNotOwned):
+		return "item is not in your inventory"
+	default:
+		return "hotbar could not be updated"
 	}
 }
 

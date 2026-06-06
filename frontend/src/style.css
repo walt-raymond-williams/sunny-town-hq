@@ -533,6 +533,67 @@ h2 {
   width: 100%;
 }
 
+.sunny-town-hotbar {
+  align-items: center;
+  bottom: 14px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  left: 50%;
+  pointer-events: auto;
+  position: absolute;
+  transform: translateX(-50%);
+  z-index: 4;
+}
+
+.sunny-town-hotbar__slot {
+  align-items: center;
+  background: rgba(23, 33, 43, 0.84);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  display: grid;
+  height: 58px;
+  justify-items: center;
+  padding: 6px;
+  position: relative;
+  width: 58px;
+}
+
+.sunny-town-hotbar__slot--selected {
+  border-color: #f1c85b;
+  box-shadow: 0 0 0 2px rgba(241, 200, 91, 0.28);
+}
+
+.sunny-town-hotbar__slot--empty-item {
+  opacity: 0.62;
+}
+
+.sunny-town-hotbar__number {
+  font-size: 11px;
+  font-weight: 800;
+  left: 6px;
+  line-height: 1;
+  position: absolute;
+  top: 5px;
+}
+
+.sunny-town-hotbar__empty {
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  height: 30px;
+  width: 30px;
+}
+
+.sunny-town-hotbar__quantity {
+  bottom: 4px;
+  font-size: 12px;
+  line-height: 1;
+  position: absolute;
+  right: 6px;
+}
+
 .sunny-town-help {
   align-items: center;
   background: rgba(23, 33, 43, 0.76);
@@ -813,7 +874,7 @@ h2 {
   gap: 6px;
 }
 
-.sunny-town-build {
+.sunny-town-hotbar-editor {
   align-items: center;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   display: grid;
@@ -821,6 +882,14 @@ h2 {
   grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 12px;
   padding-top: 12px;
+}
+
+.sunny-town-inventory__item-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
 }
 
 .sunny-town-crafting {

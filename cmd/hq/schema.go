@@ -183,6 +183,17 @@ func (app *app) ensureSchema(ctx context.Context) error {
 			check (slot in ('gear', 'accessory', 'tool'))`,
 		`create index if not exists student_equipped_item_app_user_id_idx
 			on student_equipped_item (app_user_id)`,
+		`create table if not exists student_hotbar_slot (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			slot_index integer not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, slot_index),
+			constraint student_hotbar_slot_index_check check (slot_index between 1 and 5)
+		)`,
+		`create index if not exists student_hotbar_slot_app_user_id_idx
+			on student_hotbar_slot (app_user_id)`,
 		`create table if not exists student_sunny_town_position (
 			app_user_id bigint primary key references app_user(id) on delete cascade,
 			room_id text not null,

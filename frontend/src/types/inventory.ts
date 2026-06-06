@@ -12,6 +12,15 @@ export interface StudentInventory {
   items: InventoryItem[]
 }
 
+export interface HotbarSlot {
+  slot: number
+  item: InventoryItem | null
+}
+
+export interface StudentHotbar {
+  slots: HotbarSlot[]
+}
+
 export interface CraftingIngredient {
   itemKey: string
   name: string

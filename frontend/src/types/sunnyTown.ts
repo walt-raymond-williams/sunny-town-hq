@@ -1,3 +1,5 @@
+import type { StudentHotbar, StudentInventory } from './inventory'
+
 export interface SunnyTownSession {
   roomId: string
   mapId: string
@@ -6,6 +8,8 @@ export interface SunnyTownSession {
   joinToken: string
   expiresAt: string
   wallet: SunnyTownWallet
+  inventory: StudentInventory
+  hotbar: StudentHotbar
 }
 
 export interface SunnyTownWallet {

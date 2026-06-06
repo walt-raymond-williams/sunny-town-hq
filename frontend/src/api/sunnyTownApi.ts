@@ -1,5 +1,8 @@
 import { authJson } from './http'
 import type { SunnyTownSession } from '../types/sunnyTown'
+import type { StudentHotbar } from '../types/inventory'
+import { normalizeHotbar } from './hotbarApi'
+import { normalizeInventoryItem, type StudentInventoryResponse } from './inventoryApi'
 
 interface SunnyTownSessionResponse {
   room_id?: string
@@ -19,6 +22,8 @@ interface SunnyTownSessionResponse {
   wallet?: {
     star_balance: number
   }
+  inventory?: StudentInventoryResponse
+  hotbar?: StudentHotbar
 }
 
 export async function createSunnyTownSession(): Promise<SunnyTownSession> {
@@ -35,5 +40,9 @@ export async function createSunnyTownSession(): Promise<SunnyTownSession> {
     wallet: {
       starBalance: response.wallet?.star_balance ?? 0,
     },
+    inventory: {
+      items: (response.inventory?.items || []).map(normalizeInventoryItem).filter((item) => item.quantity > 0),
+    },
+    hotbar: normalizeHotbar(response.hotbar),
   }
 }

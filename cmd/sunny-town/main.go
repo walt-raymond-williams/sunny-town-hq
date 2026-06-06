@@ -145,6 +145,7 @@ type clientMessage struct {
 }
 
 type equipmentSnapshot map[string]string
+type inventorySnapshot map[string]int
 
 type serverMessage struct {
 	Type           string                 `json:"type"`
@@ -189,6 +190,7 @@ type player struct {
 	displayName   string
 	avatarID      string
 	equipment     equipmentSnapshot
+	inventory     inventorySnapshot
 	x             float64
 	y             float64
 	facing        string
@@ -404,6 +406,11 @@ type studentEquipmentResponse struct {
 	Slots []equipmentSlotResponse `json:"slots"`
 }
 
+type inventoryQuantityResponse struct {
+	ItemKey  string `json:"item_key"`
+	Quantity int    `json:"quantity"`
+}
+
 type studentPositionResponse struct {
 	Found     bool    `json:"found"`
 	AppUserID int64   `json:"app_user_id"`
@@ -560,6 +567,31 @@ func (srv *server) loadStudentEquipment(ctx context.Context, appUserID int64) (e
 		snapshot[slot.Slot] = strings.TrimSpace(slot.Item.VisualKey)
 	}
 	return snapshot, nil
+}
+
+func (srv *server) loadStudentInventoryQuantity(ctx context.Context, appUserID int64, itemKey string) (int, error) {
+	query := url.Values{}
+	query.Set("app_user_id", strconv.FormatInt(appUserID, 10))
+	query.Set("item_key", itemKey)
+	response, err := srv.internalRequest(
+		ctx,
+		http.MethodGet,
+		"/api/internal/sunny-town/inventory-quantity?"+query.Encode(),
+		nil,
+	)
+	if err != nil {
+		return 0, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return 0, fmt.Errorf("inventory quantity request failed status=%d", response.StatusCode)
+	}
+
+	var quantity inventoryQuantityResponse
+	if err := json.NewDecoder(response.Body).Decode(&quantity); err != nil {
+		return 0, err
+	}
+	return quantity.Quantity, nil
 }
 
 func (srv *server) loadStudentPosition(ctx context.Context, appUserID int64) (studentPositionResponse, error) {
@@ -830,6 +862,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		displayName: claims.DisplayName,
 		avatarID:    claims.AvatarID,
 		equipment:   equipment,
+		inventory:   inventoryFromEquipment(equipment),
 		x:           x,
 		y:           y,
 		facing:      facing,
@@ -987,6 +1020,32 @@ func (client *client) refreshEquipment() {
 	room.broadcastSnapshot(time.Now())
 }
 
+func (client *client) ownsInventoryItem(ctx context.Context, appUserID int64, itemKey string) (bool, error) {
+	itemKey = strings.TrimSpace(itemKey)
+	if itemKey == "" || appUserID < 1 {
+		return false, nil
+	}
+	if client.server != nil {
+		quantity, err := client.server.loadStudentInventoryQuantity(ctx, appUserID, itemKey)
+		if err != nil {
+			return false, err
+		}
+		return quantity > 0, nil
+	}
+
+	room := client.currentRoom()
+	if room == nil {
+		return false, nil
+	}
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	player := room.players[client.id]
+	if player == nil {
+		return false, nil
+	}
+	return player.inventory[itemKey] > 0, nil
+}
+
 func (client *client) handleToolUse(message clientMessage) {
 	toolKey := strings.TrimSpace(message.ToolKey)
 	if toolKey == "" {
@@ -1007,14 +1066,20 @@ func (client *client) handleToolUse(message clientMessage) {
 		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
 		return
 	}
-	equippedTool := strings.TrimSpace(player.equipment[equipmentSlotTool])
+	appUserID := player.appUserID
 	room.mu.Unlock()
 
-	if equippedTool == "" || equippedTool != toolKey {
-		client.trySend(serverMessage{Type: "error", Code: "tool_not_equipped"})
+	if toolKey != "pickaxe" {
 		return
 	}
-	if toolKey != "pickaxe" {
+	ownsTool, err := client.ownsInventoryItem(context.Background(), appUserID, toolKey)
+	if err != nil {
+		log.Printf("validate tool ownership player=%s tool=%s: %v", client.id, toolKey, err)
+		client.trySend(serverMessage{Type: "error", Code: "tool_validation_failed"})
+		return
+	}
+	if !ownsTool {
+		client.trySend(serverMessage{Type: "error", Code: "tool_not_owned"})
 		return
 	}
 
@@ -1363,6 +1428,14 @@ func cloneEquipment(equipment equipmentSnapshot) equipmentSnapshot {
 		cloned[slot] = visualKey
 	}
 	return cloned
+}
+
+func inventoryFromEquipment(equipment equipmentSnapshot) inventorySnapshot {
+	inventory := inventorySnapshot{}
+	if equipment[equipmentSlotTool] == "pickaxe" {
+		inventory["pickaxe"] = 1
+	}
+	return inventory
 }
 
 func (room *room) acceptedMoveLocked(player *player, proposedX float64, proposedY float64) (float64, float64, bool) {

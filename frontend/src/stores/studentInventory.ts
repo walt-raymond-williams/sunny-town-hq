@@ -1,14 +1,17 @@
 import { defineStore } from 'pinia'
 import { craftStudentRecipe, getCraftingRecipes } from '../api/craftingApi'
 import { equipStudentItem, getStudentEquipment, unequipStudentItem } from '../api/equipmentApi'
+import { getStudentHotbar, setStudentHotbarSlot } from '../api/hotbarApi'
 import { getStudentInventory } from '../api/inventoryApi'
-import type { CraftingRecipe, EquippedSlot, EquipmentSlot, InventoryItem } from '../types/inventory'
+import type { CraftingRecipe, EquippedSlot, EquipmentSlot, HotbarSlot, InventoryItem, StudentHotbar, StudentInventory } from '../types/inventory'
 
 interface StudentInventoryState {
   items: InventoryItem[]
   craftingRecipes: CraftingRecipe[]
   equipmentSlots: EquippedSlot[]
+  hotbarSlots: HotbarSlot[]
   isLoading: boolean
+  isUpdatingHotbar: boolean
   isLoadingCrafting: boolean
   isCrafting: boolean
   isUpdatingEquipment: boolean
@@ -22,12 +25,19 @@ const defaultEquipmentSlots: EquippedSlot[] = [
   { slot: 'tool', item: null },
 ]
 
+const defaultHotbarSlots: HotbarSlot[] = Array.from({ length: 5 }, (_, index) => ({
+  slot: index + 1,
+  item: null,
+}))
+
 export const useStudentInventoryStore = defineStore('studentInventory', {
   state: (): StudentInventoryState => ({
     items: [],
     craftingRecipes: [],
     equipmentSlots: defaultEquipmentSlots,
+    hotbarSlots: defaultHotbarSlots,
     isLoading: false,
+    isUpdatingHotbar: false,
     isLoadingCrafting: false,
     isCrafting: false,
     isUpdatingEquipment: false,
@@ -46,12 +56,27 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
     setItems(items: InventoryItem[]) {
       this.items = items
       this.markEquippedItems()
+      this.syncHotbarQuantities()
+      this.error = ''
+    },
+    setHotbar(hotbar: StudentHotbar) {
+      this.hotbarSlots = mergeHotbarSlots(hotbar.slots)
+      this.syncHotbarQuantities()
+      this.error = ''
+    },
+    setSessionInventory(inventory: StudentInventory, hotbar: StudentHotbar) {
+      this.items = inventory.items
+      this.equipmentSlots = mergeEquipmentSlots(this.equipmentSlots)
+      this.hotbarSlots = mergeHotbarSlots(hotbar.slots)
+      this.markEquippedItems()
+      this.syncHotbarQuantities()
       this.error = ''
     },
     setItemQuantity(itemKey: string, quantity: number) {
       if (quantity <= 0) {
         this.items = this.items.filter((item) => item.key !== itemKey)
         this.markEquippedItems()
+        this.syncHotbarQuantities()
         return
       }
       const existing = this.items.find((item) => item.key === itemKey)
@@ -60,6 +85,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
           item.key === itemKey ? { ...item, quantity } : item
         ))
         this.markEquippedItems()
+        this.syncHotbarQuantities()
         return
       }
       const names: Record<string, { name: string; description: string }> = {
@@ -81,6 +107,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         },
       ]
       this.markEquippedItems()
+      this.syncHotbarQuantities()
     },
     setEquipmentSlots(slots: EquippedSlot[]) {
       this.equipmentSlots = mergeEquipmentSlots(slots)
@@ -99,10 +126,40 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.items = inventory.items
         this.equipmentSlots = mergeEquipmentSlots(equipment.slots)
         this.markEquippedItems()
+        this.syncHotbarQuantities()
       } catch (error) {
         this.error = error instanceof Error ? error.message : String(error)
       } finally {
         this.isLoading = false
+      }
+    },
+    async loadHotbar() {
+      this.isUpdatingHotbar = true
+      this.error = ''
+
+      try {
+        const hotbar = await getStudentHotbar()
+        this.hotbarSlots = mergeHotbarSlots(hotbar.slots)
+        this.syncHotbarQuantities()
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : String(error)
+      } finally {
+        this.isUpdatingHotbar = false
+      }
+    },
+    async setHotbarSlot(slot: number, itemKey: string) {
+      this.isUpdatingHotbar = true
+      this.error = ''
+
+      try {
+        const hotbar = await setStudentHotbarSlot(slot, itemKey)
+        this.hotbarSlots = mergeHotbarSlots(hotbar.slots)
+        this.syncHotbarQuantities()
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        this.isUpdatingHotbar = false
       }
     },
     async loadCraftingRecipes() {
@@ -126,6 +183,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.items = result.inventory.items
         this.craftingRecipes = result.recipes
         this.markEquippedItems()
+        this.syncHotbarQuantities()
       } catch (error) {
         this.craftingError = error instanceof Error ? error.message : String(error)
         throw error
@@ -174,6 +232,19 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         equipped: equippedKeys.has(item.key),
       }))
     },
+    syncHotbarQuantities() {
+      const byKey = new Map(this.items.map((item) => [item.key, item]))
+      this.hotbarSlots = mergeHotbarSlots(this.hotbarSlots).map((slot) => {
+        if (!slot.item) {
+          return slot
+        }
+        const inventoryItem = byKey.get(slot.item.key)
+        return {
+          ...slot,
+          item: inventoryItem ? { ...inventoryItem } : { ...slot.item, quantity: 0 },
+        }
+      })
+    },
   },
 })
 
@@ -181,4 +252,11 @@ function mergeEquipmentSlots(slots: EquippedSlot[]): EquippedSlot[] {
   return defaultEquipmentSlots.map((defaultSlot) => (
     slots.find((slot) => slot.slot === defaultSlot.slot) || defaultSlot
   ))
+}
+
+function mergeHotbarSlots(slots: HotbarSlot[]): HotbarSlot[] {
+  return defaultHotbarSlots.map((defaultSlot) => {
+    const slot = slots.find((candidate) => candidate.slot === defaultSlot.slot)
+    return slot ? { slot: slot.slot, item: slot.item ? { ...slot.item } : null } : { ...defaultSlot }
+  })
 }

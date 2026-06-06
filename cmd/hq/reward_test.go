@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -654,6 +655,56 @@ func TestEquipStudentItemSupportsToolSlot(t *testing.T) {
 	}
 }
 
+func TestStudentHotbarDefaultsAndUpdates(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, "pickaxe", 1); err != nil {
+		t.Fatalf("seed pickaxe inventory: %v", err)
+	}
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, "stone_block", 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+
+	hotbar, err := app.loadStudentHotbar(ctx, 123)
+	if err != nil {
+		t.Fatalf("load hotbar: %v", err)
+	}
+	if len(hotbar.Slots) != 5 || hotbar.Slots[0].Item == nil || hotbar.Slots[0].Item.Key != "pickaxe" {
+		t.Fatalf("hotbar = %#v, want pickaxe in slot 1", hotbar)
+	}
+	if hotbar.Slots[1].Item == nil || hotbar.Slots[1].Item.Key != "stone_block" {
+		t.Fatalf("hotbar = %#v, want stone_block in slot 2", hotbar)
+	}
+
+	hotbar, err = app.setStudentHotbarSlot(ctx, 123, hotbarSlotRequest{Slot: 3, ItemKey: "stone_block"})
+	if err != nil {
+		t.Fatalf("set hotbar slot: %v", err)
+	}
+	if hotbar.Slots[2].Item == nil || hotbar.Slots[2].Item.Key != "stone_block" {
+		t.Fatalf("hotbar = %#v, want stone_block in slot 3", hotbar)
+	}
+
+	hotbar, err = app.setStudentHotbarSlot(ctx, 123, hotbarSlotRequest{Slot: 3})
+	if err != nil {
+		t.Fatalf("clear hotbar slot: %v", err)
+	}
+	if hotbar.Slots[2].Item != nil {
+		t.Fatalf("hotbar = %#v, want empty slot 3", hotbar)
+	}
+}
+
+func TestStudentHotbarRejectsUnownedItem(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	_, err := app.setStudentHotbarSlot(context.Background(), 123, hotbarSlotRequest{Slot: 1, ItemKey: "stone_block"})
+	if !errors.Is(err, errHotbarItemNotOwned) {
+		t.Fatalf("set hotbar error = %v, want errHotbarItemNotOwned", err)
+	}
+}
+
 func testRewardApp(t *testing.T) (*app, func()) {
 	t.Helper()
 
@@ -775,6 +826,15 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (app_user_id, slot),
 			constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory', 'tool'))
+		)`,
+		`create table student_hotbar_slot (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			slot_index integer not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, slot_index),
+			constraint student_hotbar_slot_index_check check (slot_index between 1 and 5)
 		)`,
 		`create table student_sunny_town_position (
 			app_user_id bigint primary key references app_user(id) on delete cascade,
