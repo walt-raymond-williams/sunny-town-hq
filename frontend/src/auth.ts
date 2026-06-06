@@ -25,6 +25,12 @@ interface LoginOptions {
 interface StoredAuthState {
   state: string
   redirectUri: string
+  codeVerifier: string
+}
+
+interface CodeChallenge {
+  value: string
+  method: 'S256' | 'plain'
 }
 
 interface HqKeycloak {
@@ -56,6 +62,9 @@ export const keycloakClientId = import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'hq-w
 const realmUrl = `${keycloakUrl}/realms/${keycloakRealm}`
 const tokenStorageKey = 'hq.auth.tokens'
 const stateStorageKey = 'hq.auth.state'
+const authRefreshIntervalMs = 30_000
+let refreshPromise: Promise<boolean> | null = null
+let authRefreshTimer = 0
 
 export const keycloak: HqKeycloak = {
   authenticated: false,
@@ -71,7 +80,7 @@ export const keycloak: HqKeycloak = {
     return Boolean(this.tokenParsed?.resource_access?.[resource]?.roles?.includes(role))
   },
   async login(options = {}) {
-    startLogin(options.redirectUri || window.location.href)
+    await startLogin(options.redirectUri || window.location.href)
   },
   async logout(options = {}) {
     clearTokens()
@@ -89,9 +98,7 @@ export const keycloak: HqKeycloak = {
       return false
     }
 
-    clearTokens()
-    startLogin(window.location.href)
-    throw new Error('login required')
+    return refreshAccessToken()
   },
 }
 
@@ -122,7 +129,7 @@ export function hasRole(role: string): boolean {
 }
 
 export async function loginForRole(_role: string, redirectUri = window.location.href): Promise<boolean> {
-  startLogin(redirectUri)
+  await startLogin(redirectUri)
   return false
 }
 
@@ -132,7 +139,7 @@ export async function logout(redirectUri = window.location.origin): Promise<void
 
 export async function authHeaders(extraHeaders: HeadersInit = {}): Promise<Record<string, string>> {
   if (!keycloak.authenticated) {
-    startLogin(window.location.href)
+    await startLogin(window.location.href)
     throw new Error('login required')
   }
 
@@ -159,22 +166,44 @@ export const connectAuthInterceptor: Interceptor = (next) => async (req) => {
   return next(req)
 }
 
-function startLogin(redirectUri: string): void {
+export function startAuthRefreshLoop(): void {
+  stopAuthRefreshLoop()
+  window.addEventListener('visibilitychange', refreshAuthOnVisible)
+  authRefreshTimer = window.setInterval(() => {
+    void refreshAuthenticatedSession()
+  }, authRefreshIntervalMs)
+  void refreshAuthenticatedSession()
+}
+
+export function stopAuthRefreshLoop(): void {
+  if (authRefreshTimer) {
+    window.clearInterval(authRefreshTimer)
+    authRefreshTimer = 0
+  }
+  window.removeEventListener('visibilitychange', refreshAuthOnVisible)
+}
+
+async function startLogin(redirectUri: string): Promise<void> {
   const state = createLocalState()
+  const codeVerifier = createCodeVerifier()
+  const codeChallenge = await createCodeChallenge(codeVerifier)
   sessionStorage.setItem(
     stateStorageKey,
     JSON.stringify({
       state,
       redirectUri,
+      codeVerifier,
     }),
   )
 
   const params = new URLSearchParams({
     client_id: keycloakClientId,
     redirect_uri: redirectUri,
-    response_type: 'token',
+    response_type: 'code',
     scope: 'openid profile email',
     state,
+    code_challenge: codeChallenge.value,
+    code_challenge_method: codeChallenge.method,
   })
   window.location.assign(`${realmUrl}/protocol/openid-connect/auth?${params.toString()}`)
 }
@@ -197,6 +226,7 @@ async function finishLogin(code: string | null, state: string | null): Promise<v
       client_id: keycloakClientId,
       code,
       redirect_uri: storedState.redirectUri,
+      code_verifier: storedState.codeVerifier,
     }),
   })
 
@@ -231,6 +261,65 @@ function finishImplicitLogin(hashParams: URLSearchParams): void {
   storeTokens(tokens)
   clearStoredState()
   window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
+}
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (refreshPromise) {
+    return refreshPromise
+  }
+
+  if (!keycloak.refreshToken) {
+    clearTokens()
+    await startLogin(window.location.href)
+    throw new Error('login required')
+  }
+
+  refreshPromise = refreshAccessTokenOnce().finally(() => {
+    refreshPromise = null
+  })
+  return refreshPromise
+}
+
+async function refreshAccessTokenOnce(): Promise<boolean> {
+  const previousRefreshToken = keycloak.refreshToken
+  const response = await fetch(`${realmUrl}/protocol/openid-connect/token`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      client_id: keycloakClientId,
+      refresh_token: previousRefreshToken,
+    }),
+  })
+
+  if (!response.ok) {
+    clearTokens()
+    await startLogin(window.location.href)
+    throw new Error(`token refresh failed: ${response.status}`)
+  }
+
+  const tokens = (await response.json()) as AuthTokens
+  if (!tokens.refresh_token) {
+    tokens.refresh_token = previousRefreshToken
+  }
+  applyTokens(tokens)
+  storeTokens(tokens)
+  return true
+}
+
+async function refreshAuthenticatedSession(): Promise<void> {
+  if (!keycloak.authenticated) {
+    return
+  }
+  await keycloak.updateToken(90)
+}
+
+function refreshAuthOnVisible(): void {
+  if (document.visibilityState === 'visible') {
+    void refreshAuthenticatedSession()
+  }
 }
 
 function applyTokens(tokens: AuthTokens): void {
@@ -307,9 +396,41 @@ function base64UrlToBase64(value: string): string {
 }
 
 function createLocalState(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random()
-    .toString(36)
-    .slice(2)}`
+  return `${Date.now().toString(36)}-${createRandomBase64Url(16)}`
+}
+
+function createCodeVerifier(): string {
+  return createRandomBase64Url(32)
+}
+
+async function createCodeChallenge(verifier: string): Promise<CodeChallenge> {
+  if (!window.crypto.subtle) {
+    return {
+      value: verifier,
+      method: 'plain',
+    }
+  }
+
+  const data = new TextEncoder().encode(verifier)
+  const digest = await window.crypto.subtle.digest('SHA-256', data)
+  return {
+    value: bytesToBase64Url(new Uint8Array(digest)),
+    method: 'S256',
+  }
+}
+
+function createRandomBase64Url(byteLength: number): string {
+  const bytes = new Uint8Array(byteLength)
+  window.crypto.getRandomValues(bytes)
+  return bytesToBase64Url(bytes)
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 function headersToRecord(headers: HeadersInit): Record<string, string> {

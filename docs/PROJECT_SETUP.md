@@ -34,9 +34,9 @@ cd frontend
 npm run build
 ```
 
-The frontend auth helper is `frontend/src/auth.ts`. It intentionally avoids `keycloak-js` because browsers block Web Crypto on plain LAN HTTP URLs such as `http://<YOUR_LAN_IP>:18080`.
+The frontend auth helper is `frontend/src/auth.ts`. It uses Keycloak authorization-code login, stores the returned refresh token in session storage, and sends refreshed access tokens as bearer tokens to the Go backend.
 
-For this local-network setup, frontend login uses Keycloak implicit flow and sends the Keycloak access token as a bearer token to the Go backend.
+The helper intentionally avoids `keycloak-js` because browsers block some Web Crypto APIs on plain LAN HTTP URLs such as `http://<YOUR_LAN_IP>:18080`. PKCE uses S256 when available and falls back to the plain verifier method for trusted local-network development.
 
 ### App PostgreSQL
 
@@ -231,8 +231,8 @@ npm run build
 
 - Use one consistent host/IP for HQ and Keycloak. If users open HQ at `http://<YOUR_LAN_IP>:18080`, then `KEYCLOAK_ISSUER` should be `http://<YOUR_LAN_IP>:18081/realms/hq`.
 - Do not rely on `localhost` from student devices. On a phone/tablet, `localhost` means that device, not the laptop.
-- Plain LAN HTTP is not a secure browser context. Browser Web Crypto APIs are unavailable, so `keycloak-js` and PKCE are not usable here without HTTPS.
-- This project currently uses implicit flow only for local trusted-network development. A future hosted HTTPS setup should switch back to authorization-code flow with PKCE.
+- Plain LAN HTTP is not a secure browser context. Browser Web Crypto `subtle` APIs may be unavailable, so the frontend auth helper falls back from S256 PKCE to plain PKCE there.
+- The `hq-web` Keycloak client should keep standard flow enabled. Implicit flow is not required.
 - If Keycloak rejects login with `Invalid parameter: redirect_uri`, add the exact HQ URL to the `hq-web` client's Valid redirect URIs.
 
 ## Common Pitfalls

@@ -22,7 +22,7 @@
       "publicClient": true,
       "protocol": "openid-connect",
       "standardFlowEnabled": true,
-      "implicitFlowEnabled": true,
+      "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
         "http://localhost:5173/*",

@@ -43,6 +43,8 @@ const remoteInterpolationDelayMs = 150
 const maxRemoteHistoryFrames = 12
 const npcInteractionRadius = 54
 const toolUseDurationMs = 360
+const reconnectInitialDelayMs = 500
+const reconnectMaxDelayMs = 8_000
 const movementInputEventOptions = { capture: true }
 
 const router = useRouter()
@@ -90,6 +92,9 @@ let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
 let lastRenderTime = 0
 let activeToolUse: ToolUseAnimation | null = null
+let reconnectTimer = 0
+let reconnectAttempts = 0
+let shuttingDown = false
 
 const playerCount = computed(() => players.value.length)
 const activeDialogueLine = computed(() => activeDialogueNpc.value?.dialogue[activeDialogueLineIndex.value] || '')
@@ -125,12 +130,14 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  shuttingDown = true
   window.removeEventListener('keydown', handleKeyDown, movementInputEventOptions)
   window.removeEventListener('keyup', handleKeyUp, movementInputEventOptions)
   window.removeEventListener('blur', handleInputCancel)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('resize', handleResize)
   window.cancelAnimationFrame(animationFrame)
+  clearReconnectTimer()
   socket?.close()
   socket = null
   localSelf = null
@@ -141,14 +148,23 @@ onBeforeUnmount(() => {
 function connect(activeSession: SunnyTownSession) {
   const url = new URL(activeSession.websocketUrl)
   url.searchParams.set('token', activeSession.joinToken)
-  socket = new WebSocket(url.toString())
+  const nextSocket = new WebSocket(url.toString())
+  socket = nextSocket
 
-  socket.addEventListener('open', () => {
+  nextSocket.addEventListener('open', () => {
+    if (socket !== nextSocket) {
+      return
+    }
+    reconnectAttempts = 0
     connected.value = true
     status.value = 'Connected'
+    error.value = ''
   })
 
-  socket.addEventListener('message', (event) => {
+  nextSocket.addEventListener('message', (event) => {
+    if (socket !== nextSocket) {
+      return
+    }
     const message = parseServerMessage(event.data)
     if (!message) {
       return
@@ -209,14 +225,62 @@ function connect(activeSession: SunnyTownSession) {
     }
   })
 
-  socket.addEventListener('close', () => {
+  nextSocket.addEventListener('close', () => {
+    if (socket !== nextSocket) {
+      return
+    }
     connected.value = false
-    status.value = 'Disconnected'
+    socket = null
+    if (shuttingDown) {
+      status.value = 'Disconnected'
+      return
+    }
+    scheduleReconnect()
   })
 
-  socket.addEventListener('error', () => {
+  nextSocket.addEventListener('error', () => {
+    if (socket !== nextSocket) {
+      return
+    }
     error.value = 'Sunny Town connection failed'
   })
+}
+
+function scheduleReconnect() {
+  if (shuttingDown || reconnectTimer) {
+    return
+  }
+
+  const delay = Math.min(reconnectMaxDelayMs, reconnectInitialDelayMs * 2 ** reconnectAttempts)
+  reconnectAttempts += 1
+  status.value = 'Reconnecting...'
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = 0
+    void reconnectSunnyTown()
+  }, delay)
+}
+
+async function reconnectSunnyTown() {
+  if (shuttingDown) {
+    return
+  }
+
+  try {
+    const nextSession = await createSunnyTownSession()
+    session.value = nextSession
+    starBalance.value = nextSession.wallet.starBalance
+    connect(nextSession)
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : String(caught)
+    scheduleReconnect()
+  }
+}
+
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    window.clearTimeout(reconnectTimer)
+    reconnectTimer = 0
+  }
 }
 
 function parseServerMessage(data: unknown): SunnyTownServerMessage | null {
