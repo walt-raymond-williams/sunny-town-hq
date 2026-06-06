@@ -3,6 +3,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getNextStudentAssignment, submitStudentAnswer } from '../../api/studentAssignmentsApi'
 import { purchaseShopItem } from '../../api/shopApi'
+import {
+  canPlaceStoneBlock as canPlaceStoneBlockOnMap,
+  movementDirectionForEvent,
+  movementInputEventOptions,
+  moveSendIntervalMs,
+  simulatePlayer,
+  useSunnyTownMovement,
+} from '../../composables/useSunnyTownMovement'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { Assignment } from '../../types/assignment'
@@ -22,15 +30,6 @@ import type {
   SunnyTownWorldObject,
 } from '../../types/sunnyTown'
 
-interface MovementInput {
-  up: boolean
-  down: boolean
-  left: boolean
-  right: boolean
-}
-
-type MovementDirection = keyof MovementInput
-
 interface ToolUseAnimation {
   toolKey: string
   startedAt: number
@@ -38,17 +37,14 @@ interface ToolUseAnimation {
   facing: SunnyTownPlayer['facing']
 }
 
-const playerSpeed = 150
-const playerSize = 28
-const moveSendIntervalMs = 50
 const remoteInterpolationDelayMs = 150
 const maxRemoteHistoryFrames = 12
 const npcInteractionRadius = 54
 const toolUseDurationMs = 360
-const movementInputEventOptions = { capture: true }
 
 const router = useRouter()
 const inventoryStore = useStudentInventoryStore()
+const movement = useSunnyTownMovement()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
@@ -81,7 +77,6 @@ const schoolworkNotice = ref('')
 const isLoadingSchoolwork = ref(false)
 const isSubmittingSchoolwork = ref(false)
 
-const pressedDirections = new Set<MovementDirection>()
 const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
 let localSelf: SunnyTownPlayer | null = null
 let renderedSelf: SunnyTownPlayer | null = null
@@ -298,7 +293,7 @@ function handleKeyDown(event: KeyboardEvent) {
     return
   }
   event.preventDefault()
-  pressedDirections.add(direction)
+  movement.press(direction)
   refreshLocalMovementState()
   sendMove(true)
 }
@@ -309,7 +304,7 @@ function handleKeyUp(event: KeyboardEvent) {
     return
   }
   event.preventDefault()
-  pressedDirections.delete(direction)
+  movement.release(direction)
   refreshLocalMovementState()
   sendMove(true)
 }
@@ -321,10 +316,10 @@ function handleVisibilityChange() {
 }
 
 function handleInputCancel() {
-  if (pressedDirections.size === 0) {
+  if (!movement.hasInput()) {
     return
   }
-  pressedDirections.clear()
+  movement.clear()
   refreshLocalMovementState()
   sendMove(true)
 }
@@ -515,7 +510,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   lastSentMoveJson = ''
   activeToolUse = null
   placementHoverGrid.value = null
-  pressedDirections.clear()
+  movement.clear()
   closeNpcOverlays()
   nearbyNpc.value = null
   syncLocalSelfFromSnapshot()
@@ -775,7 +770,7 @@ function refreshLocalMovementState() {
   if (!localSelf) {
     return
   }
-  localSelf = simulatePlayer(localSelf, currentMovementInput(), 0)
+  localSelf = simulatePlayer(localSelf, movement.currentInput(), activeMap.value, worldObjects.value, 0)
 }
 
 function sendMove(force = false) {
@@ -1022,8 +1017,8 @@ function predictSelf(deltaSeconds: number) {
     localSelf = { ...selfSnapshot }
   }
 
-  const input = currentMovementInput()
-  localSelf = simulatePlayer(localSelf, input, deltaSeconds)
+  const input = movement.currentInput()
+  localSelf = simulatePlayer(localSelf, input, activeMap.value, worldObjects.value, deltaSeconds)
   sendMove(false)
 }
 
@@ -1050,140 +1045,9 @@ function syncLocalSelfFromSnapshot() {
   localSelf.lastProcessedSeq = selfSnapshot.lastProcessedSeq
 }
 
-function simulatePlayer(player: SunnyTownPlayer, input: MovementInput, deltaSeconds: number): SunnyTownPlayer {
-  const map = activeMap.value
-  if (!map) {
-    return player
-  }
-  const result = { ...player }
-  const vector = movementVector(input)
-  if (!vector) {
-    result.moving = false
-    return result
-  }
-
-  const nextX = result.x + vector.x * playerSpeed * deltaSeconds
-  const nextY = result.y + vector.y * playerSpeed * deltaSeconds
-  if (!collides(map, nextX, result.y)) {
-    result.x = clampPlayerX(map, nextX)
-  }
-  if (!collides(map, result.x, nextY)) {
-    result.y = clampPlayerY(map, nextY)
-  }
-  result.facing = movementFacing(vector)
-  result.moving = true
-  return result
-}
-
-function currentMovementInput(): MovementInput {
-  return {
-    up: pressedDirections.has('up'),
-    down: pressedDirections.has('down'),
-    left: pressedDirections.has('left'),
-    right: pressedDirections.has('right'),
-  }
-}
-
-function movementVector(input: MovementInput): { x: number; y: number } | null {
-  let x = Number(input.right) - Number(input.left)
-  let y = Number(input.down) - Number(input.up)
-  if (x === 0 && y === 0) {
-    return null
-  }
-
-  const length = Math.hypot(x, y)
-  x /= length
-  y /= length
-  return { x, y }
-}
-
-function movementFacing(vector: { x: number; y: number }): SunnyTownPlayer['facing'] {
-  if (Math.abs(vector.x) > Math.abs(vector.y)) {
-    return vector.x > 0 ? 'right' : 'left'
-  }
-  return vector.y > 0 ? 'down' : 'up'
-}
-
-function collides(map: SunnyTownMap, x: number, y: number): boolean {
-  const playerRect = {
-    x: x - playerSize / 2,
-    y: y - playerSize / 2,
-    width: playerSize,
-    height: playerSize,
-  }
-  return (
-    map.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked)) ||
-    worldObjects.value.some((object) => object.active && object.collision && rectsOverlap(playerRect, worldObjectRect(object)))
-  )
-}
-
-function worldObjectRect(object: SunnyTownWorldObject): { x: number; y: number; width: number; height: number } {
-  if (object.radius && object.radius > 0) {
-    return {
-      x: object.x - object.radius,
-      y: object.y - object.radius,
-      width: object.radius * 2,
-      height: object.radius * 2,
-    }
-  }
-  return {
-    x: object.x,
-    y: object.y,
-    width: object.width || 0,
-    height: object.height || 0,
-  }
-}
-
 function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): boolean {
-  if (gridX < 0 || gridY < 0 || gridX >= map.width || gridY >= map.height || stoneBlockQuantity.value < 1) {
-    return false
-  }
-  const tileRect = {
-    x: gridX * map.tileSize,
-    y: gridY * map.tileSize,
-    width: map.tileSize,
-    height: map.tileSize,
-  }
   const self = localSelf || players.value.find((player) => player.id === selfId.value)
-  return !(
-    map.blockedRects.some((blocked) => rectsOverlap(tileRect, blocked)) ||
-    map.portals.some((portal) => rectsOverlap(tileRect, portal)) ||
-    map.npcs.some((npc) => rectsOverlap(tileRect, {
-      x: npc.x - playerSize / 2,
-      y: npc.y - playerSize / 2,
-      width: playerSize,
-      height: playerSize,
-    })) ||
-    worldObjects.value.some((object) => object.reservesPlacement && rectsOverlap(tileRect, worldObjectRect(object))) ||
-    (self && rectsOverlap(tileRect, {
-      x: self.x - playerSize / 2,
-      y: self.y - playerSize / 2,
-      width: playerSize,
-      height: playerSize,
-    }))
-  )
-}
-
-function clampPlayerX(map: SunnyTownMap, x: number): number {
-  const maxX = map.width * map.tileSize - playerSize / 2
-  return clamp(x, playerSize / 2, maxX)
-}
-
-function clampPlayerY(map: SunnyTownMap, y: number): number {
-  const maxY = map.height * map.tileSize - playerSize / 2
-  return clamp(y, playerSize / 2, maxY)
-}
-
-function rectsOverlap(
-  first: { x: number; y: number; width: number; height: number },
-  second: { x: number; y: number; width: number; height: number },
-): boolean {
-  return (
-    first.x < second.x + second.width &&
-    first.x + first.width > second.x &&
-    first.y < second.y + second.height &&
-    first.y + first.height > second.y
-  )
+  return canPlaceStoneBlockOnMap(map, gridX, gridY, stoneBlockQuantity.value, worldObjects.value, self)
 }
 
 function drawMap(
@@ -1606,40 +1470,6 @@ function drawCollectible(
   context.fill()
   context.stroke()
   context.restore()
-}
-
-function movementDirectionForEvent(event: KeyboardEvent): MovementDirection | null {
-  switch (event.code) {
-    case 'ArrowUp':
-    case 'KeyW':
-      return 'up'
-    case 'ArrowDown':
-    case 'KeyS':
-      return 'down'
-    case 'ArrowLeft':
-    case 'KeyA':
-      return 'left'
-    case 'ArrowRight':
-    case 'KeyD':
-      return 'right'
-  }
-
-  switch (event.key.toLowerCase()) {
-    case 'arrowup':
-    case 'w':
-      return 'up'
-    case 'arrowdown':
-    case 's':
-      return 'down'
-    case 'arrowleft':
-    case 'a':
-      return 'left'
-    case 'arrowright':
-    case 'd':
-      return 'right'
-    default:
-      return null
-  }
 }
 
 function isEditableKeyboardTarget(target: EventTarget | null): boolean {
