@@ -58,6 +58,7 @@ Tasks:
 - [ ] Move room, player, world, movement, portal, collectible, resource, and placement logic into `internal/sunnytown/world`.
 - [x] Move internal HQ HTTP calls into `internal/sunnytown/hqclient`.
 - [ ] Move WebSocket server setup and request handling into `internal/sunnytown/server`.
+- [x] Split Sunny Town server/WebSocket wiring into `cmd/sunny-town/server.go` as a preparatory step.
 - [ ] Update Sunny Town tests to import/use the new packages.
 
 Verification:
@@ -209,3 +210,6 @@ Verification:
 - 2026-06-06: Phase 2 moved Sunny Town internal HQ HTTP calls into `internal/sunnytown/hqclient`.
 - 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town HQ client extraction.
 - 2026-06-06: `go test ./...` passed after Sunny Town HQ client extraction.
+- 2026-06-06: Phase 2 split Sunny Town server/WebSocket wiring into `cmd/sunny-town/server.go` as a preparatory step before moving it to `internal/sunnytown/server`.
+- 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town server file split.
+- 2026-06-06: `go test ./...` passed after Sunny Town server file split.
