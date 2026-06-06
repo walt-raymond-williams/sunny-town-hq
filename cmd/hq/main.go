@@ -105,6 +105,24 @@ type sunnyTownRewardEventResponse struct {
 	NewStarBalance int  `json:"new_star_balance"`
 }
 
+type sunnyTownResourceEventRequest struct {
+	EventID     string `json:"event_id"`
+	AppUserID   int64  `json:"app_user_id"`
+	Source      string `json:"source"`
+	RoomID      string `json:"room_id"`
+	MapID       string `json:"map_id"`
+	NodeID      string `json:"node_id"`
+	ResourceKey string `json:"resource_key"`
+	Amount      int    `json:"amount"`
+}
+
+type sunnyTownResourceEventResponse struct {
+	Accepted    bool   `json:"accepted"`
+	Duplicate   bool   `json:"duplicate"`
+	ResourceKey string `json:"resource_key"`
+	Quantity    int    `json:"quantity"`
+}
+
 type sunnyTownPositionRequest struct {
 	AppUserID int64   `json:"app_user_id"`
 	RoomID    string  `json:"room_id"`
@@ -144,6 +162,17 @@ type starRewardRequest struct {
 	RoomID        string
 	MapID         string
 	CollectibleID string
+}
+
+type inventoryLedgerRequest struct {
+	EventID   string
+	AppUserID int64
+	Source    string
+	ItemKey   string
+	Delta     int
+	RoomID    string
+	MapID     string
+	NodeID    string
 }
 
 type assignmentAttemptResponse struct {
@@ -233,6 +262,7 @@ func main() {
 	apiMux.HandleFunc("/api/assignments", app.handleAssignments)
 	apiMux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
 	mux.HandleFunc("/api/internal/sunny-town/reward-events", app.handleSunnyTownRewardEvent)
+	mux.HandleFunc("/api/internal/sunny-town/resource-events", app.handleSunnyTownResourceEvent)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", app.handleInternalSunnyTownStudentEquipment)
 	mux.HandleFunc("/api/internal/sunny-town/player-position", app.handleInternalSunnyTownPlayerPosition)
 	mux.Handle("/api/", app.authenticated(apiMux))
@@ -673,6 +703,38 @@ func (app *app) handleSunnyTownRewardEvent(w http.ResponseWriter, r *http.Reques
 		log.Printf("commit sunny town reward: %v", err)
 		writeJSON(w, http.StatusBadRequest, map[string]string{
 			"error": "reward event could not be accepted",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (app *app) handleSunnyTownResourceEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	var request sunnyTownResourceEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := app.commitSunnyTownResource(r.Context(), request)
+	if err != nil {
+		log.Printf("commit sunny town resource: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "resource event could not be accepted",
 		})
 		return
 	}
@@ -1521,6 +1583,48 @@ func (app *app) commitSunnyTownReward(ctx context.Context, request sunnyTownRewa
 	}, nil
 }
 
+func (app *app) commitSunnyTownResource(ctx context.Context, request sunnyTownResourceEventRequest) (sunnyTownResourceEventResponse, error) {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.Source = strings.TrimSpace(request.Source)
+	request.RoomID = strings.TrimSpace(request.RoomID)
+	request.MapID = strings.TrimSpace(request.MapID)
+	request.NodeID = strings.TrimSpace(request.NodeID)
+	request.ResourceKey = strings.TrimSpace(request.ResourceKey)
+	if request.EventID == "" || request.AppUserID < 1 || request.Source == "" || request.RoomID == "" || request.MapID == "" || request.NodeID == "" {
+		return sunnyTownResourceEventResponse{}, errors.New("resource event is missing required fields")
+	}
+	if request.Source != "sunny_town_mining" {
+		return sunnyTownResourceEventResponse{}, errors.New("unsupported resource event source")
+	}
+	if request.ResourceKey != "rock" && request.ResourceKey != "crystal" {
+		return sunnyTownResourceEventResponse{}, errors.New("unsupported resource")
+	}
+	if request.Amount < 1 {
+		return sunnyTownResourceEventResponse{}, errors.New("resource amount must be positive")
+	}
+
+	inserted, quantity, err := commitStudentInventoryLedgerDelta(ctx, app.db, inventoryLedgerRequest{
+		EventID:   request.EventID,
+		AppUserID: request.AppUserID,
+		Source:    request.Source,
+		ItemKey:   request.ResourceKey,
+		Delta:     request.Amount,
+		RoomID:    request.RoomID,
+		MapID:     request.MapID,
+		NodeID:    request.NodeID,
+	})
+	if err != nil {
+		return sunnyTownResourceEventResponse{}, err
+	}
+
+	return sunnyTownResourceEventResponse{
+		Accepted:    true,
+		Duplicate:   !inserted,
+		ResourceKey: request.ResourceKey,
+		Quantity:    quantity,
+	}, nil
+}
+
 func (app *app) loadSunnyTownPosition(ctx context.Context, appUserID int64) (sunnyTownPositionResponse, error) {
 	if appUserID < 1 {
 		return sunnyTownPositionResponse{}, errors.New("app_user_id is required")
@@ -1670,6 +1774,72 @@ func commitStudentStarReward(ctx context.Context, querier starRewardQuerier, req
 		request.CollectibleID,
 	).Scan(&inserted, &balance)
 	return inserted, balance, err
+}
+
+func commitStudentInventoryLedgerDelta(ctx context.Context, querier starRewardQuerier, request inventoryLedgerRequest) (bool, int, error) {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.Source = strings.TrimSpace(request.Source)
+	request.ItemKey = strings.TrimSpace(request.ItemKey)
+	if request.EventID == "" || request.AppUserID < 1 || request.Source == "" || request.ItemKey == "" || request.Delta == 0 {
+		return false, 0, errors.New("inventory ledger event is missing required fields")
+	}
+
+	var inserted bool
+	var quantity int
+	err := querier.QueryRow(
+		ctx,
+		`
+			with item_type as (
+				select id
+				from inventory_item_type
+				where key = $4
+			),
+			inserted as (
+				insert into student_inventory_ledger (
+					app_user_id,
+					event_id,
+					source,
+					item_type_id,
+					delta,
+					room_id,
+					map_id,
+					node_id
+				)
+				select $1, $2, $3, id, $5, nullif($6, ''), nullif($7, ''), nullif($8, '')
+				from item_type
+				on conflict (event_id) do nothing
+				returning app_user_id, item_type_id, delta
+			),
+			updated_inventory as (
+				insert into student_inventory_item (app_user_id, item_type_id, quantity)
+				select app_user_id, item_type_id, delta from inserted
+				on conflict (app_user_id, item_type_id) do update
+				set quantity = student_inventory_item.quantity + excluded.quantity,
+					updated_at = now()
+				returning quantity
+			)
+			select exists(select 1 from inserted) as inserted,
+				coalesce(
+					(select quantity from updated_inventory),
+					(
+						select sii.quantity
+						from student_inventory_item sii
+						join item_type on item_type.id = sii.item_type_id
+						where sii.app_user_id = $1
+					),
+					0
+				) as quantity
+		`,
+		request.AppUserID,
+		request.EventID,
+		request.Source,
+		request.ItemKey,
+		request.Delta,
+		request.RoomID,
+		request.MapID,
+		request.NodeID,
+	).Scan(&inserted, &quantity)
+	return inserted, quantity, err
 }
 
 func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64) (studentProfileResponse, error) {

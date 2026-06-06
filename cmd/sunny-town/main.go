@@ -26,18 +26,20 @@ import (
 )
 
 const (
-	defaultRoomID          = "sunny-town-main"
-	defaultMapID           = "sunny-town-v1"
-	equipmentSlotGear      = "gear"
-	equipmentSlotAccessory = "accessory"
-	equipmentSlotTool      = "tool"
-	playerSize             = 28.0
-	playerSpeed            = 150.0
-	starPickupRadius       = 30.0
-	simulationInterval     = 50 * time.Millisecond
-	snapshotInterval       = 100 * time.Millisecond
-	movingStateTTL         = 250 * time.Millisecond
-	starRespawnDelay       = 10 * time.Second
+	defaultRoomID           = "sunny-town-main"
+	defaultMapID            = "sunny-town-v1"
+	equipmentSlotGear       = "gear"
+	equipmentSlotAccessory  = "accessory"
+	equipmentSlotTool       = "tool"
+	playerSize              = 28.0
+	playerSpeed             = 150.0
+	starPickupRadius        = 30.0
+	resourceCommitQueueSize = 32
+	resourceToolCooldown    = 500 * time.Millisecond
+	simulationInterval      = 50 * time.Millisecond
+	snapshotInterval        = 100 * time.Millisecond
+	movingStateTTL          = 250 * time.Millisecond
+	starRespawnDelay        = 10 * time.Second
 )
 
 type config struct {
@@ -51,16 +53,17 @@ type config struct {
 }
 
 type gameMap struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	TileSize     int      `json:"tileSize"`
-	Width        int      `json:"width"`
-	Height       int      `json:"height"`
-	Spawns       []point  `json:"spawns"`
-	BlockedRects []rect   `json:"blockedRects"`
-	StarSpawns   []point  `json:"starSpawns"`
-	Portals      []portal `json:"portals"`
-	NPCs         []npc    `json:"npcs"`
+	ID            string                   `json:"id"`
+	Name          string                   `json:"name"`
+	TileSize      int                      `json:"tileSize"`
+	Width         int                      `json:"width"`
+	Height        int                      `json:"height"`
+	Spawns        []point                  `json:"spawns"`
+	BlockedRects  []rect                   `json:"blockedRects"`
+	StarSpawns    []point                  `json:"starSpawns"`
+	Portals       []portal                 `json:"portals"`
+	NPCs          []npc                    `json:"npcs"`
+	ResourceNodes []resourceNodeDefinition `json:"resourceNodes"`
 }
 
 type point struct {
@@ -115,6 +118,16 @@ type shopItem struct {
 	PriceStars  int    `json:"priceStars"`
 }
 
+type resourceNodeDefinition struct {
+	ID                string  `json:"id"`
+	Kind              string  `json:"kind"`
+	X                 float64 `json:"x"`
+	Y                 float64 `json:"y"`
+	Radius            float64 `json:"radius"`
+	InteractionRadius float64 `json:"interactionRadius"`
+	RespawnSeconds    int     `json:"respawnSeconds"`
+}
+
 type clientMessage struct {
 	Type         string  `json:"type"`
 	Seq          int64   `json:"seq,omitempty"`
@@ -129,22 +142,26 @@ type clientMessage struct {
 type equipmentSnapshot map[string]string
 
 type serverMessage struct {
-	Type           string                `json:"type"`
-	SelfID         string                `json:"selfId,omitempty"`
-	RoomID         string                `json:"roomId,omitempty"`
-	MapID          string                `json:"mapId,omitempty"`
-	Map            *gameMap              `json:"map,omitempty"`
-	Tick           int64                 `json:"tick,omitempty"`
-	ServerTimeMS   int64                 `json:"serverTimeMs,omitempty"`
-	Players        []playerSnapshot      `json:"players,omitempty"`
-	Collectibles   []collectibleSnapshot `json:"collectibles,omitempty"`
-	Code           string                `json:"code,omitempty"`
-	EventID        string                `json:"eventId,omitempty"`
-	Kind           string                `json:"kind,omitempty"`
-	Amount         int                   `json:"amount,omitempty"`
-	NewStarBalance int                   `json:"newStarBalance,omitempty"`
-	CollectibleID  string                `json:"collectibleId,omitempty"`
-	Reason         string                `json:"reason,omitempty"`
+	Type           string                 `json:"type"`
+	SelfID         string                 `json:"selfId,omitempty"`
+	RoomID         string                 `json:"roomId,omitempty"`
+	MapID          string                 `json:"mapId,omitempty"`
+	Map            *gameMap               `json:"map,omitempty"`
+	Tick           int64                  `json:"tick,omitempty"`
+	ServerTimeMS   int64                  `json:"serverTimeMs,omitempty"`
+	Players        []playerSnapshot       `json:"players,omitempty"`
+	Collectibles   []collectibleSnapshot  `json:"collectibles,omitempty"`
+	ResourceNodes  []resourceNodeSnapshot `json:"resourceNodes,omitempty"`
+	Code           string                 `json:"code,omitempty"`
+	EventID        string                 `json:"eventId,omitempty"`
+	Kind           string                 `json:"kind,omitempty"`
+	Amount         int                    `json:"amount,omitempty"`
+	NewStarBalance int                    `json:"newStarBalance,omitempty"`
+	CollectibleID  string                 `json:"collectibleId,omitempty"`
+	NodeID         string                 `json:"nodeId,omitempty"`
+	ResourceKey    string                 `json:"resourceKey,omitempty"`
+	Quantity       int                    `json:"quantity,omitempty"`
+	Reason         string                 `json:"reason,omitempty"`
 }
 
 type playerSnapshot struct {
@@ -160,18 +177,19 @@ type playerSnapshot struct {
 }
 
 type player struct {
-	appUserID   int64
-	id          string
-	displayName string
-	avatarID    string
-	equipment   equipmentSnapshot
-	x           float64
-	y           float64
-	facing      string
-	moving      bool
-	lastMoveAt  time.Time
-	lastMoveSeq int64
-	client      *client
+	appUserID     int64
+	id            string
+	displayName   string
+	avatarID      string
+	equipment     equipmentSnapshot
+	x             float64
+	y             float64
+	facing        string
+	moving        bool
+	lastMoveAt    time.Time
+	lastMoveSeq   int64
+	lastToolUseAt time.Time
+	client        *client
 }
 
 type client struct {
@@ -189,13 +207,15 @@ type room struct {
 	id      string
 	gameMap gameMap
 
-	mu           sync.Mutex
-	players      map[string]*player
-	collectibles map[string]*collectible
-	tick         int64
-	rewardRunID  string
-	rewardEvents chan rewardEvent
-	world        *world
+	mu             sync.Mutex
+	players        map[string]*player
+	collectibles   map[string]*collectible
+	resourceNodes  map[string]*resourceNode
+	tick           int64
+	rewardRunID    string
+	rewardEvents   chan rewardEvent
+	resourceEvents chan resourceEvent
+	world          *world
 }
 
 type server struct {
@@ -206,11 +226,12 @@ type server struct {
 }
 
 type world struct {
-	roomID       string
-	rooms        map[string]*room
-	defaultRoom  *room
-	rewardEvents chan rewardEvent
-	transferMu   sync.Mutex
+	roomID         string
+	rooms          map[string]*room
+	defaultRoom    *room
+	rewardEvents   chan rewardEvent
+	resourceEvents chan resourceEvent
+	transferMu     sync.Mutex
 }
 
 type collectible struct {
@@ -231,6 +252,29 @@ type collectibleSnapshot struct {
 	Active bool    `json:"active"`
 }
 
+type resourceNode struct {
+	id                string
+	kind              string
+	mapID             string
+	x                 float64
+	y                 float64
+	radius            float64
+	interactionRadius float64
+	respawnDelay      time.Duration
+	active            bool
+	respawnAt         time.Time
+	harvestSeq        int64
+}
+
+type resourceNodeSnapshot struct {
+	ID     string  `json:"id"`
+	Kind   string  `json:"kind"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Radius float64 `json:"radius"`
+	Active bool    `json:"active"`
+}
+
 type rewardEvent struct {
 	eventID       string
 	appUserID     int64
@@ -240,6 +284,17 @@ type rewardEvent struct {
 	kind          string
 	amount        int
 	client        *client
+}
+
+type resourceEvent struct {
+	eventID     string
+	appUserID   int64
+	roomID      string
+	mapID       string
+	nodeID      string
+	resourceKey string
+	amount      int
+	client      *client
 }
 
 type rewardCommitRequest struct {
@@ -256,6 +311,24 @@ type rewardCommitResponse struct {
 	Accepted       bool `json:"accepted"`
 	Duplicate      bool `json:"duplicate"`
 	NewStarBalance int  `json:"new_star_balance"`
+}
+
+type resourceCommitRequest struct {
+	EventID     string `json:"event_id"`
+	AppUserID   int64  `json:"app_user_id"`
+	Source      string `json:"source"`
+	RoomID      string `json:"room_id"`
+	MapID       string `json:"map_id"`
+	NodeID      string `json:"node_id"`
+	ResourceKey string `json:"resource_key"`
+	Amount      int    `json:"amount"`
+}
+
+type resourceCommitResponse struct {
+	Accepted    bool   `json:"accepted"`
+	Duplicate   bool   `json:"duplicate"`
+	ResourceKey string `json:"resource_key"`
+	Quantity    int    `json:"quantity"`
 }
 
 type studentEquipmentResponse struct {
@@ -309,6 +382,7 @@ func main() {
 
 	srv := newServer(cfg, world)
 	go srv.runRewardWorker(ctx)
+	go srv.runResourceWorker(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -502,27 +576,31 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func newWorld(roomID string, maps map[string]gameMap) *world {
 	rewardEvents := make(chan rewardEvent, 32)
+	resourceEvents := make(chan resourceEvent, resourceCommitQueueSize)
 	created := &world{
-		roomID:       roomID,
-		rooms:        map[string]*room{},
-		rewardEvents: rewardEvents,
+		roomID:         roomID,
+		rooms:          map[string]*room{},
+		rewardEvents:   rewardEvents,
+		resourceEvents: resourceEvents,
 	}
 	for _, gameMap := range maps {
-		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, created)
+		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, resourceEvents, created)
 	}
 	created.defaultRoom = created.rooms[defaultMapID]
 	return created
 }
 
-func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, world *world) *room {
+func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resourceEvents chan resourceEvent, world *world) *room {
 	return &room{
-		id:           id,
-		gameMap:      gameMap,
-		players:      map[string]*player{},
-		collectibles: initialCollectibles(gameMap),
-		rewardRunID:  newRewardRunID(),
-		rewardEvents: rewardEvents,
-		world:        world,
+		id:             id,
+		gameMap:        gameMap,
+		players:        map[string]*player{},
+		collectibles:   initialCollectibles(gameMap),
+		resourceNodes:  initialResourceNodes(gameMap),
+		rewardRunID:    newRewardRunID(),
+		rewardEvents:   rewardEvents,
+		resourceEvents: resourceEvents,
+		world:          world,
 	}
 }
 
@@ -590,13 +668,14 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 	client.setRoom(room)
 
 	client.send <- serverMessage{
-		Type:         "hello",
-		SelfID:       player.id,
-		RoomID:       room.id,
-		MapID:        room.gameMap.ID,
-		Map:          &room.gameMap,
-		Players:      room.snapshotsLocked(),
-		Collectibles: room.collectibleSnapshotsLocked(),
+		Type:          "hello",
+		SelfID:        player.id,
+		RoomID:        room.id,
+		MapID:         room.gameMap.ID,
+		Map:           &room.gameMap,
+		Players:       room.snapshotsLocked(),
+		Collectibles:  room.collectibleSnapshotsLocked(),
+		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 	}
 }
 
@@ -667,15 +746,16 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 	target.players[playerID] = player
 	player.client.setRoom(target)
 	message := serverMessage{
-		Type:         "map_changed",
-		SelfID:       player.id,
-		RoomID:       target.id,
-		MapID:        target.gameMap.ID,
-		Map:          &target.gameMap,
-		Players:      target.snapshotsLocked(),
-		Collectibles: target.collectibleSnapshotsLocked(),
-		ServerTimeMS: now.UnixMilli(),
-		Tick:         target.tick,
+		Type:          "map_changed",
+		SelfID:        player.id,
+		RoomID:        target.id,
+		MapID:         target.gameMap.ID,
+		Map:           &target.gameMap,
+		Players:       target.snapshotsLocked(),
+		Collectibles:  target.collectibleSnapshotsLocked(),
+		ResourceNodes: target.resourceNodeSnapshotsLocked(),
+		ServerTimeMS:  now.UnixMilli(),
+		Tick:          target.tick,
 	}
 	target.mu.Unlock()
 
@@ -753,6 +833,59 @@ func (client *client) handleToolUse(message clientMessage) {
 		client.trySend(serverMessage{Type: "error", Code: "tool_not_equipped"})
 		return
 	}
+	if toolKey != "pickaxe" {
+		return
+	}
+
+	var event *resourceEvent
+	now := time.Now()
+	room.mu.Lock()
+	player = room.players[client.id]
+	if player == nil {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
+		return
+	}
+	if !player.lastToolUseAt.IsZero() && now.Sub(player.lastToolUseAt) < resourceToolCooldown {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "tool_cooldown"})
+		return
+	}
+	node := room.nearestActiveResourceNodeLocked(player)
+	if node == nil {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "resource_node_not_found"})
+		return
+	}
+	player.lastToolUseAt = now
+	node.active = false
+	node.harvestSeq++
+	node.respawnAt = now.Add(node.respawnDelay)
+	resourceKey, amount := rollMiningDrop()
+	eventID := fmt.Sprintf("%s:%s:%d:%d", room.gameMap.ID, node.id, node.harvestSeq, player.appUserID)
+	event = &resourceEvent{
+		eventID:     eventID,
+		appUserID:   player.appUserID,
+		roomID:      room.id,
+		mapID:       room.gameMap.ID,
+		nodeID:      node.id,
+		resourceKey: resourceKey,
+		amount:      amount,
+		client:      player.client,
+	}
+	room.mu.Unlock()
+
+	room.broadcastSnapshot(now)
+	select {
+	case room.resourceEvents <- *event:
+	default:
+		log.Printf("resource queue full event=%s", event.eventID)
+		client.trySend(serverMessage{
+			Type:   "resource_failed",
+			NodeID: event.nodeID,
+			Reason: "temporary_error",
+		})
+	}
 }
 
 func (room *room) updateMove(playerID string, seq int64, x float64, y float64, facing string, moving bool, now time.Time) {
@@ -799,6 +932,7 @@ func (room *room) step(dt float64, now time.Time) {
 	}
 
 	room.respawnCollectiblesLocked(now)
+	room.respawnResourceNodesLocked(now)
 	room.mu.Unlock()
 
 	for _, reward := range rewards {
@@ -818,12 +952,13 @@ func (room *room) step(dt float64, now time.Time) {
 func (room *room) broadcastSnapshot(now time.Time) {
 	room.mu.Lock()
 	message := serverMessage{
-		Type:         "snapshot",
-		MapID:        room.gameMap.ID,
-		Tick:         room.tick,
-		ServerTimeMS: now.UnixMilli(),
-		Players:      room.snapshotsLocked(),
-		Collectibles: room.collectibleSnapshotsLocked(),
+		Type:          "snapshot",
+		MapID:         room.gameMap.ID,
+		Tick:          room.tick,
+		ServerTimeMS:  now.UnixMilli(),
+		Players:       room.snapshotsLocked(),
+		Collectibles:  room.collectibleSnapshotsLocked(),
+		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 	}
 	clients := make([]*client, 0, len(room.players))
 	for _, player := range room.players {
@@ -893,6 +1028,38 @@ func (room *room) collectibleSnapshotsLocked() []collectibleSnapshot {
 	return snapshots
 }
 
+func (room *room) resourceNodeSnapshotsLocked() []resourceNodeSnapshot {
+	snapshots := make([]resourceNodeSnapshot, 0, len(room.resourceNodes))
+	for _, node := range room.resourceNodes {
+		snapshots = append(snapshots, resourceNodeSnapshot{
+			ID:     node.id,
+			Kind:   node.kind,
+			X:      node.x,
+			Y:      node.y,
+			Radius: node.radius,
+			Active: node.active,
+		})
+	}
+	return snapshots
+}
+
+func (room *room) nearestActiveResourceNodeLocked(player *player) *resourceNode {
+	var nearest *resourceNode
+	nearestDistance := math.MaxFloat64
+	for _, node := range room.resourceNodes {
+		if !node.active {
+			continue
+		}
+		distance := math.Hypot(player.x-node.x, player.y-node.y)
+		if distance > node.interactionRadius || distance >= nearestDistance {
+			continue
+		}
+		nearest = node
+		nearestDistance = distance
+	}
+	return nearest
+}
+
 func (room *room) collectStarsLocked(player *player, now time.Time) []rewardEvent {
 	rewards := []rewardEvent{}
 	for _, collectible := range room.collectibles {
@@ -928,6 +1095,16 @@ func (room *room) respawnCollectiblesLocked(now time.Time) {
 		}
 		collectible.active = true
 		collectible.respawnAt = time.Time{}
+	}
+}
+
+func (room *room) respawnResourceNodesLocked(now time.Time) {
+	for _, node := range room.resourceNodes {
+		if node.active || node.respawnAt.IsZero() || now.Before(node.respawnAt) {
+			continue
+		}
+		node.active = true
+		node.respawnAt = time.Time{}
 	}
 }
 
@@ -1234,6 +1411,19 @@ func loadMap(path string) (gameMap, error) {
 			return gameMap{}, fmt.Errorf("map %q npc %q has invalid activity type %q", loaded.ID, loadedNPC.ID, loadedNPC.Activity.Type)
 		}
 	}
+	resourceNodeIDs := map[string]bool{}
+	for _, node := range loaded.ResourceNodes {
+		if node.ID == "" || node.Kind == "" || node.X < 0 || node.Y < 0 || node.Radius <= 0 || node.InteractionRadius <= 0 || node.RespawnSeconds < 1 {
+			return gameMap{}, fmt.Errorf("map %q has an invalid resource node", loaded.ID)
+		}
+		if resourceNodeIDs[node.ID] {
+			return gameMap{}, fmt.Errorf("map %q has duplicate resource node id %q", loaded.ID, node.ID)
+		}
+		resourceNodeIDs[node.ID] = true
+		if node.Kind != "rock" {
+			return gameMap{}, fmt.Errorf("map %q resource node %q has unsupported kind %q", loaded.ID, node.ID, node.Kind)
+		}
+	}
 	return loaded, nil
 }
 
@@ -1306,6 +1496,130 @@ func initialCollectibles(gameMap gameMap) map[string]*collectible {
 		}
 	}
 	return collectibles
+}
+
+func initialResourceNodes(gameMap gameMap) map[string]*resourceNode {
+	nodes := map[string]*resourceNode{}
+	for _, definition := range gameMap.ResourceNodes {
+		nodes[definition.ID] = &resourceNode{
+			id:                definition.ID,
+			kind:              definition.Kind,
+			mapID:             gameMap.ID,
+			x:                 definition.X,
+			y:                 definition.Y,
+			radius:            definition.Radius,
+			interactionRadius: definition.InteractionRadius,
+			respawnDelay:      time.Duration(definition.RespawnSeconds) * time.Second,
+			active:            true,
+		}
+	}
+	return nodes
+}
+
+func rollMiningDrop() (string, int) {
+	roll := randomInt(100)
+	if roll < 85 {
+		return "rock", 1
+	}
+	if roll < 95 {
+		return "rock", 2
+	}
+	return "crystal", 1
+}
+
+func randomInt(max int) int {
+	if max <= 1 {
+		return 0
+	}
+	var bytes [1]byte
+	if _, err := rand.Read(bytes[:]); err == nil {
+		return int(bytes[0]) % max
+	}
+	return int(time.Now().UnixNano() % int64(max))
+}
+
+func (srv *server) runResourceWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event := <-srv.world.resourceEvents:
+			response, err := srv.commitResourceWithRetry(ctx, event)
+			if err != nil {
+				log.Printf("resource commit failed event=%s player=%d: %v", event.eventID, event.appUserID, err)
+				event.client.trySend(serverMessage{
+					Type:   "resource_failed",
+					NodeID: event.nodeID,
+					Reason: "temporary_error",
+				})
+				continue
+			}
+			log.Printf("resource commit success event=%s player=%d duplicate=%v", event.eventID, event.appUserID, response.Duplicate)
+			event.client.trySend(serverMessage{
+				Type:        "resource_committed",
+				EventID:     event.eventID,
+				NodeID:      event.nodeID,
+				ResourceKey: response.ResourceKey,
+				Amount:      event.amount,
+				Quantity:    response.Quantity,
+			})
+		}
+	}
+}
+
+func (srv *server) commitResourceWithRetry(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
+	backoffs := []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond}
+	var lastErr error
+	for attempt := 0; attempt <= len(backoffs); attempt++ {
+		response, err := srv.commitResource(ctx, event)
+		if err == nil {
+			return response, nil
+		}
+		lastErr = err
+		if attempt == len(backoffs) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return resourceCommitResponse{}, ctx.Err()
+		case <-time.After(backoffs[attempt]):
+		}
+	}
+	return resourceCommitResponse{}, lastErr
+}
+
+func (srv *server) commitResource(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
+	body, err := json.Marshal(resourceCommitRequest{
+		EventID:     event.eventID,
+		AppUserID:   event.appUserID,
+		Source:      "sunny_town_mining",
+		RoomID:      event.roomID,
+		MapID:       event.mapID,
+		NodeID:      event.nodeID,
+		ResourceKey: event.resourceKey,
+		Amount:      event.amount,
+	})
+	if err != nil {
+		return resourceCommitResponse{}, err
+	}
+
+	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/resource-events", body)
+	if err != nil {
+		return resourceCommitResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return resourceCommitResponse{}, fmt.Errorf("hq resource status %d", response.StatusCode)
+	}
+
+	var committed resourceCommitResponse
+	if err := json.NewDecoder(response.Body).Decode(&committed); err != nil {
+		return resourceCommitResponse{}, err
+	}
+	if !committed.Accepted {
+		return resourceCommitResponse{}, errors.New("hq rejected resource")
+	}
+	return committed, nil
 }
 
 func newRewardRunID() string {

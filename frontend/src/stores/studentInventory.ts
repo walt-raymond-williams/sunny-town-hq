@@ -38,6 +38,34 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       this.markEquippedItems()
       this.error = ''
     },
+    setItemQuantity(itemKey: string, quantity: number) {
+      const existing = this.items.find((item) => item.key === itemKey)
+      if (existing) {
+        this.items = this.items.map((item) => (
+          item.key === itemKey ? { ...item, quantity } : item
+        ))
+        this.markEquippedItems()
+        return
+      }
+      const names: Record<string, { name: string; description: string }> = {
+        rock: { name: 'Rock', description: 'A sturdy rock from Forest Crossing.' },
+        crystal: { name: 'Crystal', description: 'A bright crystal from Forest Crossing.' },
+      }
+      const fallback = names[itemKey] || { name: itemKey, description: '' }
+      this.items = [
+        ...this.items,
+        {
+          key: itemKey,
+          name: fallback.name,
+          description: fallback.description,
+          quantity,
+          equipSlot: '',
+          visualKey: '',
+          equipped: false,
+        },
+      ]
+      this.markEquippedItems()
+    },
     setEquipmentSlots(slots: EquippedSlot[]) {
       this.equipmentSlots = mergeEquipmentSlots(slots)
       this.markEquippedItems()

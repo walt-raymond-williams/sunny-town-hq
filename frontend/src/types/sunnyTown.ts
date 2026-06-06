@@ -81,6 +81,7 @@ export interface SunnyTownMap {
   starSpawns: Array<{ x: number; y: number }>
   portals: SunnyTownPortal[]
   npcs: SunnyTownNpc[]
+  resourceNodes: SunnyTownResourceNodeDefinition[]
 }
 
 export interface SunnyTownCollectible {
@@ -91,8 +92,27 @@ export interface SunnyTownCollectible {
   active: boolean
 }
 
+export interface SunnyTownResourceNodeDefinition {
+  id: string
+  kind: 'rock'
+  x: number
+  y: number
+  radius: number
+  interactionRadius: number
+  respawnSeconds: number
+}
+
+export interface SunnyTownResourceNode {
+  id: string
+  kind: 'rock'
+  x: number
+  y: number
+  radius: number
+  active: boolean
+}
+
 export interface SunnyTownServerMessage {
-  type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed'
+  type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed' | 'resource_committed' | 'resource_failed'
   selfId?: string
   roomId?: string
   mapId?: string
@@ -101,12 +121,16 @@ export interface SunnyTownServerMessage {
   serverTimeMs?: number
   players?: SunnyTownPlayer[]
   collectibles?: SunnyTownCollectible[]
+  resourceNodes?: SunnyTownResourceNode[]
   code?: string
   eventId?: string
   kind?: 'star'
   amount?: number
   newStarBalance?: number
   collectibleId?: string
+  nodeId?: string
+  resourceKey?: 'rock' | 'crystal'
+  quantity?: number
   reason?: string
 }
 

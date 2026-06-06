@@ -113,6 +113,16 @@ func (app *app) ensureSchema(ctx context.Context) error {
 				equip_slot = excluded.equip_slot,
 				visual_key = excluded.visual_key,
 				updated_at = now()`,
+		`insert into inventory_item_type (key, name, description)
+			values
+				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
+				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.')
+			on conflict (key) do update
+			set name = excluded.name,
+				description = excluded.description,
+				equip_slot = null,
+				visual_key = null,
+				updated_at = now()`,
 		`create table if not exists student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
@@ -122,6 +132,22 @@ func (app *app) ensureSchema(ctx context.Context) error {
 			primary key (app_user_id, item_type_id),
 			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
 		)`,
+		`create table if not exists student_inventory_ledger (
+			id bigserial primary key,
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			event_id text not null unique,
+			source text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			delta integer not null,
+			room_id text null,
+			map_id text null,
+			node_id text null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now(),
+			constraint student_inventory_ledger_delta_nonzero check (delta <> 0)
+		)`,
+		`create index if not exists student_inventory_ledger_app_user_id_idx
+			on student_inventory_ledger (app_user_id, created_at desc)`,
 		`insert into student_inventory_item (app_user_id, item_type_id, quantity)
 			select u.id, iit.id, u.cookies
 			from app_user u

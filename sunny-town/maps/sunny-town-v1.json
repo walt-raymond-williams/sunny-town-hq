@@ -38,6 +38,17 @@
       "targetX": 320,
       "targetY": 416,
       "targetFacing": "up"
+    },
+    {
+      "id": "forest-crossing-path",
+      "x": 1216,
+      "y": 420,
+      "width": 32,
+      "height": 124,
+      "targetMapId": "forest-crossing-v1",
+      "targetX": 96,
+      "targetY": 480,
+      "targetFacing": "right"
     }
   ],
   "npcs": [

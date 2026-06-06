@@ -223,6 +223,17 @@ The purchase:
 - Increments cookie inventory.
 - Returns the updated star balance and inventory.
 
+## Resource Ledger
+
+Sunny Town mining stores current resource quantities in the existing `student_inventory_item` table.
+
+The catalog now includes:
+
+- `rock`
+- `crystal`
+
+Mining rewards are reported by the Sunny Town realtime service, so HQ also keeps a receipt ledger in `student_inventory_ledger`. The ledger records the external event id, source, student, item type, delta, room/map/node context, and timestamp. HQ inserts the ledger row first with unique `event_id` protection, then increments `student_inventory_item` only when that insert succeeds. Retries with the same event id return as duplicates and do not double-award resources.
+
 ## Internal Sunny Town API
 
 ### `GET /api/internal/sunny-town/student-equipment?app_user_id=...`
@@ -237,6 +248,38 @@ Sunny Town calls this endpoint:
 The endpoint is protected by `X-HQ-Service-Secret`.
 
 Sunny Town treats HQ as the source of truth. The browser never directly tells other players what visual equipment to show.
+
+### `POST /api/internal/sunny-town/resource-events`
+
+Service-authenticated endpoint used by the Sunny Town server after a validated mining action.
+
+Request:
+
+```json
+{
+  "event_id": "forest-crossing-v1:rock-node-001:1:123",
+  "app_user_id": 123,
+  "source": "sunny_town_mining",
+  "room_id": "sunny-town-main",
+  "map_id": "forest-crossing-v1",
+  "node_id": "rock-node-001",
+  "resource_key": "rock",
+  "amount": 1
+}
+```
+
+Response:
+
+```json
+{
+  "accepted": true,
+  "duplicate": false,
+  "resource_key": "rock",
+  "quantity": 12
+}
+```
+
+The browser must not call this endpoint.
 
 ## Frontend Flow
 

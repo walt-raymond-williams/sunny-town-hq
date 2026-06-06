@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -51,6 +55,105 @@ func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
 	}
 	if ledgerRows != 1 || balance != 1 {
 		t.Fatalf("ledgerRows=%d balance=%d, want 1 and 1", ledgerRows, balance)
+	}
+}
+
+func TestCommitSunnyTownResourceIdempotent(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	request := sunnyTownResourceEventRequest{
+		EventID:     "forest-crossing-v1:rock-node-001:1:123",
+		AppUserID:   123,
+		Source:      "sunny_town_mining",
+		RoomID:      "sunny-town-main",
+		MapID:       "forest-crossing-v1",
+		NodeID:      "rock-node-001",
+		ResourceKey: "rock",
+		Amount:      2,
+	}
+
+	first, err := app.commitSunnyTownResource(ctx, request)
+	if err != nil {
+		t.Fatalf("first resource commit error = %v", err)
+	}
+	if !first.Accepted || first.Duplicate || first.Quantity != 2 || first.ResourceKey != "rock" {
+		t.Fatalf("first resource commit = %#v, want accepted non-duplicate quantity 2", first)
+	}
+
+	second, err := app.commitSunnyTownResource(ctx, request)
+	if err != nil {
+		t.Fatalf("second resource commit error = %v", err)
+	}
+	if !second.Accepted || !second.Duplicate || second.Quantity != 2 {
+		t.Fatalf("second resource commit = %#v, want accepted duplicate quantity 2", second)
+	}
+
+	var ledgerRows int
+	var rockQuantity int
+	if err := app.db.QueryRow(ctx, "select count(*) from student_inventory_ledger").Scan(&ledgerRows); err != nil {
+		t.Fatalf("count inventory ledger rows: %v", err)
+	}
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select sii.quantity
+			from student_inventory_item sii
+			join inventory_item_type iit on iit.id = sii.item_type_id
+			where sii.app_user_id = 123 and iit.key = 'rock'
+		`,
+	).Scan(&rockQuantity); err != nil {
+		t.Fatalf("load rock quantity: %v", err)
+	}
+	if ledgerRows != 1 || rockQuantity != 2 {
+		t.Fatalf("ledgerRows=%d rockQuantity=%d, want 1 and 2", ledgerRows, rockQuantity)
+	}
+}
+
+func TestCommitSunnyTownResourceRejectsInvalidRequest(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	requests := []sunnyTownResourceEventRequest{
+		{},
+		{EventID: "event", AppUserID: 123, Source: "sunny_town_mining", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "star", Amount: 1},
+		{EventID: "event", AppUserID: 123, Source: "sunny_town_mining", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "rock", Amount: 0},
+		{EventID: "event", AppUserID: 123, Source: "other", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "rock", Amount: 1},
+	}
+	for _, request := range requests {
+		if _, err := app.commitSunnyTownResource(context.Background(), request); err == nil {
+			t.Fatalf("resource request %#v succeeded, want error", request)
+		}
+	}
+}
+
+func TestSunnyTownResourceEndpointRequiresServiceSecret(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.sunnyTownServiceSecret = "test-secret"
+
+	body, err := json.Marshal(sunnyTownResourceEventRequest{
+		EventID:     "forest-crossing-v1:rock-node-001:1:123",
+		AppUserID:   123,
+		Source:      "sunny_town_mining",
+		RoomID:      "sunny-town-main",
+		MapID:       "forest-crossing-v1",
+		NodeID:      "rock-node-001",
+		ResourceKey: "rock",
+		Amount:      1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/internal/sunny-town/resource-events", bytes.NewReader(body))
+	response := httptest.NewRecorder()
+
+	app.handleSunnyTownResourceEvent(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 	}
 }
 
@@ -437,6 +540,10 @@ func testRewardApp(t *testing.T) (*app, func()) {
 				('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie'),
 				('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap'),
 				('pickaxe', 'Pickaxe', 'A sturdy starter tool.', 'tool', 'pickaxe')`,
+		`insert into inventory_item_type (key, name, description)
+			values
+				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
+				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.')`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
@@ -445,6 +552,20 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (app_user_id, item_type_id),
 			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table student_inventory_ledger (
+			id bigserial primary key,
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			event_id text not null unique,
+			source text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			delta integer not null,
+			room_id text null,
+			map_id text null,
+			node_id text null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now(),
+			constraint student_inventory_ledger_delta_nonzero check (delta <> 0)
 		)`,
 		`create table student_equipped_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,

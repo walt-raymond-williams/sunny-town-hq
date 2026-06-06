@@ -14,6 +14,7 @@ import type {
   SunnyTownMoveMessage,
   SunnyTownNpc,
   SunnyTownPlayer,
+  SunnyTownResourceNode,
   SunnyTownServerMessage,
   SunnyTownSession,
   SunnyTownToolUseMessage,
@@ -51,6 +52,7 @@ const session = ref<SunnyTownSession | null>(null)
 const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
 const collectibles = ref<SunnyTownCollectible[]>([])
+const resourceNodes = ref<SunnyTownResourceNode[]>([])
 const selfId = ref('')
 const status = ref('Entering Sunny Town...')
 const error = ref('')
@@ -157,6 +159,7 @@ function connect(activeSession: SunnyTownSession) {
       }
       players.value = message.players || []
       collectibles.value = message.collectibles || []
+      resourceNodes.value = message.resourceNodes || []
       recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
       syncLocalSelfFromSnapshot()
       return
@@ -175,6 +178,22 @@ function connect(activeSession: SunnyTownSession) {
     }
     if (message.type === 'reward_failed') {
       error.value = 'That star could not be saved. Try again in a moment.'
+      return
+    }
+    if (message.type === 'resource_committed') {
+      const amount = message.amount || 1
+      const resourceKey = message.resourceKey || 'rock'
+      gameToast.value = `+${amount} ${resourceKey}`
+      if (message.quantity !== undefined) {
+        inventoryStore.setItemQuantity(resourceKey, message.quantity)
+      }
+      window.setTimeout(() => {
+        gameToast.value = ''
+      }, 1200)
+      return
+    }
+    if (message.type === 'resource_failed') {
+      error.value = 'That resource could not be saved. Try again in a moment.'
       return
     }
     if (message.type === 'error') {
@@ -321,6 +340,7 @@ function applyMapState(message: SunnyTownServerMessage) {
       ...message.map,
       portals: message.map.portals || [],
       npcs: message.map.npcs || [],
+      resourceNodes: message.map.resourceNodes || [],
       blockedRects: message.map.blockedRects || [],
       starSpawns: message.map.starSpawns || [],
       spawns: message.map.spawns || [],
@@ -328,6 +348,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   }
   players.value = message.players || []
   collectibles.value = message.collectibles || []
+  resourceNodes.value = message.resourceNodes || []
   remotePlayerHistories.clear()
   localSelf = null
   renderedSelf = null
@@ -627,6 +648,9 @@ function draw() {
       drawCollectible(context, collectible, cameraX, cameraY)
     }
   }
+  for (const node of resourceNodes.value) {
+    drawResourceNode(context, node, cameraX, cameraY)
+  }
   for (const npc of map.npcs) {
     drawNpc(context, npc, cameraX, cameraY)
   }
@@ -909,7 +933,7 @@ function drawMap(
 ) {
   context.fillStyle = map.id === 'sunny-town-v1'
     ? '#8fcf85'
-    : map.id === 'sunny-town-classroom' ? '#b7c6da' : '#cda66f'
+    : map.id === 'sunny-town-classroom' ? '#b7c6da' : map.id === 'forest-crossing-v1' ? '#6fb27a' : '#cda66f'
   context.fillRect(0, 0, width, height)
 
   if (map.id === 'sunny-town-v1') {
@@ -921,6 +945,19 @@ function drawMap(
     context.fillRect(64 - cameraX, 64 - cameraY, map.width * map.tileSize - 128, map.height * map.tileSize - 128)
     context.fillStyle = '#3f596f'
     context.fillRect(224 - cameraX, 82 - cameraY, 192, 44)
+  } else if (map.id === 'forest-crossing-v1') {
+    context.fillStyle = '#7ac27d'
+    context.fillRect(0, 0, width, height)
+    context.fillStyle = '#d1b06a'
+    context.fillRect(0 - cameraX, 420 - cameraY, map.width * map.tileSize, 124)
+    context.fillStyle = '#3b88a3'
+    context.fillRect(560 - cameraX, 0 - cameraY, 96, 384)
+    context.fillRect(560 - cameraX, 576 - cameraY, 96, 384)
+    context.fillStyle = '#a87c42'
+    context.fillRect(548 - cameraX, 384 - cameraY, 120, 192)
+    context.strokeStyle = '#765631'
+    context.lineWidth = 4
+    context.strokeRect(548 - cameraX, 384 - cameraY, 120, 192)
   } else {
     context.fillStyle = '#d9bd8d'
     context.fillRect(64 - cameraX, 64 - cameraY, map.width * map.tileSize - 128, map.height * map.tileSize - 128)
@@ -946,8 +983,16 @@ function drawMap(
       ? blocked.width > 400 || blocked.height > 400 ? '#4f8a5b' : '#7e6b52'
       : map.id === 'sunny-town-classroom'
         ? blocked.width > 260 || blocked.height > 260 ? '#516070' : '#8a6f4d'
-        : blocked.width > 260 || blocked.height > 260 ? '#6d4f38' : '#8b6748'
+        : map.id === 'forest-crossing-v1'
+          ? blocked.width > 90 || blocked.height > 90 ? '#3e7a45' : '#6b6f57'
+          : blocked.width > 260 || blocked.height > 260 ? '#6d4f38' : '#8b6748'
     context.fillRect(blocked.x - cameraX, blocked.y - cameraY, blocked.width, blocked.height)
+    if (map.id === 'forest-crossing-v1' && blocked.width <= 160 && blocked.height <= 160) {
+      context.fillStyle = '#2f6b3b'
+      context.beginPath()
+      context.arc(blocked.x + blocked.width / 2 - cameraX, blocked.y + blocked.height / 2 - cameraY, Math.min(blocked.width, blocked.height) / 2, 0, Math.PI * 2)
+      context.fill()
+    }
   }
 
   for (const portal of map.portals) {
@@ -957,6 +1002,38 @@ function drawMap(
     context.lineWidth = 2
     context.strokeRect(portal.x - cameraX + 2, portal.y - cameraY + 2, portal.width - 4, portal.height - 4)
   }
+}
+
+function drawResourceNode(
+  context: CanvasRenderingContext2D,
+  node: SunnyTownResourceNode,
+  cameraX: number,
+  cameraY: number,
+) {
+  const x = node.x - cameraX
+  const y = node.y - cameraY
+  context.save()
+  context.translate(x, y)
+  context.fillStyle = node.active ? '#6b737b' : '#4f565d'
+  context.strokeStyle = node.active ? '#343a40' : '#30343a'
+  context.lineWidth = 3
+  context.beginPath()
+  context.moveTo(-node.radius, 4)
+  context.lineTo(-node.radius * 0.55, -node.radius * 0.7)
+  context.lineTo(node.radius * 0.25, -node.radius)
+  context.lineTo(node.radius, -node.radius * 0.1)
+  context.lineTo(node.radius * 0.7, node.radius * 0.75)
+  context.lineTo(-node.radius * 0.45, node.radius)
+  context.closePath()
+  context.fill()
+  context.stroke()
+  if (node.active) {
+    context.fillStyle = '#bcd5e8'
+    context.beginPath()
+    context.arc(node.radius * 0.25, -node.radius * 0.35, 4, 0, Math.PI * 2)
+    context.fill()
+  }
+  context.restore()
 }
 
 function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, cameraX: number, cameraY: number) {

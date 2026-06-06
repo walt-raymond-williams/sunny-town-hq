@@ -250,6 +250,126 @@ func TestWorldTransfersPlayerThroughPortal(t *testing.T) {
 	}
 }
 
+func TestWorldTransfersPlayerToForestCrossing(t *testing.T) {
+	maps, err := loadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	world := newWorld(defaultRoomID, maps)
+	client := testClient(nil, "42")
+	world.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+
+	world.rooms[defaultMapID].updateMove("42", 7, 1224, 480, "right", true, time.Now())
+
+	if client.currentRoom().gameMap.ID != "forest-crossing-v1" {
+		t.Fatalf("current map = %q, want forest-crossing-v1", client.currentRoom().gameMap.ID)
+	}
+}
+
+func TestRoomResourceNodeSnapshots(t *testing.T) {
+	gameMap := testMap()
+	gameMap.ResourceNodes = []resourceNodeDefinition{{
+		ID:                "rock-node-001",
+		Kind:              "rock",
+		X:                 140,
+		Y:                 160,
+		Radius:            24,
+		InteractionRadius: 48,
+		RespawnSeconds:    15,
+	}}
+	room := testRoom(gameMap)
+
+	snapshots := room.resourceNodeSnapshotsLocked()
+	if len(snapshots) != 1 || snapshots[0].ID != "rock-node-001" || !snapshots[0].Active {
+		t.Fatalf("resource snapshots = %#v, want active rock-node-001", snapshots)
+	}
+}
+
+func TestMiningRequiresEquippedPickaxe(t *testing.T) {
+	room := testRoom(miningTestMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+	room.players["42"].x = 140
+	room.players["42"].y = 160
+
+	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
+
+	if !room.resourceNodes["rock-node-001"].active {
+		t.Fatal("node should stay active without equipped pickaxe")
+	}
+	select {
+	case event := <-room.resourceEvents:
+		t.Fatalf("unexpected resource event: %#v", event)
+	default:
+	}
+}
+
+func TestMiningRequiresPlayerInRange(t *testing.T) {
+	room := testRoom(miningTestMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
+	room.players["42"].x = 260
+	room.players["42"].y = 260
+
+	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
+
+	if !room.resourceNodes["rock-node-001"].active {
+		t.Fatal("node should stay active when player is too far away")
+	}
+	select {
+	case event := <-room.resourceEvents:
+		t.Fatalf("unexpected resource event: %#v", event)
+	default:
+	}
+}
+
+func TestMiningSucceedsAndDepletesNode(t *testing.T) {
+	room := testRoom(miningTestMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
+	room.players["42"].x = 140
+	room.players["42"].y = 160
+
+	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
+
+	node := room.resourceNodes["rock-node-001"]
+	if node.active || node.harvestSeq != 1 || node.respawnAt.IsZero() {
+		t.Fatalf("node after mining = %#v, want inactive harvest seq 1 with respawn", node)
+	}
+	select {
+	case event := <-room.resourceEvents:
+		if event.eventID != "sunny-town-v1:rock-node-001:1:42" || event.nodeID != "rock-node-001" || event.amount < 1 {
+			t.Fatalf("resource event = %#v", event)
+		}
+	default:
+		t.Fatal("expected resource event")
+	}
+}
+
+func TestMiningRequiresActiveNodeAndRespawns(t *testing.T) {
+	room := testRoom(miningTestMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
+	room.players["42"].x = 140
+	room.players["42"].y = 160
+
+	now := time.Now()
+	node := room.resourceNodes["rock-node-001"]
+	node.active = false
+	node.respawnAt = now.Add(time.Second)
+	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
+	select {
+	case event := <-room.resourceEvents:
+		t.Fatalf("unexpected resource event while inactive: %#v", event)
+	default:
+	}
+
+	room.step(0, now.Add(2*time.Second))
+	if !node.active {
+		t.Fatal("node should respawn after cooldown")
+	}
+}
+
 func TestWorldJoinUsesClaimMap(t *testing.T) {
 	world := testWorld(outdoorTestMap(), indoorTestMap())
 	client := testClient(nil, "42")
@@ -428,6 +548,37 @@ func TestLoadMapsAcceptsCheckedInMaps(t *testing.T) {
 	}
 	if len(classroom.NPCs) != 1 || classroom.NPCs[0].Activity == nil || classroom.NPCs[0].Activity.Type != "schoolwork" {
 		t.Fatalf("classroom npcs = %#v, want teacher schoolwork npc", classroom.NPCs)
+	}
+	forest, ok := maps["forest-crossing-v1"]
+	if !ok {
+		t.Fatal("expected forest-crossing-v1 map to load")
+	}
+	if len(forest.ResourceNodes) < 2 {
+		t.Fatalf("forest resource nodes = %#v, want at least two nodes", forest.ResourceNodes)
+	}
+}
+
+func TestLoadMapsRejectsDuplicateResourceNodeIDs(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"resourceNodes":[{"id":"rock-node","kind":"rock","x":64,"y":64,"radius":24,"interactionRadius":48,"respawnSeconds":15},{"id":"rock-node","kind":"rock","x":96,"y":64,"radius":24,"interactionRadius":48,"respawnSeconds":15}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected duplicate resource node ID to be rejected")
+	}
+}
+
+func TestLoadMapsRejectsInvalidResourceNodes(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"resourceNodes":[{"id":"rock-node","kind":"rock","x":64,"y":64,"radius":0,"interactionRadius":48,"respawnSeconds":15}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadMaps(dir); err == nil {
+		t.Fatal("expected invalid resource node to be rejected")
 	}
 }
 
@@ -608,4 +759,18 @@ func indoorTestMap() gameMap {
 			},
 		}},
 	}
+}
+
+func miningTestMap() gameMap {
+	gameMap := testMap()
+	gameMap.ResourceNodes = []resourceNodeDefinition{{
+		ID:                "rock-node-001",
+		Kind:              "rock",
+		X:                 140,
+		Y:                 160,
+		Radius:            24,
+		InteractionRadius: 48,
+		RespawnSeconds:    1,
+	}}
+	return gameMap
 }
