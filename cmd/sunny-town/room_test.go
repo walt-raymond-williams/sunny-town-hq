@@ -13,7 +13,7 @@ func TestRoomJoinAndLeave(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
 
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 	if len(room.players) != 1 {
 		t.Fatalf("player count after join = %d, want 1", len(room.players))
 	}
@@ -24,10 +24,30 @@ func TestRoomJoinAndLeave(t *testing.T) {
 	}
 }
 
+func TestRoomJoinUsesSavedPosition(t *testing.T) {
+	room := testRoom(testMap())
+	client := testClient(room, "42")
+
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{
+		Found:     true,
+		AppUserID: 42,
+		RoomID:    defaultRoomID,
+		MapID:     defaultMapID,
+		X:         220,
+		Y:         230,
+		Facing:    "left",
+	})
+
+	player := room.players["42"]
+	if player.x != 220 || player.y != 230 || player.facing != "left" {
+		t.Fatalf("player spawn = (%v,%v,%s), want saved position (220,230,left)", player.x, player.y, player.facing)
+	}
+}
+
 func TestRoomMovement(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	now := time.Now()
 	player := room.players["42"]
@@ -47,7 +67,7 @@ func TestRoomAcceptsClientPositionInsideBlockedGeometry(t *testing.T) {
 	gameMap.BlockedRects = []rect{{X: 130, Y: 80, Width: 60, Height: 60}}
 	room := testRoom(gameMap)
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	now := time.Now()
 	player := room.players["42"]
@@ -62,7 +82,7 @@ func TestRoomAcceptsClientPositionInsideBlockedGeometry(t *testing.T) {
 func TestRoomClampsBounds(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	player := room.players["42"]
 	player.x = 20
@@ -78,7 +98,7 @@ func TestRoomClampsBounds(t *testing.T) {
 func TestRoomAcceptsLargeClientMoveSamples(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	now := time.Now()
 	player := room.players["42"]
@@ -93,7 +113,7 @@ func TestRoomAcceptsLargeClientMoveSamples(t *testing.T) {
 func TestRoomSnapshotIncludesLastProcessedSeq(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	now := time.Now()
 	room.players["42"].lastMoveAt = now.Add(-200 * time.Millisecond)
@@ -111,7 +131,7 @@ func TestRoomSnapshotIncludesLastProcessedSeq(t *testing.T) {
 func TestRoomIgnoresOutOfOrderMove(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	now := time.Now()
 	room.players["42"].lastMoveAt = now.Add(-200 * time.Millisecond)
@@ -129,7 +149,7 @@ func TestRoomIgnoresOutOfOrderMove(t *testing.T) {
 func TestRoomDoesNotDriftWithoutNewMoveSamples(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	start := time.Now()
 	player := room.players["42"]
@@ -154,7 +174,7 @@ func TestRoomPickupEnqueuesRewardFromServerOverlap(t *testing.T) {
 	room := testRoom(gameMap)
 	room.rewardRunID = "test-run"
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	room.step(0, time.Now())
 
@@ -180,7 +200,7 @@ func TestRoomPickupRequiresOverlap(t *testing.T) {
 	gameMap.StarSpawns = []point{{X: 250, Y: 250}}
 	room := testRoom(gameMap)
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	room.step(0, time.Now())
 
@@ -194,7 +214,7 @@ func TestRoomPickupRequiresOverlap(t *testing.T) {
 func TestWorldTransfersPlayerThroughPortal(t *testing.T) {
 	world := testWorld(outdoorTestMap(), indoorTestMap())
 	client := testClient(nil, "42")
-	world.join(client, testClaims(42))
+	world.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	source := world.rooms[defaultMapID]
 	source.updateMove("42", 7, 100, 100, "down", true, time.Now())
@@ -230,10 +250,35 @@ func TestWorldTransfersPlayerThroughPortal(t *testing.T) {
 	}
 }
 
+func TestWorldJoinUsesClaimMap(t *testing.T) {
+	world := testWorld(outdoorTestMap(), indoorTestMap())
+	client := testClient(nil, "42")
+	claims := testClaims(42)
+	claims.MapID = "test-house"
+
+	world.join(client, claims, equipmentSnapshot{}, studentPositionResponse{
+		Found:     true,
+		AppUserID: 42,
+		RoomID:    defaultRoomID,
+		MapID:     "test-house",
+		X:         180,
+		Y:         190,
+		Facing:    "up",
+	})
+
+	if client.currentRoom().gameMap.ID != "test-house" {
+		t.Fatalf("current map = %q, want test-house", client.currentRoom().gameMap.ID)
+	}
+	player := world.rooms["test-house"].players["42"]
+	if player == nil || player.x != 180 || player.y != 190 || player.facing != "up" {
+		t.Fatalf("joined player = %#v, want saved indoor position", player)
+	}
+}
+
 func TestJoinHelloIncludesMapNPCs(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42))
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	select {
 	case message := <-client.send:
@@ -252,8 +297,8 @@ func TestWorldSnapshotsStayWithinCurrentCell(t *testing.T) {
 	world := testWorld(outdoorTestMap(), indoorTestMap())
 	firstClient := testClient(nil, "42")
 	secondClient := testClient(nil, "43")
-	world.join(firstClient, testClaims(42))
-	world.join(secondClient, testClaims(43))
+	world.join(firstClient, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+	world.join(secondClient, testClaims(43), equipmentSnapshot{}, studentPositionResponse{})
 
 	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "down", true, time.Now())
 
@@ -271,7 +316,7 @@ func TestWorldSnapshotsStayWithinCurrentCell(t *testing.T) {
 func TestMapNPCsStayScopedToCurrentCell(t *testing.T) {
 	world := testWorld(outdoorTestMap(), indoorTestMap())
 	client := testClient(nil, "42")
-	world.join(client, testClaims(42))
+	world.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 
 	select {
 	case message := <-client.send:
@@ -301,8 +346,8 @@ func TestWorldPlayersShareInteriorCell(t *testing.T) {
 	world := testWorld(outdoorTestMap(), indoorTestMap())
 	firstClient := testClient(nil, "42")
 	secondClient := testClient(nil, "43")
-	world.join(firstClient, testClaims(42))
-	world.join(secondClient, testClaims(43))
+	world.join(firstClient, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+	world.join(secondClient, testClaims(43), equipmentSnapshot{}, studentPositionResponse{})
 
 	now := time.Now()
 	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "down", true, now)
@@ -317,7 +362,7 @@ func TestWorldPlayersShareInteriorCell(t *testing.T) {
 func TestIndoorMapDoesNotCollectStars(t *testing.T) {
 	world := testWorld(outdoorTestMap(), indoorTestMap())
 	client := testClient(nil, "42")
-	world.join(client, testClaims(42))
+	world.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
 	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "down", true, time.Now())
 
 	world.rooms["test-house"].step(0, time.Now())
@@ -330,15 +375,16 @@ func TestIndoorMapDoesNotCollectStars(t *testing.T) {
 }
 
 func TestValidateJoinTargetRejectsUnknownRoomOrMap(t *testing.T) {
+	world := testWorld()
 	claims := testClaims(42)
 	claims.RoomID = "other-room"
-	if err := validateJoinTarget(claims, defaultRoomID, defaultMapID); err == nil {
+	if err := validateJoinTarget(claims, defaultRoomID, world.rooms); err == nil {
 		t.Fatal("expected unknown room to be rejected")
 	}
 
 	claims = testClaims(42)
 	claims.MapID = "other-map"
-	if err := validateJoinTarget(claims, defaultRoomID, defaultMapID); err == nil {
+	if err := validateJoinTarget(claims, defaultRoomID, world.rooms); err == nil {
 		t.Fatal("expected unknown map to be rejected")
 	}
 }

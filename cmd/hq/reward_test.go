@@ -54,6 +54,46 @@ func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
 	}
 }
 
+func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	first, err := app.saveSunnyTownPosition(ctx, sunnyTownPositionRequest{
+		AppUserID: 123,
+		RoomID:    "sunny-town-main",
+		MapID:     "sunny-town-v1",
+		X:         120.5,
+		Y:         140.25,
+		Facing:    "right",
+	})
+	if err != nil {
+		t.Fatalf("first save error = %v", err)
+	}
+	if !first.Found || first.MapID != "sunny-town-v1" || first.X != 120.5 || first.Facing != "right" {
+		t.Fatalf("first position = %#v", first)
+	}
+
+	second, err := app.saveSunnyTownPosition(ctx, sunnyTownPositionRequest{
+		AppUserID: 123,
+		RoomID:    "sunny-town-main",
+		MapID:     "sunny-town-classroom",
+		X:         220,
+		Y:         260,
+		Facing:    "up",
+	})
+	if err != nil {
+		t.Fatalf("second save error = %v", err)
+	}
+	loaded, err := app.loadSunnyTownPosition(ctx, 123)
+	if err != nil {
+		t.Fatalf("load position error = %v", err)
+	}
+	if !loaded.Found || loaded.AppUserID != second.AppUserID || loaded.RoomID != second.RoomID || loaded.MapID != second.MapID || loaded.X != second.X || loaded.Y != second.Y || loaded.Facing != second.Facing {
+		t.Fatalf("loaded position = %#v, want persisted fields from %#v", loaded, second)
+	}
+}
+
 func TestApplyGameResultCreditsPetStarsOnce(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
@@ -414,6 +454,17 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (app_user_id, slot),
 			constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory', 'tool'))
+		)`,
+		`create table student_sunny_town_position (
+			app_user_id bigint primary key references app_user(id) on delete cascade,
+			room_id text not null,
+			map_id text not null,
+			x double precision not null,
+			y double precision not null,
+			facing text not null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint student_sunny_town_position_facing_check check (facing in ('up', 'down', 'left', 'right'))
 		)`,
 		`insert into app_user (id, display_name) values (123, 'Student')`,
 		`insert into pet_state (user_id, hunger, happiness, energy) values (123, 50, 50, 50)`,

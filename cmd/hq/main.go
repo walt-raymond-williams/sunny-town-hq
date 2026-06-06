@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -102,6 +103,26 @@ type sunnyTownRewardEventResponse struct {
 	Accepted       bool `json:"accepted"`
 	Duplicate      bool `json:"duplicate"`
 	NewStarBalance int  `json:"new_star_balance"`
+}
+
+type sunnyTownPositionRequest struct {
+	AppUserID int64   `json:"app_user_id"`
+	RoomID    string  `json:"room_id"`
+	MapID     string  `json:"map_id"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Facing    string  `json:"facing"`
+}
+
+type sunnyTownPositionResponse struct {
+	Found     bool      `json:"found"`
+	AppUserID int64     `json:"app_user_id,omitempty"`
+	RoomID    string    `json:"room_id,omitempty"`
+	MapID     string    `json:"map_id,omitempty"`
+	X         float64   `json:"x,omitempty"`
+	Y         float64   `json:"y,omitempty"`
+	Facing    string    `json:"facing,omitempty"`
+	UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
 type shopPurchaseRequest struct {
@@ -213,6 +234,7 @@ func main() {
 	apiMux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
 	mux.HandleFunc("/api/internal/sunny-town/reward-events", app.handleSunnyTownRewardEvent)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", app.handleInternalSunnyTownStudentEquipment)
+	mux.HandleFunc("/api/internal/sunny-town/player-position", app.handleInternalSunnyTownPlayerPosition)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
 	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
@@ -572,6 +594,21 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	position, err := app.loadSunnyTownPosition(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load sunny town position: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "sunny town session could not be created",
+		})
+		return
+	}
+	roomID := "sunny-town-main"
+	mapID := "sunny-town-v1"
+	if position.Found {
+		roomID = position.RoomID
+		mapID = position.MapID
+	}
+
 	expiresAt := time.Now().UTC().Add(time.Minute)
 	avatarID := "pet-default"
 	token, err := sunnytownauth.Sign(sunnytownauth.Claims{
@@ -579,8 +616,8 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		KeycloakSubject: user.KeycloakSubject,
 		DisplayName:     profile.DisplayName,
 		Roles:           user.Roles,
-		RoomID:          "sunny-town-main",
-		MapID:           "sunny-town-v1",
+		RoomID:          roomID,
+		MapID:           mapID,
 		AvatarID:        avatarID,
 		ExpiresAt:       expiresAt.Unix(),
 	}, app.sunnyTownJoinSecret)
@@ -601,8 +638,8 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, sunnyTownSessionResponse{
-		RoomID:       "sunny-town-main",
-		MapID:        "sunny-town-v1",
+		RoomID:       roomID,
+		MapID:        mapID,
 		AvatarID:     avatarID,
 		WebSocketURL: app.sunnyTownWebSocketURL,
 		JoinToken:    token,
@@ -673,6 +710,54 @@ func (app *app) handleInternalSunnyTownStudentEquipment(w http.ResponseWriter, r
 	}
 
 	writeJSON(w, http.StatusOK, equipment)
+}
+
+func (app *app) handleInternalSunnyTownPlayerPosition(w http.ResponseWriter, r *http.Request) {
+	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) != app.sunnyTownServiceSecret {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "service authentication required",
+		})
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		userID, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("app_user_id")), 10, 64)
+		if err != nil || userID < 1 {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "app_user_id is required",
+			})
+			return
+		}
+		position, err := app.loadSunnyTownPosition(r.Context(), userID)
+		if err != nil {
+			log.Printf("load internal sunny town position: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "position could not be loaded",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, position)
+	case http.MethodPost:
+		var request sunnyTownPositionRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "request body must be valid JSON",
+			})
+			return
+		}
+		position, err := app.saveSunnyTownPosition(r.Context(), request)
+		if err != nil {
+			log.Printf("save internal sunny town position: %v", err)
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "position could not be saved",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, position)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func equipmentErrorMessage(err error) string {
@@ -1434,6 +1519,101 @@ func (app *app) commitSunnyTownReward(ctx context.Context, request sunnyTownRewa
 		Duplicate:      !inserted,
 		NewStarBalance: balance,
 	}, nil
+}
+
+func (app *app) loadSunnyTownPosition(ctx context.Context, appUserID int64) (sunnyTownPositionResponse, error) {
+	if appUserID < 1 {
+		return sunnyTownPositionResponse{}, errors.New("app_user_id is required")
+	}
+
+	var position sunnyTownPositionResponse
+	err := app.db.QueryRow(
+		ctx,
+		`
+			select app_user_id, room_id, map_id, x, y, facing, updated_at
+			from student_sunny_town_position
+			where app_user_id = $1
+		`,
+		appUserID,
+	).Scan(
+		&position.AppUserID,
+		&position.RoomID,
+		&position.MapID,
+		&position.X,
+		&position.Y,
+		&position.Facing,
+		&position.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return sunnyTownPositionResponse{Found: false}, nil
+	}
+	if err != nil {
+		return sunnyTownPositionResponse{}, err
+	}
+	position.Found = true
+	return position, nil
+}
+
+func (app *app) saveSunnyTownPosition(ctx context.Context, request sunnyTownPositionRequest) (sunnyTownPositionResponse, error) {
+	request.RoomID = strings.TrimSpace(request.RoomID)
+	request.MapID = strings.TrimSpace(request.MapID)
+	request.Facing = strings.TrimSpace(request.Facing)
+	if request.AppUserID < 1 || request.RoomID == "" || request.MapID == "" {
+		return sunnyTownPositionResponse{}, errors.New("position is missing required fields")
+	}
+	if !isSunnyTownFacing(request.Facing) {
+		return sunnyTownPositionResponse{}, errors.New("invalid sunny town facing")
+	}
+	if math.IsNaN(request.X) || math.IsInf(request.X, 0) || math.IsNaN(request.Y) || math.IsInf(request.Y, 0) {
+		return sunnyTownPositionResponse{}, errors.New("invalid sunny town coordinates")
+	}
+
+	var position sunnyTownPositionResponse
+	err := app.db.QueryRow(
+		ctx,
+		`
+			insert into student_sunny_town_position (
+				app_user_id,
+				room_id,
+				map_id,
+				x,
+				y,
+				facing
+			)
+			values ($1, $2, $3, $4, $5, $6)
+			on conflict (app_user_id) do update
+			set room_id = excluded.room_id,
+				map_id = excluded.map_id,
+				x = excluded.x,
+				y = excluded.y,
+				facing = excluded.facing,
+				updated_at = now()
+			returning app_user_id, room_id, map_id, x, y, facing, updated_at
+		`,
+		request.AppUserID,
+		request.RoomID,
+		request.MapID,
+		request.X,
+		request.Y,
+		request.Facing,
+	).Scan(
+		&position.AppUserID,
+		&position.RoomID,
+		&position.MapID,
+		&position.X,
+		&position.Y,
+		&position.Facing,
+		&position.UpdatedAt,
+	)
+	if err != nil {
+		return sunnyTownPositionResponse{}, err
+	}
+	position.Found = true
+	return position, nil
+}
+
+func isSunnyTownFacing(value string) bool {
+	return value == "up" || value == "down" || value == "left" || value == "right"
 }
 
 type starRewardQuerier interface {

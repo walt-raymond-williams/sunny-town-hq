@@ -262,6 +262,25 @@ type studentEquipmentResponse struct {
 	Slots []equipmentSlotResponse `json:"slots"`
 }
 
+type studentPositionResponse struct {
+	Found     bool    `json:"found"`
+	AppUserID int64   `json:"app_user_id"`
+	RoomID    string  `json:"room_id"`
+	MapID     string  `json:"map_id"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Facing    string  `json:"facing"`
+}
+
+type studentPositionRequest struct {
+	AppUserID int64   `json:"app_user_id"`
+	RoomID    string  `json:"room_id"`
+	MapID     string  `json:"map_id"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Facing    string  `json:"facing"`
+}
+
 type equipmentSlotResponse struct {
 	Slot string                 `json:"slot"`
 	Item *equipmentItemResponse `json:"item"`
@@ -347,24 +366,34 @@ func newServer(cfg config, world *world) *server {
 	return srv
 }
 
-func (srv *server) loadStudentEquipment(ctx context.Context, appUserID int64) (equipmentSnapshot, error) {
+func (srv *server) internalRequest(ctx context.Context, method string, path string, body []byte) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(
 		ctx,
+		method,
+		srv.config.hqInternalURL+path,
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	request.Header.Set("X-HQ-Service-Secret", srv.config.serviceSecret)
+	return srv.client.Do(request)
+}
+
+func (srv *server) loadStudentEquipment(ctx context.Context, appUserID int64) (equipmentSnapshot, error) {
+	response, err := srv.internalRequest(
+		ctx,
 		http.MethodGet,
-		srv.config.hqInternalURL+"/api/internal/sunny-town/student-equipment?app_user_id="+strconv.FormatInt(appUserID, 10),
+		"/api/internal/sunny-town/student-equipment?app_user_id="+strconv.FormatInt(appUserID, 10),
 		nil,
 	)
 	if err != nil {
 		return equipmentSnapshot{}, err
 	}
-	request.Header.Set("X-HQ-Service-Secret", srv.config.serviceSecret)
-
-	response, err := srv.client.Do(request)
-	if err != nil {
-		return equipmentSnapshot{}, err
-	}
 	defer response.Body.Close()
-
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return equipmentSnapshot{}, fmt.Errorf("equipment request failed status=%d", response.StatusCode)
 	}
@@ -387,6 +416,44 @@ func (srv *server) loadStudentEquipment(ctx context.Context, appUserID int64) (e
 	return snapshot, nil
 }
 
+func (srv *server) loadStudentPosition(ctx context.Context, appUserID int64) (studentPositionResponse, error) {
+	response, err := srv.internalRequest(
+		ctx,
+		http.MethodGet,
+		"/api/internal/sunny-town/player-position?app_user_id="+strconv.FormatInt(appUserID, 10),
+		nil,
+	)
+	if err != nil {
+		return studentPositionResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return studentPositionResponse{}, fmt.Errorf("position request failed status=%d", response.StatusCode)
+	}
+
+	var position studentPositionResponse
+	if err := json.NewDecoder(response.Body).Decode(&position); err != nil {
+		return studentPositionResponse{}, err
+	}
+	return position, nil
+}
+
+func (srv *server) saveStudentPosition(ctx context.Context, position studentPositionRequest) error {
+	body, err := json.Marshal(position)
+	if err != nil {
+		return err
+	}
+	response, err := srv.internalRequest(ctx, http.MethodPost, "/api/internal/sunny-town/player-position", body)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return fmt.Errorf("save position failed status=%d", response.StatusCode)
+	}
+	return nil
+}
+
 func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	claims, err := sunnytownauth.Verify(r.URL.Query().Get("token"), srv.config.joinSecret, time.Now())
 	if err != nil {
@@ -394,7 +461,7 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid sunny town token", http.StatusUnauthorized)
 		return
 	}
-	if err := validateJoinTarget(claims, srv.world.roomID, defaultMapID); err != nil {
+	if err := validateJoinTarget(claims, srv.world.roomID, srv.world.rooms); err != nil {
 		log.Printf("sunny town auth failed: unknown room=%q map=%q", claims.RoomID, claims.MapID)
 		http.Error(w, "unknown room or map", http.StatusBadRequest)
 		return
@@ -420,8 +487,14 @@ func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		equipment = equipmentSnapshot{}
 	}
 
-	srv.world.join(client, claims, equipment)
-	log.Printf("player joined room=%s map=%s player=%s", srv.world.roomID, defaultMapID, playerID)
+	position, err := srv.loadStudentPosition(r.Context(), claims.AppUserID)
+	if err != nil {
+		log.Printf("load sunny town position: %v", err)
+		position = studentPositionResponse{}
+	}
+
+	srv.world.join(client, claims, equipment, position)
+	log.Printf("player joined room=%s map=%s player=%s", srv.world.roomID, claims.MapID, playerID)
 
 	go client.writePump()
 	client.readPump()
@@ -453,8 +526,12 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, world *w
 	}
 }
 
-func (world *world) join(client *client, claims sunnytownauth.Claims, equipmentValues ...equipmentSnapshot) {
-	world.defaultRoom.join(client, claims, equipmentValues...)
+func (world *world) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {
+	target := world.rooms[claims.MapID]
+	if target == nil {
+		target = world.defaultRoom
+	}
+	target.join(client, claims, equipment, position)
 }
 
 func (room *room) run(ctx context.Context) {
@@ -476,25 +553,30 @@ func (room *room) run(ctx context.Context) {
 	}
 }
 
-func (room *room) join(client *client, claims sunnytownauth.Claims, equipmentValues ...equipmentSnapshot) {
+func (room *room) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
-	equipment := equipmentSnapshot{}
-	if len(equipmentValues) > 0 {
-		equipment = equipmentValues[0]
-	}
-
 	spawn := room.spawnPointLocked()
+	x := spawn.X
+	y := spawn.Y
+	facing := "down"
+	if position.Found && position.RoomID == room.id && position.MapID == room.gameMap.ID {
+		x = room.clampX(position.X)
+		y = room.clampY(position.Y)
+		if isFacing(position.Facing) {
+			facing = position.Facing
+		}
+	}
 	player := &player{
 		appUserID:   claims.AppUserID,
 		id:          client.id,
 		displayName: claims.DisplayName,
 		avatarID:    claims.AvatarID,
 		equipment:   equipment,
-		x:           spawn.X,
-		y:           spawn.Y,
-		facing:      "down",
+		x:           x,
+		y:           y,
+		facing:      facing,
 		lastMoveAt:  time.Now(),
 		client:      client,
 	}
@@ -519,12 +601,28 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipmentVal
 }
 
 func (room *room) leave(client *client) {
+	var saved *studentPositionRequest
 	room.mu.Lock()
 	if existing := room.players[client.id]; existing != nil && existing.client == client {
 		delete(room.players, client.id)
+		saved = &studentPositionRequest{
+			AppUserID: existing.appUserID,
+			RoomID:    room.id,
+			MapID:     room.gameMap.ID,
+			X:         math.Round(existing.x*10) / 10,
+			Y:         math.Round(existing.y*10) / 10,
+			Facing:    existing.facing,
+		}
 		log.Printf("player left room=%s player=%s", room.id, client.id)
 	}
 	room.mu.Unlock()
+	if saved != nil && client.server != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := client.server.saveStudentPosition(ctx, *saved); err != nil {
+			log.Printf("save sunny town position player=%s map=%s: %v", client.id, saved.MapID, err)
+		}
+	}
 }
 
 func (world *world) leave(client *client) {
@@ -1218,8 +1316,11 @@ func newRewardRunID() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
-func validateJoinTarget(claims sunnytownauth.Claims, roomID string, mapID string) error {
-	if claims.RoomID != roomID || claims.MapID != mapID {
+func validateJoinTarget(claims sunnytownauth.Claims, roomID string, rooms map[string]*room) error {
+	if claims.RoomID != roomID {
+		return errors.New("unknown room or map")
+	}
+	if rooms[claims.MapID] == nil {
 		return errors.New("unknown room or map")
 	}
 	return nil

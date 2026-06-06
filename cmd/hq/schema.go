@@ -156,6 +156,19 @@ func (app *app) ensureSchema(ctx context.Context) error {
 			check (slot in ('gear', 'accessory', 'tool'))`,
 		`create index if not exists student_equipped_item_app_user_id_idx
 			on student_equipped_item (app_user_id)`,
+		`create table if not exists student_sunny_town_position (
+			app_user_id bigint primary key references app_user(id) on delete cascade,
+			room_id text not null,
+			map_id text not null,
+			x double precision not null,
+			y double precision not null,
+			facing text not null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint student_sunny_town_position_facing_check check (facing in ('up', 'down', 'left', 'right'))
+		)`,
+		`create index if not exists student_sunny_town_position_updated_at_idx
+			on student_sunny_town_position (updated_at desc)`,
 	}
 
 	for _, statement := range statements {
