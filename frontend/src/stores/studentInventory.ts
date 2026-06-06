@@ -14,6 +14,7 @@ interface StudentInventoryState {
 const defaultEquipmentSlots: EquippedSlot[] = [
   { slot: 'gear', item: null },
   { slot: 'accessory', item: null },
+  { slot: 'tool', item: null },
 ]
 
 export const useStudentInventoryStore = defineStore('studentInventory', {

@@ -12,7 +12,7 @@ export interface StudentInventory {
   items: InventoryItem[]
 }
 
-export type EquipmentSlot = 'gear' | 'accessory'
+export type EquipmentSlot = 'gear' | 'accessory' | 'tool'
 
 export interface EquipmentItem {
   key: string

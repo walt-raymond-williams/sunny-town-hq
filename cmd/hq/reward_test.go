@@ -291,6 +291,27 @@ func TestUnequipStudentItemClearsSlot(t *testing.T) {
 	}
 }
 
+func TestEquipStudentItemSupportsToolSlot(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, "pickaxe", 1); err != nil {
+		t.Fatalf("seed pickaxe inventory: %v", err)
+	}
+
+	equipment, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
+		Slot:    equipmentSlotTool,
+		ItemKey: "pickaxe",
+	})
+	if err != nil {
+		t.Fatalf("equip pickaxe error = %v", err)
+	}
+	if equipment.Slots[2].Item == nil || equipment.Slots[2].Item.Key != "pickaxe" {
+		t.Fatalf("equipment = %#v, want pickaxe in tool slot", equipment)
+	}
+}
+
 func testRewardApp(t *testing.T) (*app, func()) {
 	t.Helper()
 
@@ -374,7 +395,8 @@ func testRewardApp(t *testing.T) (*app, func()) {
 		`insert into inventory_item_type (key, name, description, equip_slot, visual_key)
 			values
 				('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie'),
-				('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap')`,
+				('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap'),
+				('pickaxe', 'Pickaxe', 'A sturdy starter tool.', 'tool', 'pickaxe')`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
@@ -391,7 +413,7 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			created_at timestamptz not null default now(),
 			updated_at timestamptz not null default now(),
 			primary key (app_user_id, slot),
-			constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory'))
+			constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory', 'tool'))
 		)`,
 		`insert into app_user (id, display_name) values (123, 'Student')`,
 		`insert into pet_state (user_id, hunger, happiness, energy) values (123, 50, 50, 50)`,

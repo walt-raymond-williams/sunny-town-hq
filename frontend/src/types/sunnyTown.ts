@@ -27,6 +27,7 @@ export interface SunnyTownPlayer {
 export interface SunnyTownEquipment {
   gear?: string
   accessory?: string
+  tool?: string
 }
 
 export interface SunnyTownPortal {
@@ -121,4 +122,13 @@ export interface SunnyTownMoveMessage {
 
 export interface SunnyTownEquipmentChangedMessage {
   type: 'equipment_changed'
+}
+
+export interface SunnyTownToolUseMessage {
+  type: 'tool_use'
+  toolKey: string
+  x: number
+  y: number
+  facing: 'up' | 'down' | 'left' | 'right'
+  clientTimeMs: number
 }

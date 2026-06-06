@@ -30,6 +30,7 @@ const (
 	defaultMapID           = "sunny-town-v1"
 	equipmentSlotGear      = "gear"
 	equipmentSlotAccessory = "accessory"
+	equipmentSlotTool      = "tool"
 	playerSize             = 28.0
 	playerSpeed            = 150.0
 	starPickupRadius       = 30.0
@@ -122,6 +123,7 @@ type clientMessage struct {
 	Y            float64 `json:"y,omitempty"`
 	Facing       string  `json:"facing,omitempty"`
 	Moving       bool    `json:"moving,omitempty"`
+	ToolKey      string  `json:"toolKey,omitempty"`
 }
 
 type equipmentSnapshot map[string]string
@@ -374,7 +376,7 @@ func (srv *server) loadStudentEquipment(ctx context.Context, appUserID int64) (e
 
 	snapshot := equipmentSnapshot{}
 	for _, slot := range equipment.Slots {
-		if slot.Slot != equipmentSlotGear && slot.Slot != equipmentSlotAccessory {
+		if slot.Slot != equipmentSlotGear && slot.Slot != equipmentSlotAccessory && slot.Slot != equipmentSlotTool {
 			continue
 		}
 		if slot.Item == nil || strings.TrimSpace(slot.Item.VisualKey) == "" {
@@ -624,6 +626,35 @@ func (client *client) refreshEquipment() {
 	}
 	room.mu.Unlock()
 	room.broadcastSnapshot(time.Now())
+}
+
+func (client *client) handleToolUse(message clientMessage) {
+	toolKey := strings.TrimSpace(message.ToolKey)
+	if toolKey == "" {
+		client.trySend(serverMessage{Type: "error", Code: "missing_tool"})
+		return
+	}
+
+	room := client.currentRoom()
+	if room == nil {
+		client.trySend(serverMessage{Type: "error", Code: "not_in_room"})
+		return
+	}
+
+	room.mu.Lock()
+	player := room.players[client.id]
+	if player == nil {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
+		return
+	}
+	equippedTool := strings.TrimSpace(player.equipment[equipmentSlotTool])
+	room.mu.Unlock()
+
+	if equippedTool == "" || equippedTool != toolKey {
+		client.trySend(serverMessage{Type: "error", Code: "tool_not_equipped"})
+		return
+	}
 }
 
 func (room *room) updateMove(playerID string, seq int64, x float64, y float64, facing string, moving bool, now time.Time) {
@@ -897,6 +928,8 @@ func (client *client) readPump() {
 			}
 		case "equipment_changed":
 			client.refreshEquipment()
+		case "tool_use":
+			client.handleToolUse(message)
 		case "ping":
 			_ = client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		default:

@@ -42,7 +42,7 @@ export async function unequipStudentItem(slot: EquipmentSlot): Promise<StudentEq
 function normalizeStudentEquipment(response: StudentEquipmentResponse): StudentEquipment {
   return {
     slots: (response.slots || [])
-      .filter((slot): slot is EquipmentSlotResponse & { slot: EquipmentSlot } => slot.slot === 'gear' || slot.slot === 'accessory')
+      .filter((slot): slot is EquipmentSlotResponse & { slot: EquipmentSlot } => slot.slot === 'gear' || slot.slot === 'accessory' || slot.slot === 'tool')
       .map((slot) => ({
         slot: slot.slot,
         item: slot.item ? normalizeEquipmentItem(slot.item) : null,

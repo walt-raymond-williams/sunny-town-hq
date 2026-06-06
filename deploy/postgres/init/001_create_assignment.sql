@@ -107,7 +107,7 @@ create table if not exists inventory_item_type (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint inventory_item_type_key_check check (key ~ '^[a-z][a-z0-9_]*$'),
-  constraint inventory_item_type_equip_slot_check check (equip_slot is null or equip_slot in ('gear', 'accessory'))
+  constraint inventory_item_type_equip_slot_check check (equip_slot is null or equip_slot in ('gear', 'accessory', 'tool'))
 );
 
 insert into inventory_item_type (key, name, description)
@@ -122,7 +122,8 @@ set name = excluded.name,
 insert into inventory_item_type (key, name, description, equip_slot, visual_key)
 values
   ('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie'),
-  ('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap')
+  ('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap'),
+  ('pickaxe', 'Pickaxe', 'A sturdy starter tool.', 'tool', 'pickaxe')
 on conflict (key) do update
 set name = excluded.name,
   description = excluded.description,
@@ -145,7 +146,7 @@ select u.id, iit.id, 1
 from app_user u
 join app_user_role ur on ur.user_id = u.id and ur.role = 'student'
 cross join inventory_item_type iit
-where iit.key in ('sunny_hoodie', 'star_cap')
+where iit.key in ('sunny_hoodie', 'star_cap', 'pickaxe')
 on conflict (app_user_id, item_type_id) do update
 set quantity = greatest(student_inventory_item.quantity, excluded.quantity),
   updated_at = now();
@@ -157,7 +158,7 @@ create table if not exists student_equipped_item (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (app_user_id, slot),
-  constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory'))
+  constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory', 'tool'))
 );
 
 create index if not exists student_equipped_item_app_user_id_idx

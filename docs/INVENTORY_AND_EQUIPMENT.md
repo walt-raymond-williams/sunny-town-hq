@@ -18,10 +18,10 @@ This is the item catalog. It defines every kind of inventory item that can exist
 
 Important columns:
 
-- `key`: stable item key, such as `cookie`, `sunny_hoodie`, or `star_cap`.
+- `key`: stable item key, such as `cookie`, `sunny_hoodie`, `star_cap`, or `pickaxe`.
 - `name`: display name.
 - `description`: display text.
-- `equip_slot`: nullable equipment slot. Current values are `gear` and `accessory`.
+- `equip_slot`: nullable equipment slot. Current values are `gear`, `accessory`, and `tool`.
 - `visual_key`: nullable Sunny Town render key.
 
 If `equip_slot` is null, the item is not equippable.
@@ -31,6 +31,7 @@ Current seeded item types:
 - `cookie`: not equippable.
 - `sunny_hoodie`: equippable in `gear`.
 - `star_cap`: equippable in `accessory`.
+- `pickaxe`: equippable in `tool`.
 
 ### `student_inventory_item`
 
@@ -59,6 +60,7 @@ Current slots:
 
 - `gear`
 - `accessory`
+- `tool`
 
 Rules:
 
@@ -90,6 +92,7 @@ Existing student accounts receive:
 
 - 1 `sunny_hoodie`
 - 1 `star_cap`
+- 1 `pickaxe`
 
 New student accounts also receive those starter items during authenticated user sync.
 
@@ -147,6 +150,16 @@ Returns all equipment slots, even empty ones:
     {
       "slot": "accessory",
       "item": null
+    },
+    {
+      "slot": "tool",
+      "item": {
+        "key": "pickaxe",
+        "name": "Pickaxe",
+        "description": "A sturdy starter tool.",
+        "equipSlot": "tool",
+        "visualKey": "pickaxe"
+      }
     }
   ]
 }
@@ -167,7 +180,7 @@ Request:
 
 Validation:
 
-- Slot must be `gear` or `accessory`.
+- Slot must be `gear`, `accessory`, or `tool`.
 - Item must exist.
 - Item must be equippable for that slot.
 - Student must own quantity greater than zero.
@@ -255,6 +268,7 @@ The inventory dialog shows:
 
 - Gear slot.
 - Accessory slot.
+- Tool slot.
 - Inventory items.
 - Equip/Unequip buttons for equippable items.
 - Quantity badges for non-equippable items, such as cookies.
@@ -298,7 +312,8 @@ Player snapshots include equipment:
   "avatarId": "pet-default",
   "equipment": {
     "gear": "sunny_hoodie",
-    "accessory": "star_cap"
+    "accessory": "star_cap",
+    "tool": "pickaxe"
   },
   "lastProcessedSeq": 42
 }
@@ -310,6 +325,31 @@ Current MVP visuals:
 
 - `sunny_hoodie`: changes the character body/gear styling.
 - `star_cap`: draws a cap/headpiece.
+- `pickaxe`: draws a held tool and can play a local swing animation.
+
+### Sunny Town Tool Use
+
+Pressing `F` is the primary Sunny Town interaction key.
+
+Current priority:
+
+- If a nearby NPC or activity can be interacted with, `F` uses that interaction.
+- Otherwise, if a tool is equipped, `F` uses the equipped tool.
+
+For MVP, using `pickaxe` plays a local swing animation and sends this WebSocket message:
+
+```json
+{
+  "type": "tool_use",
+  "toolKey": "pickaxe",
+  "x": 320,
+  "y": 416,
+  "facing": "down",
+  "clientTimeMs": 1760000000000
+}
+```
+
+The Sunny Town server validates that the player currently has the requested tool equipped. World-object effects such as mining, combat, fishing, harvesting, or object state changes should be added behind this server handler later.
 
 ## Important Rules
 
@@ -329,10 +369,11 @@ Backend:
 - Existing students receive starter equipment during schema migration.
 - New students receive starter equipment during authenticated user sync.
 - `GET /api/student/inventory` returns only positive quantities and includes equipment metadata.
-- `GET /api/student/equipment` returns `gear` and `accessory` slots.
+- `GET /api/student/equipment` returns `gear`, `accessory`, and `tool` slots.
 - Equipping a valid owned item succeeds.
 - Equipping cookies fails.
 - Equipping an unowned item fails.
+- Equipping `pickaxe` into the `tool` slot succeeds when owned.
 - Equipping an item into the wrong slot fails.
 - Unequipping clears the slot.
 - Sunny Town internal equipment endpoint requires the service secret.

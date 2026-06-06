@@ -1364,7 +1364,17 @@ func (app *app) purchaseStudentShopItem(ctx context.Context, userID int64, reque
 				delta,
 				metadata
 			)
-			values ($1, $2, 'shop_purchase', $3, jsonb_build_object('shop_id', $4, 'item_key', $5, 'quantity', $6))
+			values (
+				$1,
+				$2,
+				'shop_purchase',
+				$3,
+				jsonb_build_object(
+					'shop_id', $4::text,
+					'item_key', $5::text,
+					'quantity', $6::integer
+				)
+			)
 		`,
 		userID,
 		fmt.Sprintf("shop-purchase:%d:%d", userID, time.Now().UnixNano()),

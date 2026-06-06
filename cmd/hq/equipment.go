@@ -9,6 +9,7 @@ import (
 const (
 	equipmentSlotGear      = "gear"
 	equipmentSlotAccessory = "accessory"
+	equipmentSlotTool      = "tool"
 )
 
 var (
@@ -42,7 +43,7 @@ type equipmentChangeRequest struct {
 func normalizeEquipmentSlot(slot string) (string, error) {
 	slot = strings.TrimSpace(slot)
 	switch slot {
-	case equipmentSlotGear, equipmentSlotAccessory:
+	case equipmentSlotGear, equipmentSlotAccessory, equipmentSlotTool:
 		return slot, nil
 	default:
 		return "", errInvalidEquipmentSlot
@@ -59,7 +60,7 @@ func (app *app) loadStudentEquipment(ctx context.Context, userID int64) (student
 				iit.description,
 				coalesce(iit.equip_slot, '') as equip_slot,
 				coalesce(iit.visual_key, '') as visual_key
-			from (values ('gear'), ('accessory')) as slots(slot)
+			from (values ('gear'), ('accessory'), ('tool')) as slots(slot)
 			left join student_equipped_item sei on sei.app_user_id = $1
 				and sei.slot = slots.slot
 			left join student_inventory_item sii on sii.app_user_id = sei.app_user_id
@@ -67,7 +68,7 @@ func (app *app) loadStudentEquipment(ctx context.Context, userID int64) (student
 				and sii.quantity > 0
 			left join inventory_item_type iit on iit.id = sei.item_type_id
 				and sii.app_user_id is not null
-			order by case slots.slot when 'gear' then 1 else 2 end
+			order by case slots.slot when 'gear' then 1 when 'accessory' then 2 else 3 end
 		`,
 		userID,
 	)

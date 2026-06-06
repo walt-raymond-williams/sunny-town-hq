@@ -6,6 +6,7 @@ import { createSunnyTownSession } from '../api/sunnyTownApi'
 import { purchaseShopItem } from '../api/shopApi'
 import { useStudentInventoryStore } from '../stores/studentInventory'
 import type { Assignment } from '../types/assignment'
+import type { EquipmentSlot } from '../types/inventory'
 import type {
   SunnyTownCollectible,
   SunnyTownEquipmentChangedMessage,
@@ -15,6 +16,7 @@ import type {
   SunnyTownPlayer,
   SunnyTownServerMessage,
   SunnyTownSession,
+  SunnyTownToolUseMessage,
 } from '../types/sunnyTown'
 
 interface MovementInput {
@@ -26,12 +28,20 @@ interface MovementInput {
 
 type MovementDirection = keyof MovementInput
 
+interface ToolUseAnimation {
+  toolKey: string
+  startedAt: number
+  durationMs: number
+  facing: SunnyTownPlayer['facing']
+}
+
 const playerSpeed = 150
 const playerSize = 28
 const moveSendIntervalMs = 50
 const remoteInterpolationDelayMs = 150
 const maxRemoteHistoryFrames = 12
 const npcInteractionRadius = 54
+const toolUseDurationMs = 360
 const movementInputEventOptions = { capture: true }
 
 const router = useRouter()
@@ -75,6 +85,7 @@ let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
 let lastRenderTime = 0
+let activeToolUse: ToolUseAnimation | null = null
 
 const playerCount = computed(() => players.value.length)
 const activeDialogueLine = computed(() => activeDialogueNpc.value?.dialogue[activeDialogueLineIndex.value] || '')
@@ -216,7 +227,7 @@ function handleKeyDown(event: KeyboardEvent) {
   }
   if (event.code === 'KeyF' || event.key.toLowerCase() === 'f') {
     event.preventDefault()
-    interactWithNearbyNpc()
+    handlePrimaryInteraction()
     return
   }
 
@@ -275,7 +286,7 @@ function notifyEquipmentChanged() {
   socket.send(JSON.stringify(message))
 }
 
-async function equipInventoryItem(itemKey: string, slot: 'gear' | 'accessory' | '') {
+async function equipInventoryItem(itemKey: string, slot: EquipmentSlot | '') {
   if (!slot) {
     return
   }
@@ -284,7 +295,7 @@ async function equipInventoryItem(itemKey: string, slot: 'gear' | 'accessory' | 
   notifyEquipmentChanged()
 }
 
-async function unequipInventorySlot(slot: 'gear' | 'accessory') {
+async function unequipInventorySlot(slot: EquipmentSlot) {
   await inventoryStore.unequipItem(slot)
   applyLocalEquipmentVisuals()
   notifyEquipmentChanged()
@@ -321,6 +332,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   localSelf = null
   renderedSelf = null
   lastSentMoveJson = ''
+  activeToolUse = null
   pressedDirections.clear()
   closeNpcOverlays()
   nearbyNpc.value = null
@@ -328,12 +340,22 @@ function applyMapState(message: SunnyTownServerMessage) {
   draw()
 }
 
-function interactWithNearbyNpc() {
-  if (!activeMap.value) {
+function handlePrimaryInteraction() {
+  if (interactWithNearbyNpc()) {
     return
   }
+  useEquippedTool()
+}
+
+function interactWithNearbyNpc(): boolean {
+  if (!activeMap.value) {
+    return false
+  }
   if (activeSchoolworkNpc.value) {
-    return
+    return true
+  }
+  if (activeShopNpc.value) {
+    return true
   }
   if (activeDialogueNpc.value) {
     if (activeDialogueLineIndex.value < activeDialogueNpc.value.dialogue.length - 1) {
@@ -341,23 +363,52 @@ function interactWithNearbyNpc() {
     } else {
       closeDialogue()
     }
-    return
+    return true
   }
 
   const npc = nearestNpcToSelf()
   if (!npc) {
-    return
+    return false
   }
   if (npc.shop) {
     openShopMenu(npc)
-    return
+    return true
   }
   if (npc.activity?.type === 'schoolwork') {
     openSchoolworkMenu(npc)
-    return
+    return true
   }
   activeDialogueNpc.value = npc
   activeDialogueLineIndex.value = 0
+  return true
+}
+
+function useEquippedTool() {
+  const player = localSelf || players.value.find((candidate) => candidate.id === selfId.value)
+  const toolKey = player?.equipment?.tool || ''
+  if (!player || !toolKey) {
+    return
+  }
+
+  activeToolUse = {
+    toolKey,
+    startedAt: performance.now(),
+    durationMs: toolUseDurationMs,
+    facing: player.facing,
+  }
+
+  if (socket?.readyState === WebSocket.OPEN) {
+    const message: SunnyTownToolUseMessage = {
+      type: 'tool_use',
+      toolKey,
+      x: Math.round(player.x * 10) / 10,
+      y: Math.round(player.y * 10) / 10,
+      facing: player.facing,
+      clientTimeMs: Date.now(),
+    }
+    socket.send(JSON.stringify(message))
+  }
+  draw()
 }
 
 function closeDialogue() {
@@ -920,11 +971,17 @@ function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, 
 
   const gearKey = player.equipment?.gear || ''
   const accessoryKey = player.equipment?.accessory || ''
+  const toolKey = player.equipment?.tool || ''
+  const toolProgress = isSelf ? currentToolUseProgress(toolKey) : null
 
   context.fillStyle = gearKey === 'sunny_hoodie' ? '#f06f38' : (isSelf ? '#27746f' : '#5c6bc0')
   context.beginPath()
   context.arc(x, y, 16, 0, Math.PI * 2)
   context.fill()
+
+  if (toolKey === 'pickaxe') {
+    drawPickaxe(context, x, y, player.facing, toolProgress)
+  }
 
   if (gearKey === 'sunny_hoodie') {
     context.fillStyle = '#2f7d72'
@@ -970,6 +1027,71 @@ function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, 
   context.font = '700 12px Inter, sans-serif'
   context.textAlign = 'center'
   context.fillText(player.displayName, x, y - 24)
+}
+
+function currentToolUseProgress(toolKey: string): number | null {
+  if (!activeToolUse || activeToolUse.toolKey !== toolKey) {
+    return null
+  }
+  const progress = (performance.now() - activeToolUse.startedAt) / activeToolUse.durationMs
+  if (progress >= 1) {
+    activeToolUse = null
+    return null
+  }
+  return clamp(progress, 0, 1)
+}
+
+function drawPickaxe(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  facing: SunnyTownPlayer['facing'],
+  swingProgress: number | null,
+) {
+  const swinging = swingProgress !== null
+  const direction = directionVector(facing)
+  const side = facing === 'left' || facing === 'right' ? -1 : 1
+  const baseX = x + direction.x * 17 + (facing === 'up' || facing === 'down' ? 13 : 0)
+  const baseY = y + direction.y * 14 + (facing === 'left' || facing === 'right' ? 2 : 6)
+  const swingAngle = swinging ? (Math.sin(swingProgress * Math.PI) * 1.2 - 0.6) * side : 0
+  const restingAngle = facing === 'left'
+    ? -0.8
+    : facing === 'right'
+      ? 0.8
+      : facing === 'up'
+        ? -0.35
+        : 0.35
+
+  context.save()
+  context.translate(baseX, baseY)
+  context.rotate(restingAngle + swingAngle)
+  context.lineCap = 'round'
+  context.strokeStyle = swinging ? '#f6d56f' : '#7b4b24'
+  context.lineWidth = swinging ? 5 : 4
+  context.beginPath()
+  context.moveTo(0, 12)
+  context.lineTo(0, -13)
+  context.stroke()
+  context.strokeStyle = '#5f6b75'
+  context.lineWidth = swinging ? 6 : 5
+  context.beginPath()
+  context.moveTo(-10, -14)
+  context.quadraticCurveTo(0, -21, 12, -14)
+  context.stroke()
+  context.restore()
+}
+
+function directionVector(facing: SunnyTownPlayer['facing']) {
+  switch (facing) {
+    case 'up':
+      return { x: 0, y: -1 }
+    case 'down':
+      return { x: 0, y: 1 }
+    case 'left':
+      return { x: -1, y: 0 }
+    case 'right':
+      return { x: 1, y: 0 }
+  }
 }
 
 function drawNpc(context: CanvasRenderingContext2D, npc: SunnyTownNpc, cameraX: number, cameraY: number) {
@@ -1131,7 +1253,7 @@ function backToPet() {
       </div>
       <div class="sunny-town-help">
         <v-icon icon="mdi-keyboard" size="small" />
-        <span>Move with arrow keys or WASD - E inventory - F talk</span>
+          <span>Move with arrow keys or WASD - E inventory - F interact</span>
       </div>
       <div v-if="nearbyNpc && !activeDialogueNpc && !activeSchoolworkNpc && !inventoryOpen" class="sunny-town-talk-hint">
         <v-icon icon="mdi-chat" size="small" />

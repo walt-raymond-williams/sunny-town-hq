@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { petStats } from '../../domain/categories'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
+import type { EquipmentSlot } from '../../types/inventory'
 import type { useStudentPetStore } from '../../stores/studentPet'
 import type { FallingStarsResult } from '../../types/pet'
 
@@ -30,7 +31,7 @@ async function openInventory() {
   await inventoryStore.loadInventory()
 }
 
-async function equipFromInventory(itemKey: string, slot: 'gear' | 'accessory' | '') {
+async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
   if (!slot) {
     return
   }
