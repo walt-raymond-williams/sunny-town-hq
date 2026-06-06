@@ -266,6 +266,60 @@ func TestWorldTransfersPlayerToForestCrossing(t *testing.T) {
 	}
 }
 
+func TestWorldDoesNotBouncePlayerFromTargetPortal(t *testing.T) {
+	town := testMap()
+	town.Portals = []portal{{
+		ID:           "to-forest",
+		X:            100,
+		Y:            100,
+		Width:        32,
+		Height:       32,
+		TargetMapID:  "forest",
+		TargetX:      100,
+		TargetY:      100,
+		TargetFacing: "right",
+	}}
+	forest := gameMap{
+		ID:       "forest",
+		Name:     "Forest",
+		TileSize: 32,
+		Width:    10,
+		Height:   10,
+		Spawns:   []point{{X: 200, Y: 200}},
+		Portals: []portal{{
+			ID:           "to-town",
+			X:            84,
+			Y:            84,
+			Width:        64,
+			Height:       64,
+			TargetMapID:  defaultMapID,
+			TargetX:      160,
+			TargetY:      160,
+			TargetFacing: "left",
+		}},
+	}
+	world := testWorld(town, forest)
+	client := testClient(nil, "42")
+	world.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+
+	now := time.Now()
+	world.rooms[defaultMapID].updateMove("42", 7, 100, 100, "right", true, now)
+	if client.currentRoom().gameMap.ID != "forest" {
+		t.Fatalf("current map after first transfer = %q, want forest", client.currentRoom().gameMap.ID)
+	}
+
+	world.rooms["forest"].updateMove("42", 8, 101, 100, "right", true, now.Add(50*time.Millisecond))
+	if client.currentRoom().gameMap.ID != "forest" {
+		t.Fatalf("current map after moving inside target portal = %q, want forest", client.currentRoom().gameMap.ID)
+	}
+
+	world.rooms["forest"].updateMove("42", 9, 200, 200, "right", true, now.Add(100*time.Millisecond))
+	world.rooms["forest"].updateMove("42", 10, 100, 100, "left", true, now.Add(150*time.Millisecond))
+	if client.currentRoom().gameMap.ID != defaultMapID {
+		t.Fatalf("current map after leaving and re-entering portal = %q, want %s", client.currentRoom().gameMap.ID, defaultMapID)
+	}
+}
+
 func TestRoomResourceNodeSnapshots(t *testing.T) {
 	gameMap := testMap()
 	gameMap.ResourceNodes = []resourceNodeDefinition{{
@@ -323,16 +377,35 @@ func TestMiningRequiresPlayerInRange(t *testing.T) {
 	}
 }
 
-func TestMiningSucceedsAndDepletesNode(t *testing.T) {
+func TestMiningRequiresThreeSwings(t *testing.T) {
 	room := testRoom(miningTestMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
 	room.players["42"].x = 140
 	room.players["42"].y = 160
 
-	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
-
 	node := room.resourceNodes["rock-node-001"]
+	swingPickaxe(room, client)
+	if !node.active || node.hitCount != 1 || node.harvestSeq != 0 {
+		t.Fatalf("node after first swing = %#v, want active with 1 hit", node)
+	}
+	select {
+	case event := <-room.resourceEvents:
+		t.Fatalf("unexpected event after first swing: %#v", event)
+	default:
+	}
+
+	swingPickaxe(room, client)
+	if !node.active || node.hitCount != 2 || node.harvestSeq != 0 {
+		t.Fatalf("node after second swing = %#v, want active with 2 hits", node)
+	}
+	select {
+	case event := <-room.resourceEvents:
+		t.Fatalf("unexpected event after second swing: %#v", event)
+	default:
+	}
+
+	swingPickaxe(room, client)
 	if node.active || node.harvestSeq != 1 || node.respawnAt.IsZero() {
 		t.Fatalf("node after mining = %#v, want inactive harvest seq 1 with respawn", node)
 	}
@@ -773,4 +846,11 @@ func miningTestMap() gameMap {
 		RespawnSeconds:    1,
 	}}
 	return gameMap
+}
+
+func swingPickaxe(room *room, client *client) {
+	if player := room.players[client.id]; player != nil {
+		player.lastToolUseAt = time.Now().Add(-resourceToolCooldown)
+	}
+	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
 }

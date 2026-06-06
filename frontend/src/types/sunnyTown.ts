@@ -109,6 +109,8 @@ export interface SunnyTownResourceNode {
   y: number
   radius: number
   active: boolean
+  hits: number
+  needed: number
 }
 
 export interface SunnyTownServerMessage {

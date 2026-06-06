@@ -35,6 +35,7 @@ const (
 	playerSpeed             = 150.0
 	starPickupRadius        = 30.0
 	resourceCommitQueueSize = 32
+	resourceHitsRequired    = 3
 	resourceToolCooldown    = 500 * time.Millisecond
 	simulationInterval      = 50 * time.Millisecond
 	snapshotInterval        = 100 * time.Millisecond
@@ -189,6 +190,7 @@ type player struct {
 	lastMoveAt    time.Time
 	lastMoveSeq   int64
 	lastToolUseAt time.Time
+	portalLocked  bool
 	client        *client
 }
 
@@ -262,6 +264,7 @@ type resourceNode struct {
 	interactionRadius float64
 	respawnDelay      time.Duration
 	active            bool
+	hitCount          int
 	respawnAt         time.Time
 	harvestSeq        int64
 }
@@ -273,6 +276,8 @@ type resourceNodeSnapshot struct {
 	Y      float64 `json:"y"`
 	Radius float64 `json:"radius"`
 	Active bool    `json:"active"`
+	Hits   int     `json:"hits"`
+	Needed int     `json:"needed"`
 }
 
 type rewardEvent struct {
@@ -741,6 +746,7 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 	player.moving = false
 	player.lastMoveAt = now
 	player.lastMoveSeq = seq
+	player.portalLocked = true
 
 	target.mu.Lock()
 	target.players[playerID] = player
@@ -858,24 +864,31 @@ func (client *client) handleToolUse(message clientMessage) {
 		return
 	}
 	player.lastToolUseAt = now
-	node.active = false
-	node.harvestSeq++
-	node.respawnAt = now.Add(node.respawnDelay)
-	resourceKey, amount := rollMiningDrop()
-	eventID := fmt.Sprintf("%s:%s:%d:%d", room.gameMap.ID, node.id, node.harvestSeq, player.appUserID)
-	event = &resourceEvent{
-		eventID:     eventID,
-		appUserID:   player.appUserID,
-		roomID:      room.id,
-		mapID:       room.gameMap.ID,
-		nodeID:      node.id,
-		resourceKey: resourceKey,
-		amount:      amount,
-		client:      player.client,
+	node.hitCount++
+	if node.hitCount >= resourceHitsRequired {
+		node.active = false
+		node.hitCount = 0
+		node.harvestSeq++
+		node.respawnAt = now.Add(node.respawnDelay)
+		resourceKey, amount := rollMiningDrop()
+		eventID := fmt.Sprintf("%s:%s:%d:%d", room.gameMap.ID, node.id, node.harvestSeq, player.appUserID)
+		event = &resourceEvent{
+			eventID:     eventID,
+			appUserID:   player.appUserID,
+			roomID:      room.id,
+			mapID:       room.gameMap.ID,
+			nodeID:      node.id,
+			resourceKey: resourceKey,
+			amount:      amount,
+			client:      player.client,
+		}
 	}
 	room.mu.Unlock()
 
 	room.broadcastSnapshot(now)
+	if event == nil {
+		return
+	}
 	select {
 	case room.resourceEvents <- *event:
 	default:
@@ -908,7 +921,12 @@ func (room *room) updateMove(playerID string, seq int64, x float64, y float64, f
 		player.moving = moving && ok
 		player.lastMoveSeq = seq
 		if ok {
-			triggered = room.portalForPlayerLocked(player)
+			currentPortal := room.portalForPlayerLocked(player)
+			if currentPortal == nil {
+				player.portalLocked = false
+			} else if !player.portalLocked {
+				triggered = currentPortal
+			}
 		}
 	}
 	room.mu.Unlock()
@@ -1038,6 +1056,8 @@ func (room *room) resourceNodeSnapshotsLocked() []resourceNodeSnapshot {
 			Y:      node.y,
 			Radius: node.radius,
 			Active: node.active,
+			Hits:   node.hitCount,
+			Needed: resourceHitsRequired,
 		})
 	}
 	return snapshots
@@ -1104,6 +1124,7 @@ func (room *room) respawnResourceNodesLocked(now time.Time) {
 			continue
 		}
 		node.active = true
+		node.hitCount = 0
 		node.respawnAt = time.Time{}
 	}
 }

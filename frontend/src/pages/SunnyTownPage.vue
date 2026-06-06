@@ -290,6 +290,17 @@ function handleResize() {
   draw()
 }
 
+function handleCanvasPointerDown(event: PointerEvent) {
+  if (event.button !== 0) {
+    return
+  }
+  if (activeDialogueNpc.value || activeShopNpc.value || activeSchoolworkNpc.value || inventoryOpen.value) {
+    return
+  }
+  event.preventDefault()
+  useEquippedTool()
+}
+
 async function toggleInventory() {
   inventoryOpen.value = !inventoryOpen.value
   if (inventoryOpen.value) {
@@ -1032,6 +1043,23 @@ function drawResourceNode(
     context.beginPath()
     context.arc(node.radius * 0.25, -node.radius * 0.35, 4, 0, Math.PI * 2)
     context.fill()
+    const hits = Math.max(0, node.hits || 0)
+    if (hits > 0) {
+      context.strokeStyle = '#23282e'
+      context.lineWidth = 2
+      context.beginPath()
+      context.moveTo(-node.radius * 0.15, -node.radius * 0.75)
+      context.lineTo(node.radius * 0.05, -node.radius * 0.25)
+      context.lineTo(-node.radius * 0.2, node.radius * 0.15)
+      context.stroke()
+    }
+    if (hits > 1) {
+      context.beginPath()
+      context.moveTo(node.radius * 0.2, -node.radius * 0.45)
+      context.lineTo(node.radius * 0.45, -node.radius * 0.05)
+      context.lineTo(node.radius * 0.25, node.radius * 0.45)
+      context.stroke()
+    }
   }
   context.restore()
 }
@@ -1324,13 +1352,13 @@ function backToPet() {
     </v-alert>
 
     <div class="sunny-town-stage">
-      <canvas ref="canvas" aria-label="Sunny Town map" />
+      <canvas ref="canvas" aria-label="Sunny Town map" @pointerdown="handleCanvasPointerDown" />
       <div v-if="gameToast" class="sunny-town-toast" role="status">
         {{ gameToast }}
       </div>
       <div class="sunny-town-help">
         <v-icon icon="mdi-keyboard" size="small" />
-          <span>Move with arrow keys or WASD - E inventory - F interact</span>
+          <span>Move with arrow keys or WASD - E inventory - F/click use tool</span>
       </div>
       <div v-if="nearbyNpc && !activeDialogueNpc && !activeSchoolworkNpc && !inventoryOpen" class="sunny-town-talk-hint">
         <v-icon icon="mdi-chat" size="small" />
