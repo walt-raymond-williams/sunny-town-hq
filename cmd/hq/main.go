@@ -29,6 +29,12 @@ type app struct {
 	sunnyTownJoinSecret    string
 	sunnyTownServiceSecret string
 	sunnyTownWebSocketURL  string
+	aiServiceURL           string
+	hqToAIServiceSecret    string
+	aiToHQServiceSecret    string
+	aiGradingEnabled       bool
+	aiAutoApplyGrades      bool
+	aiPromptVersionGrader  string
 }
 
 var (
@@ -190,6 +196,12 @@ type assignmentAttemptResponse struct {
 	DateGraded      *time.Time `json:"date_graded"`
 	CookieAwarded   bool       `json:"cookie_awarded"`
 	ResetAt         *time.Time `json:"reset_at"`
+	GradedByType    *string    `json:"graded_by_type,omitempty"`
+	GradedByUserID  *int64     `json:"graded_by_user_id,omitempty"`
+	GradedByService *string    `json:"graded_by_service,omitempty"`
+	GradeSource     *string    `json:"grade_source,omitempty"`
+	AIReviewStatus  *string    `json:"ai_review_status,omitempty"`
+	AIGradeID       *int64     `json:"ai_grade_id,omitempty"`
 }
 
 type assignmentResponse struct {
@@ -231,6 +243,12 @@ func main() {
 		sunnyTownJoinSecret:    envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
 		sunnyTownServiceSecret: envOrDefault("SUNNY_TOWN_SERVICE_SECRET", "local-dev-service-secret"),
 		sunnyTownWebSocketURL:  envOrDefault("SUNNY_TOWN_WS_URL", "ws://127.0.0.1:18082/sunny-town/ws"),
+		aiServiceURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("AI_SERVICE_URL")), "/"),
+		hqToAIServiceSecret:    strings.TrimSpace(os.Getenv("HQ_TO_AI_SERVICE_SECRET")),
+		aiToHQServiceSecret:    envOrDefault("AI_TO_HQ_SERVICE_SECRET", "local-dev-ai-service-secret"),
+		aiGradingEnabled:       envBool("AI_GRADING_ENABLED", false),
+		aiAutoApplyGrades:      envBool("AI_AUTO_APPLY_GRADES", false),
+		aiPromptVersionGrader:  envOrDefault("AI_PROMPT_VERSION_GRADER", "assignment-grader-v1"),
 	}
 	if err := app.ensureSchema(ctx); err != nil {
 		log.Fatalf("ensure schema: %v", err)
@@ -274,6 +292,7 @@ func main() {
 	mux.HandleFunc("/api/internal/sunny-town/map-objects", app.handleInternalSunnyTownMapObjects)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects/place", app.handleInternalSunnyTownPlaceMapObject)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects/remove", app.handleInternalSunnyTownRemoveMapObject)
+	mux.HandleFunc("/api/internal/ai/assignment-attempts/", app.handleInternalAIAssignmentAttempt)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
 	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
@@ -1339,6 +1358,8 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 	assignment.Attempts = attemptsForStudent(assignment.Attempts, user.ID)
 	assignment.CurrentAttempt = currentAttempt(assignment.Attempts)
 
+	app.triggerAIGradingForAttempt(attemptID)
+
 	writeJSON(w, http.StatusOK, assignment)
 }
 
@@ -1426,98 +1447,25 @@ func (app *app) gradeAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tx, err := app.db.Begin(r.Context())
-	if err != nil {
-		log.Printf("begin grade assignment: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "result could not be saved",
-		})
-		return
-	}
-	defer func() {
-		_ = tx.Rollback(r.Context())
-	}()
-
-	var attemptID int64
-	var studentUserID int64
-	var cookieAwarded bool
-	err = tx.QueryRow(
-		r.Context(),
-		`
-			select aa.id, aa.student_user_id, aa.cookie_awarded
-			from assignment_attempt aa
-			where aa.id = $1
-				and aa.assignment_id = $2
-				and aa.reset_at is null
-		`,
-		request.AttemptID,
-		id,
-	).Scan(&attemptID, &studentUserID, &cookieAwarded)
-	if errors.Is(err, pgx.ErrNoRows) {
+	user, _ := userFromContext(r.Context())
+	err := app.gradeAssignmentAttempt(r.Context(), gradeAttemptCommand{
+		AssignmentID:     id,
+		AttemptID:        request.AttemptID,
+		Passed:           *request.Passed,
+		Feedback:         request.Feedback,
+		GradedByType:     graderTypeTeacher,
+		GradedByUserID:   &user.ID,
+		GradeSource:      gradeSourceManual,
+		PreserveAIReview: false,
+	})
+	if errors.Is(err, errAnsweredAssignmentNotFound) {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "answered assignment not found",
 		})
 		return
 	}
-	if err != nil {
-		log.Printf("load attempt for grading: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "result could not be saved",
-		})
-		return
-	}
-
-	awardCookie := *request.Passed && !cookieAwarded
-	result, err := tx.Exec(
-		r.Context(),
-		`
-			update assignment_attempt
-			set passed = $1,
-				feedback = nullif($2, ''),
-				date_graded = now(),
-				cookie_awarded = case
-					when $1 and not cookie_awarded then true
-					else cookie_awarded
-				end
-			where id = $3
-		`,
-		*request.Passed,
-		request.Feedback,
-		attemptID,
-	)
 	if err != nil {
 		log.Printf("grade assignment: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "result could not be saved",
-		})
-		return
-	}
-
-	if result.RowsAffected() == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{
-			"error": "answered assignment not found",
-		})
-		return
-	}
-
-	if awardCookie {
-		if err := incrementStudentInventoryItem(
-			r.Context(),
-			tx,
-			studentUserID,
-			cookieInventoryKey,
-			1,
-		); err != nil {
-			log.Printf("award cookie: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{
-				"error": "cookie could not be awarded",
-			})
-			return
-		}
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
-		log.Printf("commit grade assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "result could not be saved",
 		})
@@ -2283,7 +2231,13 @@ func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any)
 				aa.feedback,
 				aa.date_graded,
 				aa.cookie_awarded,
-				aa.reset_at
+				aa.reset_at,
+				aa.graded_by_type,
+				aa.graded_by_user_id,
+				aa.graded_by_service,
+				aa.grade_source,
+				aa.ai_review_status,
+				aa.ai_grade_id
 			from assignment_attempt aa
 			join app_user u on u.id = aa.student_user_id
 			where aa.assignment_id = any($1)
@@ -2311,6 +2265,12 @@ func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any)
 			&attempt.DateGraded,
 			&attempt.CookieAwarded,
 			&attempt.ResetAt,
+			&attempt.GradedByType,
+			&attempt.GradedByUserID,
+			&attempt.GradedByService,
+			&attempt.GradeSource,
+			&attempt.AIReviewStatus,
+			&attempt.AIGradeID,
 		); err != nil {
 			return nil, err
 		}
@@ -2482,6 +2442,14 @@ func envOrDefault(name string, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func envBool(name string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
+	if value == "" {
+		return fallback
+	}
+	return value == "1" || value == "true" || value == "yes" || value == "on"
 }
 
 func logRequests(next http.Handler) http.Handler {

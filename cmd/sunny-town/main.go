@@ -1598,6 +1598,11 @@ func (room *room) collidesLocked(x float64, y float64) bool {
 			return true
 		}
 	}
+	for _, node := range room.resourceNodes {
+		if node.active && rectsOverlap(playerRect, node.rect()) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -1625,7 +1630,7 @@ func (room *room) canPlaceObjectLocked(gridX int, gridY int, itemKey string) boo
 		}
 	}
 	for _, node := range room.resourceNodes {
-		if rectsOverlap(objectRect, rect{X: node.x - node.radius, Y: node.y - node.radius, Width: node.radius * 2, Height: node.radius * 2}) {
+		if rectsOverlap(objectRect, node.rect()) {
 			return false
 		}
 	}
@@ -2061,6 +2066,15 @@ func (object *placedObject) rect() rect {
 		Y:      object.y,
 		Width:  object.width,
 		Height: object.height,
+	}
+}
+
+func (node *resourceNode) rect() rect {
+	return rect{
+		X:      node.x - node.radius,
+		Y:      node.y - node.radius,
+		Width:  node.radius * 2,
+		Height: node.radius * 2,
 	}
 }
 

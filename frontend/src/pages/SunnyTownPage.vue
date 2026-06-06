@@ -898,7 +898,9 @@ function draw() {
     }
   }
   for (const node of resourceNodes.value) {
-    drawResourceNode(context, node, cameraX, cameraY)
+    if (node.active) {
+      drawResourceNode(context, node, cameraX, cameraY)
+    }
   }
   for (const npc of map.npcs) {
     drawNpc(context, npc, cameraX, cameraY)
@@ -1149,8 +1151,18 @@ function collides(map: SunnyTownMap, x: number, y: number): boolean {
   }
   return (
     map.blockedRects.some((blocked) => rectsOverlap(playerRect, blocked)) ||
-    placedObjects.value.some((object) => rectsOverlap(playerRect, object))
+    placedObjects.value.some((object) => rectsOverlap(playerRect, object)) ||
+    resourceNodes.value.some((node) => node.active && rectsOverlap(playerRect, resourceNodeRect(node)))
   )
+}
+
+function resourceNodeRect(node: SunnyTownResourceNode): { x: number; y: number; width: number; height: number } {
+  return {
+    x: node.x - node.radius,
+    y: node.y - node.radius,
+    width: node.radius * 2,
+    height: node.radius * 2,
+  }
 }
 
 function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): boolean {
@@ -1173,12 +1185,7 @@ function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): bo
       width: playerSize,
       height: playerSize,
     })) ||
-    resourceNodes.value.some((node) => rectsOverlap(tileRect, {
-      x: node.x - node.radius,
-      y: node.y - node.radius,
-      width: node.radius * 2,
-      height: node.radius * 2,
-    })) ||
+    resourceNodes.value.some((node) => rectsOverlap(tileRect, resourceNodeRect(node))) ||
     placedObjects.value.some((object) => rectsOverlap(tileRect, object)) ||
     (self && rectsOverlap(tileRect, {
       x: self.x - playerSize / 2,
@@ -1343,12 +1350,15 @@ function drawResourceNode(
   cameraX: number,
   cameraY: number,
 ) {
+  if (!node.active) {
+    return
+  }
   const x = node.x - cameraX
   const y = node.y - cameraY
   context.save()
   context.translate(x, y)
-  context.fillStyle = node.active ? '#6b737b' : '#4f565d'
-  context.strokeStyle = node.active ? '#343a40' : '#30343a'
+  context.fillStyle = '#6b737b'
+  context.strokeStyle = '#343a40'
   context.lineWidth = 3
   context.beginPath()
   context.moveTo(-node.radius, 4)
@@ -1360,28 +1370,26 @@ function drawResourceNode(
   context.closePath()
   context.fill()
   context.stroke()
-  if (node.active) {
-    context.fillStyle = '#bcd5e8'
+  context.fillStyle = '#bcd5e8'
+  context.beginPath()
+  context.arc(node.radius * 0.25, -node.radius * 0.35, 4, 0, Math.PI * 2)
+  context.fill()
+  const hits = Math.max(0, node.hits || 0)
+  if (hits > 0) {
+    context.strokeStyle = '#23282e'
+    context.lineWidth = 2
     context.beginPath()
-    context.arc(node.radius * 0.25, -node.radius * 0.35, 4, 0, Math.PI * 2)
-    context.fill()
-    const hits = Math.max(0, node.hits || 0)
-    if (hits > 0) {
-      context.strokeStyle = '#23282e'
-      context.lineWidth = 2
-      context.beginPath()
-      context.moveTo(-node.radius * 0.15, -node.radius * 0.75)
-      context.lineTo(node.radius * 0.05, -node.radius * 0.25)
-      context.lineTo(-node.radius * 0.2, node.radius * 0.15)
-      context.stroke()
-    }
-    if (hits > 1) {
-      context.beginPath()
-      context.moveTo(node.radius * 0.2, -node.radius * 0.45)
-      context.lineTo(node.radius * 0.45, -node.radius * 0.05)
-      context.lineTo(node.radius * 0.25, node.radius * 0.45)
-      context.stroke()
-    }
+    context.moveTo(-node.radius * 0.15, -node.radius * 0.75)
+    context.lineTo(node.radius * 0.05, -node.radius * 0.25)
+    context.lineTo(-node.radius * 0.2, node.radius * 0.15)
+    context.stroke()
+  }
+  if (hits > 1) {
+    context.beginPath()
+    context.moveTo(node.radius * 0.2, -node.radius * 0.45)
+    context.lineTo(node.radius * 0.45, -node.radius * 0.05)
+    context.lineTo(node.radius * 0.25, node.radius * 0.45)
+    context.stroke()
   }
   context.restore()
 }

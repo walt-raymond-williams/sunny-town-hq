@@ -102,6 +102,29 @@ func TestRoomRejectsClientPositionInsidePlacedObject(t *testing.T) {
 	}
 }
 
+func TestRoomRejectsClientPositionInsideActiveResourceNode(t *testing.T) {
+	room := testRoom(miningTestMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+
+	now := time.Now()
+	player := room.players["42"]
+	player.lastMoveAt = now.Add(-200 * time.Millisecond)
+	room.updateMove("42", 7, 140, 160, "right", true, now)
+
+	if player.x != 100 || player.y != 100 {
+		t.Fatalf("player position = (%v,%v), want previous position (100,100)", player.x, player.y)
+	}
+
+	room.resourceNodes["rock-node-001"].active = false
+	player.lastMoveAt = now.Add(-200 * time.Millisecond)
+	room.updateMove("42", 8, 140, 160, "right", true, now.Add(time.Second))
+
+	if player.x != 140 || player.y != 160 {
+		t.Fatalf("player position = (%v,%v), want movement through depleted node", player.x, player.y)
+	}
+}
+
 func TestRoomCanPlaceObjectRejectsBlockedAndOccupiedTiles(t *testing.T) {
 	gameMap := testMap()
 	gameMap.BlockedRects = []rect{{X: 192, Y: 96, Width: 32, Height: 32}}

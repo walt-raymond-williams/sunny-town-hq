@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"hq/internal/aiapi"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -705,6 +707,197 @@ func TestStudentHotbarRejectsUnownedItem(t *testing.T) {
 	}
 }
 
+func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.aiAutoApplyGrades = false
+
+	ctx := context.Background()
+	assignmentID, attemptID := seedAssignmentAttempt(t, app)
+	passed := true
+	confidence := 0.91
+
+	response, err := app.recordAIGradeResult(ctx, attemptID, aiapi.AIGradeResultRequest{
+		RequestID:           "assignment-attempt-1:assignment-grader-v1",
+		Status:              aiGradeStatusCompleted,
+		RecommendedPassed:   &passed,
+		RecommendedFeedback: "Correct.",
+		Confidence:          &confidence,
+		RubricScores: []aiapi.RubricScore{{
+			Name:   "correctness",
+			Score:  1,
+			Reason: "Matches expected answer.",
+		}},
+		Model:         "fake-grader",
+		PromptVersion: "assignment-grader-v1",
+	})
+	if err != nil {
+		t.Fatalf("record ai grade result: %v", err)
+	}
+	if response.Applied {
+		t.Fatal("expected AI result to be stored without auto-applying grade")
+	}
+
+	var count int
+	var currentPassed *bool
+	if err := app.db.QueryRow(ctx, "select count(*) from assignment_ai_grade where assignment_attempt_id = $1", attemptID).Scan(&count); err != nil {
+		t.Fatalf("count ai grades: %v", err)
+	}
+	if err := app.db.QueryRow(ctx, "select passed from assignment_attempt where id = $1 and assignment_id = $2", attemptID, assignmentID).Scan(&currentPassed); err != nil {
+		t.Fatalf("load attempt passed: %v", err)
+	}
+	if count != 1 || currentPassed != nil {
+		t.Fatalf("ai grade count=%d passed=%v, want stored recommendation and ungraded attempt", count, currentPassed)
+	}
+}
+
+func TestRecordAIGradeResultAutoAppliesThroughSharedGradeCommand(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.aiAutoApplyGrades = true
+
+	ctx := context.Background()
+	_, attemptID := seedAssignmentAttempt(t, app)
+	passed := true
+	confidence := 0.97
+
+	response, err := app.recordAIGradeResult(ctx, attemptID, aiapi.AIGradeResultRequest{
+		RequestID:           "assignment-attempt-1:assignment-grader-v1",
+		Status:              aiGradeStatusCompleted,
+		RecommendedPassed:   &passed,
+		RecommendedFeedback: "Correct.",
+		Confidence:          &confidence,
+		Model:               "fake-grader",
+		PromptVersion:       "assignment-grader-v1",
+	})
+	if err != nil {
+		t.Fatalf("record ai grade result: %v", err)
+	}
+	if !response.Applied {
+		t.Fatal("expected AI grade to auto-apply")
+	}
+
+	var gradedByType string
+	var gradeSource string
+	var reviewStatus string
+	var cookieAwarded bool
+	var cookieQuantity int
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select graded_by_type, grade_source, ai_review_status, cookie_awarded
+			from assignment_attempt
+			where id = $1
+		`,
+		attemptID,
+	).Scan(&gradedByType, &gradeSource, &reviewStatus, &cookieAwarded); err != nil {
+		t.Fatalf("load graded attempt metadata: %v", err)
+	}
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select sii.quantity
+			from student_inventory_item sii
+			join inventory_item_type iit on iit.id = sii.item_type_id
+			where sii.app_user_id = 123 and iit.key = 'cookie'
+		`,
+	).Scan(&cookieQuantity); err != nil {
+		t.Fatalf("load cookie quantity: %v", err)
+	}
+	if gradedByType != graderTypeAI || gradeSource != gradeSourceAIAuto || reviewStatus != aiReviewStatusPending || !cookieAwarded || cookieQuantity != 1 {
+		t.Fatalf("metadata type=%q source=%q review=%q cookieAwarded=%v cookies=%d, want AI auto grade with one cookie", gradedByType, gradeSource, reviewStatus, cookieAwarded, cookieQuantity)
+	}
+}
+
+func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.aiAutoApplyGrades = true
+
+	ctx := context.Background()
+	assignmentID, attemptID := seedAssignmentAttempt(t, app)
+	passed := true
+	if _, err := app.recordAIGradeResult(ctx, attemptID, aiapi.AIGradeResultRequest{
+		RequestID:           "assignment-attempt-1:assignment-grader-v1",
+		Status:              aiGradeStatusCompleted,
+		RecommendedPassed:   &passed,
+		RecommendedFeedback: "Correct.",
+		Model:               "fake-grader",
+		PromptVersion:       "assignment-grader-v1",
+	}); err != nil {
+		t.Fatalf("record ai grade result: %v", err)
+	}
+
+	teacherID := int64(124)
+	if _, err := app.db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
+		t.Fatalf("seed teacher: %v", err)
+	}
+	if err := app.gradeAssignmentAttempt(ctx, gradeAttemptCommand{
+		AssignmentID:     assignmentID,
+		AttemptID:        attemptID,
+		Passed:           false,
+		Feedback:         "Try again.",
+		GradedByType:     graderTypeTeacher,
+		GradedByUserID:   &teacherID,
+		GradeSource:      gradeSourceManual,
+		PreserveAIReview: false,
+	}); err != nil {
+		t.Fatalf("teacher override grade: %v", err)
+	}
+
+	var gradedByType string
+	var gradeSource string
+	var reviewStatus string
+	var currentPassed bool
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select graded_by_type, grade_source, ai_review_status, passed
+			from assignment_attempt
+			where id = $1
+		`,
+		attemptID,
+	).Scan(&gradedByType, &gradeSource, &reviewStatus, &currentPassed); err != nil {
+		t.Fatalf("load override metadata: %v", err)
+	}
+	if gradedByType != graderTypeTeacher || gradeSource != gradeSourceTeacherOverride || reviewStatus != aiReviewStatusOverridden || currentPassed {
+		t.Fatalf("override metadata type=%q source=%q review=%q passed=%v, want teacher override failure", gradedByType, gradeSource, reviewStatus, currentPassed)
+	}
+}
+
+func seedAssignmentAttempt(t *testing.T, app *app) (int64, int64) {
+	t.Helper()
+	ctx := context.Background()
+
+	var assignmentID int64
+	if err := app.db.QueryRow(
+		ctx,
+		"insert into assignment (category, prompt, expected_answer) values ('MATH', 'What is 2 + 2?', '4') returning id",
+	).Scan(&assignmentID); err != nil {
+		t.Fatalf("seed assignment: %v", err)
+	}
+
+	var attemptID int64
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			insert into assignment_attempt (
+				assignment_id,
+				student_user_id,
+				attempt_number,
+				submitted_answer
+			)
+			values ($1, 123, 1, '4')
+			returning id
+		`,
+		assignmentID,
+	).Scan(&attemptID); err != nil {
+		t.Fatalf("seed assignment attempt: %v", err)
+	}
+
+	return assignmentID, attemptID
+}
+
 func testRewardApp(t *testing.T) (*app, func()) {
 	t.Helper()
 
@@ -773,6 +966,52 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			sleep_started_at timestamptz null,
 			sleep_started_energy integer null
 		)`,
+		`create table assignment (
+			id bigserial primary key,
+			category text not null,
+			prompt text not null,
+			expected_answer text not null,
+			created_at timestamptz not null default now()
+		)`,
+		`create table assignment_attempt (
+			id bigserial primary key,
+			assignment_id bigint not null references assignment(id) on delete cascade,
+			student_user_id bigint not null references app_user(id) on delete cascade,
+			attempt_number integer not null,
+			submitted_answer text not null,
+			date_submitted timestamptz not null default now(),
+			passed boolean null,
+			feedback text null,
+			date_graded timestamptz null,
+			cookie_awarded boolean not null default false,
+			reset_at timestamptz null,
+			graded_by_type text null,
+			graded_by_user_id bigint null references app_user(id) on delete set null,
+			graded_by_service text null,
+			grade_source text null,
+			ai_review_status text null,
+			ai_grade_id bigint null,
+			unique (assignment_id, student_user_id, attempt_number)
+		)`,
+		`create table assignment_ai_grade (
+			id bigserial primary key,
+			assignment_attempt_id bigint not null references assignment_attempt(id) on delete cascade,
+			request_id text not null unique,
+			status text not null,
+			recommended_passed boolean null,
+			recommended_feedback text null,
+			confidence numeric null,
+			rubric_scores jsonb not null default '[]'::jsonb,
+			model text null,
+			prompt_version text not null,
+			raw_response jsonb null,
+			error_message text null,
+			created_at timestamptz not null default now(),
+			completed_at timestamptz null
+		)`,
+		`alter table assignment_attempt
+			add constraint assignment_attempt_ai_grade_id_fkey
+			foreign key (ai_grade_id) references assignment_ai_grade(id) on delete set null`,
 		`create table inventory_item_type (
 			id bigserial primary key,
 			key text not null unique,
