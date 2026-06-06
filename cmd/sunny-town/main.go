@@ -44,6 +44,14 @@ const (
 	starRespawnDelay        = 10 * time.Second
 )
 
+const (
+	worldObjectSourceNatural = "natural"
+	worldObjectSourcePlaced  = "placed"
+
+	worldObjectKindRockNode   = "rock_node"
+	worldObjectKindStoneBlock = "stone_block"
+)
+
 type config struct {
 	host           string
 	port           string
@@ -222,6 +230,7 @@ type room struct {
 	collectibles   map[string]*collectible
 	resourceNodes  map[string]*resourceNode
 	placedObjects  map[string]*placedObject
+	worldObjects   map[string]*worldObject
 	tick           int64
 	rewardRunID    string
 	rewardEvents   chan rewardEvent
@@ -263,20 +272,36 @@ type collectibleSnapshot struct {
 	Active bool    `json:"active"`
 }
 
-type resourceNode struct {
+type worldObject struct {
 	id                string
 	kind              string
+	source            string
+	itemKey           string
+	resourceKind      string
 	mapID             string
 	x                 float64
 	y                 float64
+	width             float64
+	height            float64
 	radius            float64
 	interactionRadius float64
+	collision         bool
+	breakable         bool
+	toolKey           string
+	hitsRequired      int
+	reservesPlacement bool
 	respawnDelay      time.Duration
 	active            bool
 	hitCount          int
 	respawnAt         time.Time
 	harvestSeq        int64
+	gridX             int
+	gridY             int
+	placedByAppUserID int64
 }
+
+type resourceNode = worldObject
+type placedObject = worldObject
 
 type resourceNodeSnapshot struct {
 	ID     string  `json:"id"`
@@ -287,19 +312,6 @@ type resourceNodeSnapshot struct {
 	Active bool    `json:"active"`
 	Hits   int     `json:"hits"`
 	Needed int     `json:"needed"`
-}
-
-type placedObject struct {
-	id                string
-	itemKey           string
-	mapID             string
-	gridX             int
-	gridY             int
-	x                 float64
-	y                 float64
-	width             float64
-	height            float64
-	placedByAppUserID int64
 }
 
 type placedObjectSnapshot struct {
@@ -641,7 +653,7 @@ func (srv *server) loadInitialMapObjects(ctx context.Context) error {
 			return err
 		}
 		room.mu.Lock()
-		room.placedObjects = objects
+		room.setPlacedObjectsLocked(objects)
 		room.mu.Unlock()
 	}
 	return nil
@@ -687,7 +699,7 @@ func (srv *server) refreshRoomMapObjects(ctx context.Context, mapID string) erro
 		return err
 	}
 	room.mu.Lock()
-	room.placedObjects = objects
+	room.setPlacedObjectsLocked(objects)
 	room.mu.Unlock()
 	return nil
 }
@@ -800,13 +812,19 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 }
 
 func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resourceEvents chan resourceEvent, world *world) *room {
+	resourceNodes := initialResourceNodes(gameMap)
+	worldObjects := map[string]*worldObject{}
+	for _, node := range resourceNodes {
+		worldObjects[worldObjectKey(node.source, node.id)] = node
+	}
 	return &room{
 		id:             id,
 		gameMap:        gameMap,
 		players:        map[string]*player{},
 		collectibles:   initialCollectibles(gameMap),
-		resourceNodes:  initialResourceNodes(gameMap),
+		resourceNodes:  resourceNodes,
 		placedObjects:  map[string]*placedObject{},
+		worldObjects:   worldObjects,
 		rewardRunID:    newRewardRunID(),
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
@@ -1083,11 +1101,9 @@ func (client *client) handleToolUse(message clientMessage) {
 		return
 	}
 
-	if client.handlePlacedObjectToolUse(room, toolKey) {
-		return
-	}
-
 	var event *resourceEvent
+	var removeRequest *removeMapObjectRequest
+	var removeTargetID string
 	now := time.Now()
 	room.mu.Lock()
 	player = room.players[client.id]
@@ -1101,34 +1117,55 @@ func (client *client) handleToolUse(message clientMessage) {
 		client.trySend(serverMessage{Type: "error", Code: "tool_cooldown"})
 		return
 	}
-	node := room.nearestActiveResourceNodeLocked(player)
-	if node == nil {
+	target := room.nearestBreakableWorldObjectLocked(player, toolKey)
+	if target == nil {
 		room.mu.Unlock()
 		client.trySend(serverMessage{Type: "error", Code: "resource_node_not_found"})
 		return
 	}
+	if target.source == worldObjectSourcePlaced && client.server == nil {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "map_object_remove_failed"})
+		return
+	}
 	player.lastToolUseAt = now
-	node.hitCount++
-	if node.hitCount >= resourceHitsRequired {
-		node.active = false
-		node.hitCount = 0
-		node.harvestSeq++
-		node.respawnAt = now.Add(node.respawnDelay)
-		resourceKey, amount := rollMiningDrop()
-		eventID := fmt.Sprintf("%s:%s:%d:%d", room.gameMap.ID, node.id, node.harvestSeq, player.appUserID)
-		event = &resourceEvent{
-			eventID:     eventID,
-			appUserID:   player.appUserID,
-			roomID:      room.id,
-			mapID:       room.gameMap.ID,
-			nodeID:      node.id,
-			resourceKey: resourceKey,
-			amount:      amount,
-			client:      player.client,
+	target.hitCount++
+	if target.hitCount >= target.hitsRequired {
+		switch target.source {
+		case worldObjectSourcePlaced:
+			removeTargetID = target.id
+			removeRequest = &removeMapObjectRequest{
+				AppUserID: player.appUserID,
+				RoomID:    room.id,
+				MapID:     room.gameMap.ID,
+				GridX:     target.gridX,
+				GridY:     target.gridY,
+			}
+		case worldObjectSourceNatural:
+			target.active = false
+			target.hitCount = 0
+			target.harvestSeq++
+			target.respawnAt = now.Add(target.respawnDelay)
+			resourceKey, amount := rollMiningDrop()
+			eventID := fmt.Sprintf("%s:%s:%d:%d", room.gameMap.ID, target.id, target.harvestSeq, player.appUserID)
+			event = &resourceEvent{
+				eventID:     eventID,
+				appUserID:   player.appUserID,
+				roomID:      room.id,
+				mapID:       room.gameMap.ID,
+				nodeID:      target.id,
+				resourceKey: resourceKey,
+				amount:      amount,
+				client:      player.client,
+			}
 		}
 	}
 	room.mu.Unlock()
 
+	if removeRequest != nil {
+		client.removePlacedWorldObject(room, *removeRequest, removeTargetID, now)
+		return
+	}
 	room.broadcastSnapshot(now)
 	if event == nil {
 		return
@@ -1145,54 +1182,19 @@ func (client *client) handleToolUse(message clientMessage) {
 	}
 }
 
-func (client *client) handlePlacedObjectToolUse(room *room, toolKey string) bool {
-	if toolKey != "pickaxe" || client.server == nil {
-		return false
-	}
-
-	now := time.Now()
-	var request removeMapObjectRequest
-	var targetID string
-	room.mu.Lock()
-	player := room.players[client.id]
-	if player == nil {
-		room.mu.Unlock()
-		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
-		return true
-	}
-	if !player.lastToolUseAt.IsZero() && now.Sub(player.lastToolUseAt) < resourceToolCooldown {
-		room.mu.Unlock()
-		client.trySend(serverMessage{Type: "error", Code: "tool_cooldown"})
-		return true
-	}
-	target := room.nearestPlacedObjectLocked(player)
-	if target == nil {
-		room.mu.Unlock()
-		return false
-	}
-	player.lastToolUseAt = now
-	targetID = target.id
-	request = removeMapObjectRequest{
-		AppUserID: player.appUserID,
-		RoomID:    room.id,
-		MapID:     room.gameMap.ID,
-		GridX:     target.gridX,
-		GridY:     target.gridY,
-	}
-	room.mu.Unlock()
-
+func (client *client) removePlacedWorldObject(room *room, request removeMapObjectRequest, targetID string, now time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	removed, quantity, err := client.server.removeMapObject(ctx, request, room.gameMap)
 	cancel()
 	if err != nil {
 		log.Printf("remove placed object player=%s object=%s: %v", client.id, targetID, err)
 		client.trySend(serverMessage{Type: "error", Code: "map_object_remove_failed"})
-		return true
+		return
 	}
 
 	var snapshot placedObjectSnapshot
 	room.mu.Lock()
-	delete(room.placedObjects, removed.id)
+	room.removePlacedObjectLocked(removed.id)
 	snapshot = removed.snapshot()
 	room.mu.Unlock()
 
@@ -1209,7 +1211,6 @@ func (client *client) handlePlacedObjectToolUse(room *room, toolKey string) bool
 		ResourceKey:  removed.itemKey,
 		Quantity:     quantity,
 	})
-	return true
 }
 
 func (client *client) handlePlaceObject(message clientMessage) {
@@ -1276,7 +1277,7 @@ func (client *client) handlePlaceObject(message clientMessage) {
 		client.trySend(serverMessage{Type: "error", Code: "invalid_map_object_location"})
 		return
 	}
-	room.placedObjects[placed.id] = placed
+	room.addPlacedObjectLocked(placed)
 	snapshot := placed.snapshot()
 	room.mu.Unlock()
 
@@ -1471,13 +1472,13 @@ func (room *room) resourceNodeSnapshotsLocked() []resourceNodeSnapshot {
 	for _, node := range room.resourceNodes {
 		snapshots = append(snapshots, resourceNodeSnapshot{
 			ID:     node.id,
-			Kind:   node.kind,
+			Kind:   node.resourceKind,
 			X:      node.x,
 			Y:      node.y,
 			Radius: node.radius,
 			Active: node.active,
 			Hits:   node.hitCount,
-			Needed: resourceHitsRequired,
+			Needed: node.hitsRequired,
 		})
 	}
 	return snapshots
@@ -1491,31 +1492,16 @@ func (room *room) placedObjectSnapshotsLocked() []placedObjectSnapshot {
 	return snapshots
 }
 
-func (room *room) nearestActiveResourceNodeLocked(player *player) *resourceNode {
-	var nearest *resourceNode
+func (room *room) nearestBreakableWorldObjectLocked(player *player, toolKey string) *worldObject {
+	var nearest *worldObject
 	nearestDistance := math.MaxFloat64
-	for _, node := range room.resourceNodes {
-		if !node.active {
+	for _, object := range room.worldObjects {
+		if !object.active || !object.breakable || object.toolKey != toolKey {
 			continue
 		}
-		distance := math.Hypot(player.x-node.x, player.y-node.y)
-		if distance > node.interactionRadius || distance >= nearestDistance {
-			continue
-		}
-		nearest = node
-		nearestDistance = distance
-	}
-	return nearest
-}
-
-func (room *room) nearestPlacedObjectLocked(player *player) *placedObject {
-	var nearest *placedObject
-	nearestDistance := math.MaxFloat64
-	for _, object := range room.placedObjects {
-		centerX := object.x + object.width/2
-		centerY := object.y + object.height/2
+		centerX, centerY := object.center()
 		distance := math.Hypot(player.x-centerX, player.y-centerY)
-		if distance > 58 || distance >= nearestDistance {
+		if distance > object.interactionRadius || distance >= nearestDistance {
 			continue
 		}
 		nearest = object
@@ -1593,13 +1579,8 @@ func (room *room) collidesLocked(x float64, y float64) bool {
 			return true
 		}
 	}
-	for _, object := range room.placedObjects {
-		if rectsOverlap(playerRect, object.rect()) {
-			return true
-		}
-	}
-	for _, node := range room.resourceNodes {
-		if node.active && rectsOverlap(playerRect, node.rect()) {
+	for _, object := range room.worldObjects {
+		if object.active && object.collision && rectsOverlap(playerRect, object.rect()) {
 			return true
 		}
 	}
@@ -1629,18 +1610,13 @@ func (room *room) canPlaceObjectLocked(gridX int, gridY int, itemKey string) boo
 			return false
 		}
 	}
-	for _, node := range room.resourceNodes {
-		if rectsOverlap(objectRect, node.rect()) {
+	for _, object := range room.worldObjects {
+		if object.reservesPlacement && rectsOverlap(objectRect, object.rect()) {
 			return false
 		}
 	}
 	for _, player := range room.players {
 		if rectsOverlap(objectRect, rect{X: player.x - playerSize/2, Y: player.y - playerSize/2, Width: playerSize, Height: playerSize}) {
-			return false
-		}
-	}
-	for _, object := range room.placedObjects {
-		if rectsOverlap(objectRect, object.rect()) {
 			return false
 		}
 	}
@@ -2021,12 +1997,19 @@ func initialResourceNodes(gameMap gameMap) map[string]*resourceNode {
 	for _, definition := range gameMap.ResourceNodes {
 		nodes[definition.ID] = &resourceNode{
 			id:                definition.ID,
-			kind:              definition.Kind,
+			kind:              worldObjectKindRockNode,
+			source:            worldObjectSourceNatural,
+			resourceKind:      definition.Kind,
 			mapID:             gameMap.ID,
 			x:                 definition.X,
 			y:                 definition.Y,
 			radius:            definition.Radius,
 			interactionRadius: definition.InteractionRadius,
+			collision:         true,
+			breakable:         true,
+			toolKey:           "pickaxe",
+			hitsRequired:      resourceHitsRequired,
+			reservesPlacement: true,
 			respawnDelay:      time.Duration(definition.RespawnSeconds) * time.Second,
 			active:            true,
 		}
@@ -2038,6 +2021,8 @@ func placedObjectFromResponse(gameMap gameMap, response mapObjectResponse) *plac
 	objectRect := gridRect(gameMap, response.GridX, response.GridY)
 	return &placedObject{
 		id:                strconv.FormatInt(response.ID, 10),
+		kind:              worldObjectKindStoneBlock,
+		source:            worldObjectSourcePlaced,
 		itemKey:           response.ItemKey,
 		mapID:             response.MapID,
 		gridX:             response.GridX,
@@ -2046,6 +2031,13 @@ func placedObjectFromResponse(gameMap gameMap, response mapObjectResponse) *plac
 		y:                 objectRect.Y,
 		width:             objectRect.Width,
 		height:            objectRect.Height,
+		interactionRadius: 58,
+		collision:         true,
+		breakable:         true,
+		toolKey:           "pickaxe",
+		hitsRequired:      1,
+		reservesPlacement: true,
+		active:            true,
 		placedByAppUserID: response.PlacedByAppUserID,
 	}
 }
@@ -2061,6 +2053,14 @@ func gridRect(gameMap gameMap, gridX int, gridY int) rect {
 }
 
 func (object *placedObject) rect() rect {
+	if object.radius > 0 {
+		return rect{
+			X:      object.x - object.radius,
+			Y:      object.y - object.radius,
+			Width:  object.radius * 2,
+			Height: object.radius * 2,
+		}
+	}
 	return rect{
 		X:      object.x,
 		Y:      object.y,
@@ -2069,13 +2069,37 @@ func (object *placedObject) rect() rect {
 	}
 }
 
-func (node *resourceNode) rect() rect {
-	return rect{
-		X:      node.x - node.radius,
-		Y:      node.y - node.radius,
-		Width:  node.radius * 2,
-		Height: node.radius * 2,
+func (object *worldObject) center() (float64, float64) {
+	if object.radius > 0 {
+		return object.x, object.y
 	}
+	return object.x + object.width/2, object.y + object.height/2
+}
+
+func worldObjectKey(source string, id string) string {
+	return source + ":" + id
+}
+
+func (room *room) setPlacedObjectsLocked(objects map[string]*placedObject) {
+	for _, object := range room.placedObjects {
+		delete(room.worldObjects, worldObjectKey(object.source, object.id))
+	}
+	room.placedObjects = objects
+	for _, object := range objects {
+		room.addPlacedObjectLocked(object)
+	}
+}
+
+func (room *room) addPlacedObjectLocked(object *placedObject) {
+	room.placedObjects[object.id] = object
+	room.worldObjects[worldObjectKey(object.source, object.id)] = object
+}
+
+func (room *room) removePlacedObjectLocked(id string) {
+	if object := room.placedObjects[id]; object != nil {
+		delete(room.worldObjects, worldObjectKey(object.source, object.id))
+	}
+	delete(room.placedObjects, id)
 }
 
 func (object *placedObject) snapshot() placedObjectSnapshot {

@@ -83,14 +83,14 @@ func TestRoomRejectsClientPositionInsidePlacedObject(t *testing.T) {
 	room := testRoom(testMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
-	room.placedObjects["block-1"] = placedObjectFromResponse(room.gameMap, mapObjectResponse{
+	room.addPlacedObjectLocked(placedObjectFromResponse(room.gameMap, mapObjectResponse{
 		ID:                1,
 		MapID:             room.gameMap.ID,
 		GridX:             4,
 		GridY:             3,
 		ItemKey:           "stone_block",
 		PlacedByAppUserID: 42,
-	})
+	}))
 
 	now := time.Now()
 	player := room.players["42"]
@@ -137,14 +137,14 @@ func TestRoomCanPlaceObjectRejectsBlockedAndOccupiedTiles(t *testing.T) {
 		t.Fatal("expected blocked tile to reject stone block placement")
 	}
 
-	room.placedObjects["block-1"] = placedObjectFromResponse(room.gameMap, mapObjectResponse{
+	room.addPlacedObjectLocked(placedObjectFromResponse(room.gameMap, mapObjectResponse{
 		ID:                1,
 		MapID:             room.gameMap.ID,
 		GridX:             2,
 		GridY:             2,
 		ItemKey:           "stone_block",
 		PlacedByAppUserID: 42,
-	})
+	}))
 	if room.canPlaceObjectLocked(2, 2, "stone_block") {
 		t.Fatal("expected occupied tile to reject stone block placement")
 	}
@@ -407,6 +407,37 @@ func TestRoomResourceNodeSnapshots(t *testing.T) {
 	snapshots := room.resourceNodeSnapshotsLocked()
 	if len(snapshots) != 1 || snapshots[0].ID != "rock-node-001" || !snapshots[0].Active {
 		t.Fatalf("resource snapshots = %#v, want active rock-node-001", snapshots)
+	}
+}
+
+func TestRoomTargetsNearestBreakableWorldObject(t *testing.T) {
+	room := testRoom(miningTestMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+	room.addPlacedObjectLocked(placedObjectFromResponse(room.gameMap, mapObjectResponse{
+		ID:                1,
+		MapID:             room.gameMap.ID,
+		GridX:             2,
+		GridY:             2,
+		ItemKey:           "stone_block",
+		PlacedByAppUserID: 42,
+	}))
+
+	player := room.players["42"]
+	player.x = 80
+	player.y = 80
+
+	target := room.nearestBreakableWorldObjectLocked(player, "pickaxe")
+	if target == nil || target.source != worldObjectSourcePlaced || target.itemKey != "stone_block" {
+		t.Fatalf("nearest target = %#v, want placed stone block", target)
+	}
+
+	player.x = 140
+	player.y = 160
+
+	target = room.nearestBreakableWorldObjectLocked(player, "pickaxe")
+	if target == nil || target.source != worldObjectSourceNatural || target.resourceKind != "rock" {
+		t.Fatalf("nearest target = %#v, want natural rock", target)
 	}
 }
 
