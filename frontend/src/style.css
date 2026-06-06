@@ -775,21 +775,29 @@ h2 {
   padding: 8px 0;
 }
 
-.sunny-town-inventory {
+.sunny-town-inventory-tray {
+  align-items: stretch;
   background: rgba(23, 33, 43, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
+  display: flex;
   max-height: calc(100% - 72px);
-  max-width: min(360px, calc(100% - 24px));
-  overflow-y: auto;
+  max-width: min(760px, calc(100% - 24px));
+  overflow: hidden;
   padding: 14px;
   position: absolute;
   right: 12px;
   top: 54px;
-  width: 360px;
+  width: max-content;
   z-index: 5;
+}
+
+.sunny-town-inventory {
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  width: 360px;
 }
 
 .sunny-town-inventory__header {
@@ -816,11 +824,14 @@ h2 {
 }
 
 .sunny-town-crafting {
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
   display: grid;
   gap: 10px;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-right: 14px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  padding-right: 14px;
+  width: 340px;
 }
 
 .sunny-town-crafting__header {
@@ -878,6 +889,28 @@ h2 {
   .pet-actions {
     margin-left: 0;
     width: 100%;
+  }
+
+  .sunny-town-inventory-tray {
+    flex-direction: column;
+    left: 12px;
+    max-width: calc(100% - 24px);
+    width: auto;
+  }
+
+  .sunny-town-inventory,
+  .sunny-town-crafting {
+    max-height: none;
+    width: 100%;
+  }
+
+  .sunny-town-crafting {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    border-right: 0;
+    margin-bottom: 12px;
+    margin-right: 0;
+    padding-bottom: 12px;
+    padding-right: 0;
   }
 
   .game-overlay {

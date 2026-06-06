@@ -1822,79 +1822,7 @@ function backToPet() {
           </section>
         </div>
       </div>
-      <div v-if="inventoryOpen" class="sunny-town-inventory" role="dialog" aria-label="Inventory">
-        <div class="sunny-town-inventory__header">
-          <strong>Inventory</strong>
-          <div class="sunny-town-inventory__actions">
-            <v-btn
-              :color="craftingPanelOpen ? 'warning' : undefined"
-              :prepend-icon="craftingPanelOpen ? 'mdi-hammer-wrench' : 'mdi-hammer'"
-              size="x-small"
-              :variant="craftingPanelOpen ? 'flat' : 'tonal'"
-              @click="toggleCraftingPanel"
-            >
-              Crafting
-            </v-btn>
-            <v-btn icon="mdi-close" size="x-small" variant="text" @click="inventoryOpen = false" />
-          </div>
-        </div>
-        <v-alert v-if="inventoryStore.error" class="mb-3" density="compact" type="error" variant="tonal">
-          {{ inventoryStore.error }}
-        </v-alert>
-        <section class="equipment-panel equipment-panel--dark" aria-label="Equipment">
-          <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
-            <div>
-              <p class="summary-category">{{ slot.slot }}</p>
-              <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
-            </div>
-            <v-btn
-              v-if="slot.item"
-              :loading="inventoryStore.isUpdatingEquipment"
-              color="primary"
-              size="x-small"
-              variant="flat"
-              @click="unequipInventorySlot(slot.slot)"
-            >
-              Unequip
-            </v-btn>
-          </div>
-        </section>
-        <div class="inventory-list inventory-list--compact">
-          <div v-for="item in inventoryStore.unequippedItems" :key="item.key" class="inventory-item inventory-item--dark">
-            <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
-            <div>
-              <p class="inventory-item__name">{{ item.name }}</p>
-              <p class="inventory-item__description">{{ item.description }}</p>
-            </div>
-            <v-btn
-              v-if="item.equipSlot && !item.equipped"
-              :loading="inventoryStore.isUpdatingEquipment"
-              color="primary"
-              size="x-small"
-              variant="flat"
-              @click="equipInventoryItem(item.key, item.equipSlot)"
-            >
-              Equip
-            </v-btn>
-            <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
-          </div>
-        </div>
-        <section class="sunny-town-build" aria-label="Build">
-          <div>
-            <p class="inventory-item__name">Stone Block</p>
-            <p class="inventory-item__description">Place a crafted block on the map grid.</p>
-          </div>
-          <v-btn
-            :color="placingStoneBlock ? 'warning' : 'primary'"
-            :disabled="stoneBlockQuantity < 1"
-            :prepend-icon="placingStoneBlock ? 'mdi-cancel' : 'mdi-cube-outline'"
-            size="x-small"
-            :variant="placingStoneBlock ? 'flat' : 'tonal'"
-            @click="toggleStoneBlockPlacement"
-          >
-            {{ placingStoneBlock ? 'Cancel' : `Place ${stoneBlockQuantity}` }}
-          </v-btn>
-        </section>
+      <div v-if="inventoryOpen" class="sunny-town-inventory-tray" role="dialog" aria-label="Inventory">
         <section v-if="craftingPanelOpen" class="sunny-town-crafting" aria-label="Crafting">
           <div class="sunny-town-crafting__header">
             <strong>Crafting</strong>
@@ -1951,6 +1879,81 @@ function backToPet() {
             </v-btn>
           </div>
         </section>
+
+        <div class="sunny-town-inventory">
+          <div class="sunny-town-inventory__header">
+            <strong>Inventory</strong>
+            <div class="sunny-town-inventory__actions">
+              <v-btn
+                :color="craftingPanelOpen ? 'warning' : undefined"
+                :prepend-icon="craftingPanelOpen ? 'mdi-hammer-wrench' : 'mdi-hammer'"
+                size="x-small"
+                :variant="craftingPanelOpen ? 'flat' : 'tonal'"
+                @click="toggleCraftingPanel"
+              >
+                Crafting
+              </v-btn>
+              <v-btn icon="mdi-close" size="x-small" variant="text" @click="inventoryOpen = false" />
+            </div>
+          </div>
+          <v-alert v-if="inventoryStore.error" class="mb-3" density="compact" type="error" variant="tonal">
+            {{ inventoryStore.error }}
+          </v-alert>
+          <section class="equipment-panel equipment-panel--dark" aria-label="Equipment">
+            <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
+              <div>
+                <p class="summary-category">{{ slot.slot }}</p>
+                <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
+              </div>
+              <v-btn
+                v-if="slot.item"
+                :loading="inventoryStore.isUpdatingEquipment"
+                color="primary"
+                size="x-small"
+                variant="flat"
+                @click="unequipInventorySlot(slot.slot)"
+              >
+                Unequip
+              </v-btn>
+            </div>
+          </section>
+          <div class="inventory-list inventory-list--compact">
+            <div v-for="item in inventoryStore.unequippedItems" :key="item.key" class="inventory-item inventory-item--dark">
+              <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
+              <div>
+                <p class="inventory-item__name">{{ item.name }}</p>
+                <p class="inventory-item__description">{{ item.description }}</p>
+              </div>
+              <v-btn
+                v-if="item.equipSlot && !item.equipped"
+                :loading="inventoryStore.isUpdatingEquipment"
+                color="primary"
+                size="x-small"
+                variant="flat"
+                @click="equipInventoryItem(item.key, item.equipSlot)"
+              >
+                Equip
+              </v-btn>
+              <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
+            </div>
+          </div>
+          <section class="sunny-town-build" aria-label="Build">
+            <div>
+              <p class="inventory-item__name">Stone Block</p>
+              <p class="inventory-item__description">Place a crafted block on the map grid.</p>
+            </div>
+            <v-btn
+              :color="placingStoneBlock ? 'warning' : 'primary'"
+              :disabled="stoneBlockQuantity < 1"
+              :prepend-icon="placingStoneBlock ? 'mdi-cancel' : 'mdi-cube-outline'"
+              size="x-small"
+              :variant="placingStoneBlock ? 'flat' : 'tonal'"
+              @click="toggleStoneBlockPlacement"
+            >
+              {{ placingStoneBlock ? 'Cancel' : `Place ${stoneBlockQuantity}` }}
+            </v-btn>
+          </section>
+        </div>
       </div>
     </div>
   </section>
