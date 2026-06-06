@@ -231,8 +231,33 @@ The catalog now includes:
 
 - `rock`
 - `crystal`
+- `stone_block`
 
 Mining rewards are reported by the Sunny Town realtime service, so HQ also keeps a receipt ledger in `student_inventory_ledger`. The ledger records the external event id, source, student, item type, delta, room/map/node context, and timestamp. HQ inserts the ledger row first with unique `event_id` protection, then increments `student_inventory_item` only when that insert succeeds. Retries with the same event id return as duplicates and do not double-award resources.
+
+## Crafting
+
+HQ owns crafting mutations because crafting consumes and creates durable inventory items.
+
+Current recipes:
+
+- `stone_block`: consumes 4 `rock` and creates 1 `stone_block`.
+
+### `GET /api/student/crafting/recipes`
+
+Returns all known recipes with current ingredient ownership and `canCraft`.
+
+### `POST /api/student/crafting/craft`
+
+Request:
+
+```json
+{
+  "recipeKey": "stone_block"
+}
+```
+
+The endpoint runs in a database transaction, consumes ingredients, creates the output item, and returns updated inventory plus updated recipe availability. If the student lacks ingredients, no inventory is changed.
 
 ## Internal Sunny Town API
 
@@ -291,6 +316,7 @@ It loads:
 
 - `/api/student/inventory`
 - `/api/student/equipment`
+- `/api/student/crafting/recipes`
 
 It exposes:
 
@@ -300,6 +326,8 @@ It exposes:
 - `equippedVisuals`
 - `equipItem`
 - `unequipItem`
+- `loadCraftingRecipes`
+- `craftRecipe`
 
 After equipment changes, the store reloads inventory so `equipped` flags stay correct.
 
@@ -325,6 +353,8 @@ The overlay shows:
 - Current equipment slots.
 - Inventory items.
 - Equip/Unequip controls.
+- A session-persistent Crafting toggle.
+- A session-persistent All Recipes toggle inside the crafting panel.
 
 After equip or unequip succeeds:
 

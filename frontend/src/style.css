@@ -397,6 +397,30 @@ h2 {
   border-radius: 10px;
 }
 
+.inventory-item__icon--rock {
+  background:
+    linear-gradient(135deg, transparent 0 16%, rgba(255, 255, 255, 0.28) 17% 26%, transparent 27%),
+    #727b83;
+  border: 2px solid #3f464c;
+  border-radius: 14px 18px 12px 16px;
+}
+
+.inventory-item__icon--crystal {
+  background:
+    linear-gradient(135deg, transparent 0 34%, rgba(255, 255, 255, 0.5) 35% 45%, transparent 46%),
+    linear-gradient(60deg, #6bb9d6 0 50%, #9ee6f0 51%);
+  border: 2px solid #317895;
+  border-radius: 8px 20px 8px 20px;
+}
+
+.inventory-item__icon--stone_block {
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.2) 0 12%, transparent 13%),
+    linear-gradient(#858f97 0 47%, #59636b 48%);
+  border: 2px solid #333b42;
+  border-radius: 8px;
+}
+
 .inventory-item__name,
 .inventory-item__description {
   margin: 0;
@@ -773,6 +797,59 @@ h2 {
   display: flex;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.sunny-town-inventory__actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.sunny-town-crafting {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.sunny-town-crafting__header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.sunny-town-crafting__recipe {
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding-top: 10px;
+}
+
+.sunny-town-crafting__recipe--disabled {
+  opacity: 0.72;
+}
+
+.sunny-town-crafting__ingredients {
+  color: rgba(255, 255, 255, 0.72);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 6px;
+  line-height: 1.35;
+}
+
+.sunny-town-crafting__ingredient--missing {
+  color: #ffb4a8;
+}
+
+.sunny-town-crafting__empty {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  padding: 4px 0;
 }
 
 @media (max-width: 640px) {

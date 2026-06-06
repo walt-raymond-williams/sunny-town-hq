@@ -60,6 +60,8 @@ const connected = ref(false)
 const starBalance = ref(0)
 const gameToast = ref('')
 const inventoryOpen = ref(false)
+const craftingPanelOpen = ref(false)
+const showAllCraftingRecipes = ref(false)
 const nearbyNpc = ref<SunnyTownNpc | null>(null)
 const activeDialogueNpc = ref<SunnyTownNpc | null>(null)
 const activeDialogueLineIndex = ref(0)
@@ -98,6 +100,9 @@ const dialogueProgress = computed(() => {
   return `${activeDialogueLineIndex.value + 1}/${activeDialogueNpc.value.dialogue.length}`
 })
 const shopItems = computed(() => activeShopNpc.value?.shop?.items || [])
+const visibleCraftingRecipes = computed(() => (
+  showAllCraftingRecipes.value ? inventoryStore.craftingRecipes : inventoryStore.craftableRecipes
+))
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown, movementInputEventOptions)
@@ -186,6 +191,9 @@ function connect(activeSession: SunnyTownSession) {
       gameToast.value = `+${amount} ${resourceKey}`
       if (message.quantity !== undefined) {
         inventoryStore.setItemQuantity(resourceKey, message.quantity)
+      }
+      if (craftingPanelOpen.value) {
+        void inventoryStore.loadCraftingRecipes()
       }
       window.setTimeout(() => {
         gameToast.value = ''
@@ -305,7 +313,21 @@ async function toggleInventory() {
   inventoryOpen.value = !inventoryOpen.value
   if (inventoryOpen.value) {
     await inventoryStore.loadInventory()
+    if (craftingPanelOpen.value) {
+      await inventoryStore.loadCraftingRecipes()
+    }
   }
+}
+
+async function toggleCraftingPanel() {
+  craftingPanelOpen.value = !craftingPanelOpen.value
+  if (craftingPanelOpen.value) {
+    await inventoryStore.loadCraftingRecipes()
+  }
+}
+
+async function craftInventoryRecipe(recipeKey: string) {
+  await inventoryStore.craftRecipe(recipeKey)
 }
 
 function notifyEquipmentChanged() {
@@ -1521,7 +1543,18 @@ function backToPet() {
       <div v-if="inventoryOpen" class="sunny-town-inventory" role="dialog" aria-label="Inventory">
         <div class="sunny-town-inventory__header">
           <strong>Inventory</strong>
-          <v-btn icon="mdi-close" size="x-small" variant="text" @click="inventoryOpen = false" />
+          <div class="sunny-town-inventory__actions">
+            <v-btn
+              :color="craftingPanelOpen ? 'warning' : undefined"
+              :prepend-icon="craftingPanelOpen ? 'mdi-hammer-wrench' : 'mdi-hammer'"
+              size="x-small"
+              :variant="craftingPanelOpen ? 'flat' : 'tonal'"
+              @click="toggleCraftingPanel"
+            >
+              Crafting
+            </v-btn>
+            <v-btn icon="mdi-close" size="x-small" variant="text" @click="inventoryOpen = false" />
+          </div>
         </div>
         <v-alert v-if="inventoryStore.error" class="mb-3" density="compact" type="error" variant="tonal">
           {{ inventoryStore.error }}
@@ -1564,6 +1597,62 @@ function backToPet() {
             <strong v-else class="inventory-item__quantity">{{ item.quantity }}</strong>
           </div>
         </div>
+        <section v-if="craftingPanelOpen" class="sunny-town-crafting" aria-label="Crafting">
+          <div class="sunny-town-crafting__header">
+            <strong>Crafting</strong>
+            <v-switch
+              v-model="showAllCraftingRecipes"
+              color="warning"
+              density="compact"
+              hide-details
+              inset
+              label="All recipes"
+            />
+          </div>
+          <v-progress-linear
+            v-if="inventoryStore.isLoadingCrafting"
+            class="mb-3"
+            color="warning"
+            indeterminate
+          />
+          <v-alert v-if="inventoryStore.craftingError" class="mb-3" density="compact" type="error" variant="tonal">
+            {{ inventoryStore.craftingError }}
+          </v-alert>
+          <div v-if="visibleCraftingRecipes.length === 0 && !inventoryStore.isLoadingCrafting" class="sunny-town-crafting__empty">
+            No recipes available.
+          </div>
+          <div
+            v-for="recipe in visibleCraftingRecipes"
+            :key="recipe.key"
+            class="sunny-town-crafting__recipe"
+            :class="{ 'sunny-town-crafting__recipe--disabled': !recipe.canCraft }"
+          >
+            <span class="inventory-item__icon" :class="`inventory-item__icon--${recipe.outputKey}`" aria-hidden="true" />
+            <div>
+              <p class="inventory-item__name">{{ recipe.name }}</p>
+              <p class="inventory-item__description">{{ recipe.description }}</p>
+              <div class="sunny-town-crafting__ingredients">
+                <span
+                  v-for="ingredient in recipe.ingredients"
+                  :key="ingredient.itemKey"
+                  :class="{ 'sunny-town-crafting__ingredient--missing': ingredient.owned < ingredient.required }"
+                >
+                  {{ ingredient.owned }}/{{ ingredient.required }} {{ ingredient.name }}
+                </span>
+              </div>
+            </div>
+            <v-btn
+              :disabled="!recipe.canCraft || inventoryStore.isCrafting"
+              :loading="inventoryStore.isCrafting"
+              color="warning"
+              size="x-small"
+              variant="flat"
+              @click="craftInventoryRecipe(recipe.key)"
+            >
+              Craft
+            </v-btn>
+          </div>
+        </section>
       </div>
     </div>
   </section>

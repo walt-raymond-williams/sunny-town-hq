@@ -355,6 +355,93 @@ func TestPurchaseStudentShopItemRejectsInvalidPurchase(t *testing.T) {
 	}
 }
 
+func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	recipes, err := app.loadCraftingRecipes(ctx, 123)
+	if err != nil {
+		t.Fatalf("load recipes: %v", err)
+	}
+	if len(recipes.Recipes) != 1 || recipes.Recipes[0].Key != "stone_block" || !recipes.Recipes[0].CanCraft {
+		t.Fatalf("recipes = %#v, want craftable stone_block", recipes)
+	}
+
+	response, err := app.craftStudentRecipe(ctx, 123, craftRecipeRequest{RecipeKey: "stone_block"})
+	if err != nil {
+		t.Fatalf("craft recipe error = %v", err)
+	}
+
+	quantities := map[string]int{}
+	for _, item := range response.Inventory.Items {
+		quantities[item.Key] = item.Quantity
+	}
+	if quantities["rock"] != 1 || quantities["stone_block"] != 1 {
+		t.Fatalf("inventory quantities = %#v, want rock=1 stone_block=1", quantities)
+	}
+	if len(response.Recipes) != 1 || response.Recipes[0].CanCraft {
+		t.Fatalf("recipes after craft = %#v, want stone_block not craftable", response.Recipes)
+	}
+}
+
+func TestCraftStudentRecipeRequiresIngredients(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := incrementStudentInventoryItem(ctx, app.db, 123, "rock", 3); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	_, err := app.craftStudentRecipe(ctx, 123, craftRecipeRequest{RecipeKey: "stone_block"})
+	if err != errInsufficientIngredient {
+		t.Fatalf("craft recipe error = %v, want errInsufficientIngredient", err)
+	}
+
+	var rockQuantity int
+	var stoneBlockRows int
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select sii.quantity
+			from student_inventory_item sii
+			join inventory_item_type iit on iit.id = sii.item_type_id
+			where sii.app_user_id = 123 and iit.key = 'rock'
+		`,
+	).Scan(&rockQuantity); err != nil {
+		t.Fatalf("load rock quantity: %v", err)
+	}
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select count(*)
+			from student_inventory_item sii
+			join inventory_item_type iit on iit.id = sii.item_type_id
+			where sii.app_user_id = 123 and iit.key = 'stone_block'
+		`,
+	).Scan(&stoneBlockRows); err != nil {
+		t.Fatalf("count stone block rows: %v", err)
+	}
+	if rockQuantity != 3 || stoneBlockRows != 0 {
+		t.Fatalf("rockQuantity=%d stoneBlockRows=%d, want 3 and 0", rockQuantity, stoneBlockRows)
+	}
+}
+
+func TestCraftStudentRecipeRejectsUnknownRecipe(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+
+	_, err := app.craftStudentRecipe(context.Background(), 123, craftRecipeRequest{RecipeKey: "missing"})
+	if err != errUnknownRecipe {
+		t.Fatalf("craft recipe error = %v, want errUnknownRecipe", err)
+	}
+}
+
 func TestEquipStudentItemRequiresOwnedEquippableItem(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
@@ -543,7 +630,8 @@ func testRewardApp(t *testing.T) (*app, func()) {
 		`insert into inventory_item_type (key, name, description)
 			values
 				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
-				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.')`,
+				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
+				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,

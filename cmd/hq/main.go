@@ -250,6 +250,8 @@ func main() {
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
 	apiMux.HandleFunc("/api/student/inventory", app.handleStudentInventory)
+	apiMux.HandleFunc("/api/student/crafting/recipes", app.handleStudentCraftingRecipes)
+	apiMux.HandleFunc("/api/student/crafting/craft", app.handleCraftStudentRecipe)
 	apiMux.HandleFunc("/api/student/equipment", app.handleStudentEquipment)
 	apiMux.HandleFunc("/api/student/equipment/equip", app.handleEquipStudentItem)
 	apiMux.HandleFunc("/api/student/equipment/unequip", app.handleUnequipStudentItem)
@@ -457,6 +459,58 @@ func (app *app) handleStudentInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, inventory)
+}
+
+func (app *app) handleStudentCraftingRecipes(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	recipes, err := app.loadCraftingRecipes(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("load crafting recipes: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "crafting recipes could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, recipes)
+}
+
+func (app *app) handleCraftStudentRecipe(w http.ResponseWriter, r *http.Request) {
+	user, ok := requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request craftRecipeRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := app.craftStudentRecipe(r.Context(), user.ID, request)
+	if err != nil {
+		log.Printf("craft student recipe: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": craftingErrorMessage(err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (app *app) handleStudentEquipment(w http.ResponseWriter, r *http.Request) {

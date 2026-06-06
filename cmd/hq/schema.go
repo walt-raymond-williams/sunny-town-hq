@@ -116,7 +116,8 @@ func (app *app) ensureSchema(ctx context.Context) error {
 		`insert into inventory_item_type (key, name, description)
 			values
 				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
-				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.')
+				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
+				('stone_block', 'Stone Block', 'A solid block crafted from stone.')
 			on conflict (key) do update
 			set name = excluded.name,
 				description = excluded.description,

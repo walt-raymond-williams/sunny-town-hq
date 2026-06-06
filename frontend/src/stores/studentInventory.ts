@@ -1,14 +1,19 @@
 import { defineStore } from 'pinia'
+import { craftStudentRecipe, getCraftingRecipes } from '../api/craftingApi'
 import { equipStudentItem, getStudentEquipment, unequipStudentItem } from '../api/equipmentApi'
 import { getStudentInventory } from '../api/inventoryApi'
-import type { EquippedSlot, EquipmentSlot, InventoryItem } from '../types/inventory'
+import type { CraftingRecipe, EquippedSlot, EquipmentSlot, InventoryItem } from '../types/inventory'
 
 interface StudentInventoryState {
   items: InventoryItem[]
+  craftingRecipes: CraftingRecipe[]
   equipmentSlots: EquippedSlot[]
   isLoading: boolean
+  isLoadingCrafting: boolean
+  isCrafting: boolean
   isUpdatingEquipment: boolean
   error: string
+  craftingError: string
 }
 
 const defaultEquipmentSlots: EquippedSlot[] = [
@@ -20,14 +25,19 @@ const defaultEquipmentSlots: EquippedSlot[] = [
 export const useStudentInventoryStore = defineStore('studentInventory', {
   state: (): StudentInventoryState => ({
     items: [],
+    craftingRecipes: [],
     equipmentSlots: defaultEquipmentSlots,
     isLoading: false,
+    isLoadingCrafting: false,
+    isCrafting: false,
     isUpdatingEquipment: false,
     error: '',
+    craftingError: '',
   }),
   getters: {
     cookieQuantity: (state) => state.items.find((item) => item.key === 'cookie')?.quantity ?? 0,
     unequippedItems: (state) => state.items.filter((item) => !item.equipped),
+    craftableRecipes: (state) => state.craftingRecipes.filter((recipe) => recipe.canCraft),
     equippedVisuals: (state) => Object.fromEntries(
       state.equipmentSlots.map((slot) => [slot.slot, slot.item?.visualKey || '']),
     ) as Record<EquipmentSlot, string>,
@@ -50,6 +60,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       const names: Record<string, { name: string; description: string }> = {
         rock: { name: 'Rock', description: 'A sturdy rock from Forest Crossing.' },
         crystal: { name: 'Crystal', description: 'A bright crystal from Forest Crossing.' },
+        stone_block: { name: 'Stone Block', description: 'A solid block crafted from stone.' },
       }
       const fallback = names[itemKey] || { name: itemKey, description: '' }
       this.items = [
@@ -87,6 +98,34 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.error = error instanceof Error ? error.message : String(error)
       } finally {
         this.isLoading = false
+      }
+    },
+    async loadCraftingRecipes() {
+      this.isLoadingCrafting = true
+      this.craftingError = ''
+
+      try {
+        this.craftingRecipes = await getCraftingRecipes()
+      } catch (error) {
+        this.craftingError = error instanceof Error ? error.message : String(error)
+      } finally {
+        this.isLoadingCrafting = false
+      }
+    },
+    async craftRecipe(recipeKey: string) {
+      this.isCrafting = true
+      this.craftingError = ''
+
+      try {
+        const result = await craftStudentRecipe(recipeKey)
+        this.items = result.inventory.items
+        this.craftingRecipes = result.recipes
+        this.markEquippedItems()
+      } catch (error) {
+        this.craftingError = error instanceof Error ? error.message : String(error)
+        throw error
+      } finally {
+        this.isCrafting = false
       }
     },
     async equipItem(slot: EquipmentSlot, itemKey: string) {

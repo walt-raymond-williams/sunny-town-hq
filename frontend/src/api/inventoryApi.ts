@@ -22,7 +22,7 @@ export async function getStudentInventory(): Promise<StudentInventory> {
   }
 }
 
-function normalizeInventoryItem(item: InventoryItemResponse): InventoryItem {
+export function normalizeInventoryItem(item: InventoryItemResponse): InventoryItem {
   return {
     key: item.key || '',
     name: item.name || '',

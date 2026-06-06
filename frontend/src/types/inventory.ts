@@ -12,6 +12,30 @@ export interface StudentInventory {
   items: InventoryItem[]
 }
 
+export interface CraftingIngredient {
+  itemKey: string
+  name: string
+  description: string
+  required: number
+  owned: number
+}
+
+export interface CraftingRecipe {
+  key: string
+  name: string
+  description: string
+  outputKey: string
+  outputName: string
+  quantity: number
+  canCraft: boolean
+  ingredients: CraftingIngredient[]
+}
+
+export interface CraftRecipeResult {
+  inventory: StudentInventory
+  recipes: CraftingRecipe[]
+}
+
 export type EquipmentSlot = 'gear' | 'accessory' | 'tool'
 
 export interface EquipmentItem {

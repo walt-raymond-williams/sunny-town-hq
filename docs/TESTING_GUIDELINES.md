@@ -72,6 +72,7 @@ For inventory changes, verify:
 - Feeding the pet consumes cookie inventory, not `app_user.cookies`.
 - Stars remain in `student_wallet` and are not represented as inventory items.
 - Mining resources appear as `rock` or `crystal` inventory items after HQ confirms the resource event.
+- Crafting a `stone_block` consumes 4 `rock`, creates 1 `stone_block`, and refreshes recipe availability.
 
 ## Manual Browser Notes
 
