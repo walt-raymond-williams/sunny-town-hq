@@ -469,11 +469,10 @@ function handleCanvasPointerLeave() {
 async function toggleInventory() {
   inventoryOpen.value = !inventoryOpen.value
   if (inventoryOpen.value) {
+    craftingPanelOpen.value = true
     await inventoryStore.loadInventory()
     await inventoryStore.loadHotbar()
-    if (craftingPanelOpen.value) {
-      await inventoryStore.loadCraftingRecipes()
-    }
+    await inventoryStore.loadCraftingRecipes()
   }
 }
 
