@@ -1,0 +1,63 @@
+version: '3'
+
+tasks:
+  test:
+    desc: Run all Go tests.
+    cmds:
+      - go test ./...
+
+  test:hq:
+    desc: Run HQ backend tests.
+    cmds:
+      - go test ./cmd/hq
+
+  test:sunny-town:
+    desc: Run Sunny Town backend tests.
+    cmds:
+      - go test ./cmd/sunny-town ./internal/sunnytownauth
+
+  frontend:install:
+    desc: Install frontend dependencies.
+    dir: frontend
+    cmds:
+      - npm install
+
+  frontend:typecheck:
+    desc: Run frontend TypeScript checks.
+    dir: frontend
+    cmds:
+      - npm run typecheck
+
+  frontend:build:
+    desc: Build the production frontend bundle into ignored web assets.
+    dir: frontend
+    cmds:
+      - npm run build
+
+  compose:up:
+    desc: Build and start the full local Docker Compose stack.
+    cmds:
+      - docker compose -f deploy\docker-compose.yml up -d --build
+
+  compose:rebuild-runtime:
+    desc: Rebuild and recreate HQ and Sunny Town containers.
+    cmds:
+      - docker compose -f deploy\docker-compose.yml up -d --build --force-recreate hq sunny-town
+
+  compose:config:
+    desc: Validate Docker Compose configuration.
+    cmds:
+      - docker compose -f deploy\docker-compose.yml config
+
+  health:
+    desc: Check HQ and Sunny Town health endpoints.
+    cmds:
+      - powershell -NoProfile -Command "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18080/healthz | Select-Object -ExpandProperty Content"
+      - powershell -NoProfile -Command "Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18082/healthz | Select-Object -ExpandProperty Content"
+
+  verify:
+    desc: Run deterministic local verification.
+    cmds:
+      - task: test
+      - task: frontend:build
+      - task: compose:config

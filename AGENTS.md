@@ -13,8 +13,11 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 - Sunny Town map JSON lives in `sunny-town/maps`.
 - Vue frontend code lives in `frontend/src`.
 - Project docs, plans, setup notes, and testing guidance live in `docs/`.
+- Current-state architecture, API, database, and runtime docs live in `docs/current/`.
+- Historical planning docs live in `docs/archive/`.
 - Production frontend assets are generated into local `web/` by `npm run build`; `web/` is ignored and should not be committed.
 - Integration/runtime configuration lives under `deploy/`.
+- Common verification and runtime commands live in `Taskfile.yml`.
 
 ## Ownership Boundaries
 
@@ -36,6 +39,18 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 ## Verification
 
 Favor deterministic checks before manual browser exploration.
+
+Preferred task commands:
+
+```powershell
+task test
+task frontend:build
+task compose:rebuild-runtime
+task health
+task verify
+```
+
+If Go Task is unavailable, use the direct commands below.
 
 For backend changes:
 

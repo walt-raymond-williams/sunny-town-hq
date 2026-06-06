@@ -35,7 +35,10 @@ proto/                  Protobuf definitions and generated Go code
 internal/               Shared internal Go packages
 deploy/                 Docker Compose, Dockerfiles, Keycloak, database init
 docs/                   Setup, testing, architecture, and feature notes
+docs/current/           Current-state architecture, API, database, and runtime docs
+docs/archive/           Historical planning docs
 web/                    Ignored generated frontend build output
+Taskfile.yml            Common verification and runtime commands
 ```
 
 ## Quick Start
@@ -87,6 +90,18 @@ http://<YOUR_LAN_IP>:18080
 Use one consistent host/IP for HQ and Keycloak. A token issued for `localhost` will not match a browser session opened through the laptop LAN IP.
 
 ## Development
+
+With Go Task installed, use the shared project commands:
+
+```powershell
+task test
+task frontend:build
+task compose:up
+task health
+task verify
+```
+
+Direct fallback commands are below.
 
 Run backend tests:
 
@@ -154,13 +169,17 @@ Sunny Town does not write the HQ database directly. It calls internal HQ HTTP en
 
 ## More Documentation
 
+- [Current architecture](docs/current/ARCHITECTURE.md)
+- [Current API surface](docs/current/API.md)
+- [Current database](docs/current/DATABASE.md)
+- [Current runtime](docs/current/RUNTIME.md)
 - [Project setup](docs/PROJECT_SETUP.md)
 - [Testing guidelines](docs/TESTING_GUIDELINES.md)
-- [HQ architecture](ARCHITECTURE.md)
 - [Sunny Town architecture](docs/SUNNY_TOWN_ARCHITECTURE.md)
 - [Sunny Town movement model](docs/SUNNY_TOWN_MOVEMENT_MODEL.md)
 - [Inventory and equipment](docs/INVENTORY_AND_EQUIPMENT.md)
 - [Keycloak setup](docs/KEYCLOAK_SETUP.md)
+- [Restructure implementation plan](docs/RESTRUCTURE_IMPLEMENTATION_PLAN.md)
 
 ## Notes
 

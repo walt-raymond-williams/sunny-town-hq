@@ -4,6 +4,18 @@ Use this checklist when validating changes in HQ and Sunny Town. Favor the conta
 
 ## Standard Checks
 
+Preferred task commands:
+
+```powershell
+task test
+task frontend:build
+task compose:rebuild-runtime
+task health
+task verify
+```
+
+If Go Task is unavailable, use the direct commands below.
+
 Run backend tests from the repo root:
 
 ```powershell

@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	stconfig "hq/internal/sunnytown/config"
 	"hq/internal/sunnytownauth"
 
 	"github.com/gorilla/websocket"
@@ -51,16 +52,6 @@ const (
 	worldObjectKindRockNode   = "rock_node"
 	worldObjectKindStoneBlock = "stone_block"
 )
-
-type config struct {
-	host           string
-	port           string
-	joinSecret     string
-	serviceSecret  string
-	hqInternalURL  string
-	allowedOrigins map[string]bool
-	mapsDir        string
-}
 
 type gameMap struct {
 	ID            string                   `json:"id"`
@@ -241,7 +232,7 @@ type room struct {
 }
 
 type server struct {
-	config   config
+	config   stconfig.Config
 	world    *world
 	client   *http.Client
 	upgrader websocket.Upgrader
@@ -476,8 +467,8 @@ type equipmentItemResponse struct {
 }
 
 func main() {
-	cfg := loadConfig()
-	maps, err := loadMaps(cfg.mapsDir)
+	cfg := stconfig.Load()
+	maps, err := loadMaps(cfg.MapsDir)
 	if err != nil {
 		log.Fatalf("load maps: %v", err)
 	}
@@ -506,7 +497,7 @@ func main() {
 	mux.HandleFunc("/sunny-town/ws", srv.handleWebSocket)
 
 	httpServer := &http.Server{
-		Addr:              cfg.host + ":" + cfg.port,
+		Addr:              cfg.Host + ":" + cfg.Port,
 		Handler:           logRequests(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -518,25 +509,13 @@ func main() {
 		_ = httpServer.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("Sunny Town listening on http://%s:%s", cfg.host, cfg.port)
+	log.Printf("Sunny Town listening on http://%s:%s", cfg.Host, cfg.Port)
 	if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("server stopped: %v", err)
 	}
 }
 
-func loadConfig() config {
-	return config{
-		host:           envOrDefault("SUNNY_TOWN_HOST", "0.0.0.0"),
-		port:           envOrDefault("SUNNY_TOWN_PORT", "18082"),
-		joinSecret:     envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
-		serviceSecret:  envOrDefault("SUNNY_TOWN_SERVICE_SECRET", "local-dev-service-secret"),
-		hqInternalURL:  strings.TrimRight(envOrDefault("HQ_INTERNAL_BASE_URL", "http://127.0.0.1:8080"), "/"),
-		allowedOrigins: allowedOrigins(envOrDefault("SUNNY_TOWN_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:18080,http://127.0.0.1:5173,http://127.0.0.1:18080")),
-		mapsDir:        envOrDefault("SUNNY_TOWN_MAPS_DIR", filepath.Join("sunny-town", "maps")),
-	}
-}
-
-func newServer(cfg config, world *world) *server {
+func newServer(cfg stconfig.Config, world *world) *server {
 	srv := &server{
 		config: cfg,
 		world:  world,
@@ -549,7 +528,7 @@ func newServer(cfg config, world *world) *server {
 		WriteBufferSize: 1024,
 		CheckOrigin: func(r *http.Request) bool {
 			origin := strings.TrimSpace(r.Header.Get("Origin"))
-			return origin == "" || cfg.allowedOrigins["*"] || cfg.allowedOrigins[origin]
+			return origin == "" || cfg.AllowedOrigins["*"] || cfg.AllowedOrigins[origin]
 		},
 	}
 	return srv
@@ -559,7 +538,7 @@ func (srv *server) internalRequest(ctx context.Context, method string, path stri
 	request, err := http.NewRequestWithContext(
 		ctx,
 		method,
-		srv.config.hqInternalURL+path,
+		srv.config.HQInternalURL+path,
 		bytes.NewReader(body),
 	)
 	if err != nil {
@@ -568,7 +547,7 @@ func (srv *server) internalRequest(ctx context.Context, method string, path stri
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	request.Header.Set("X-HQ-Service-Secret", srv.config.serviceSecret)
+	request.Header.Set("X-HQ-Service-Secret", srv.config.ServiceSecret)
 	return srv.client.Do(request)
 }
 
@@ -771,7 +750,7 @@ func (srv *server) removeMapObject(ctx context.Context, request removeMapObjectR
 }
 
 func (srv *server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	claims, err := sunnytownauth.Verify(r.URL.Query().Get("token"), srv.config.joinSecret, time.Now())
+	claims, err := sunnytownauth.Verify(r.URL.Query().Get("token"), srv.config.JoinSecret, time.Now())
 	if err != nil {
 		log.Printf("sunny town auth failed: %v", err)
 		http.Error(w, "invalid sunny town token", http.StatusUnauthorized)
@@ -1861,14 +1840,14 @@ func (srv *server) commitReward(ctx context.Context, event rewardEvent) (rewardC
 	request, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		srv.config.hqInternalURL+"/api/internal/sunny-town/reward-events",
+		srv.config.HQInternalURL+"/api/internal/sunny-town/reward-events",
 		bytes.NewReader(body),
 	)
 	if err != nil {
 		return rewardCommitResponse{}, err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-HQ-Service-Secret", srv.config.serviceSecret)
+	request.Header.Set("X-HQ-Service-Secret", srv.config.ServiceSecret)
 
 	response, err := srv.client.Do(request)
 	if err != nil {
@@ -1994,17 +1973,6 @@ func loadMaps(dir string) (map[string]gameMap, error) {
 		}
 	}
 	return maps, nil
-}
-
-func allowedOrigins(value string) map[string]bool {
-	origins := map[string]bool{}
-	for _, origin := range strings.Split(value, ",") {
-		origin = strings.TrimSpace(origin)
-		if origin != "" {
-			origins[origin] = true
-		}
-	}
-	return origins
 }
 
 func rectsOverlap(a rect, b rect) bool {
@@ -2304,14 +2272,6 @@ func validateJoinTarget(claims sunnytownauth.Claims, roomID string, rooms map[st
 		return errors.New("unknown room or map")
 	}
 	return nil
-}
-
-func envOrDefault(name string, fallback string) string {
-	value := strings.TrimSpace(os.Getenv(name))
-	if value == "" {
-		return fallback
-	}
-	return value
 }
 
 func logRequests(next http.Handler) http.Handler {
