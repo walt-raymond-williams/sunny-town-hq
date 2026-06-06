@@ -34,18 +34,21 @@ Expected health response is `ok`. Expected containers include healthy `hq-server
 
 ## Sunny Town Multiplayer / Room Testing
 
-For Sunny Town map, room, movement, collectible, or inventory overlay changes, verify:
+For Sunny Town map, room, movement, collectible, resource, or inventory overlay changes, verify:
 
 - The server starts with all map JSON files loaded from `SUNNY_TOWN_MAPS_DIR`.
-- `sunny-town-v1` remains the default join map.
+- `sunny-town-v1` remains the default first join map when no saved position exists.
+- A saved `student_sunny_town_position` can return the player to their last map and position.
 - The frontend receives map data from the server instead of relying on hardcoded map geometry.
 - Player movement still works with arrow keys and WASD.
 - Pressing `E` toggles inventory and does not affect movement.
-- Stars still appear and collect only on outdoor maps.
+- Stars still appear and collect only on maps with `starSpawns`.
 - A player walking into the outdoor southern building door transitions into `sunny-town-house-1`.
 - A player walking into the indoor south door transitions back to `sunny-town-v1`.
-- Two students inside the same building can see each other.
-- Players in different cells do not appear in each other’s snapshots.
+- A player walking through the eastern path transitions to `forest-crossing-v1` and can return.
+- Two students inside the same map can see each other.
+- Players in different maps do not appear in each other's snapshots.
+- Mining a Forest Crossing node requires an equipped pickaxe, advances node hit count, depletes after three hits, and sends a resource commit result.
 
 Backend tests should cover at least:
 
@@ -53,8 +56,11 @@ Backend tests should cover at least:
 - Duplicate map IDs are rejected.
 - Portals targeting missing maps are rejected.
 - Portal entry sends a `map_changed` message with the target map.
-- Snapshot lists are scoped to the player’s current cell.
+- Snapshot lists are scoped to the player's current map.
 - Indoor maps without `starSpawns` do not enqueue star reward events.
+- Resource node definitions are validated, including duplicate id rejection.
+- Mining rejects missing tools, wrong tools, inactive nodes, and out-of-range players.
+- HQ resource event commits are idempotent through `student_inventory_ledger`.
 
 ## Inventory Testing
 
@@ -65,6 +71,7 @@ For inventory changes, verify:
 - Student Pet inventory dialog shows the same cookie quantity as Sunny Town inventory.
 - Feeding the pet consumes cookie inventory, not `app_user.cookies`.
 - Stars remain in `student_wallet` and are not represented as inventory items.
+- Mining resources appear as `rock` or `crystal` inventory items after HQ confirms the resource event.
 
 ## Manual Browser Notes
 

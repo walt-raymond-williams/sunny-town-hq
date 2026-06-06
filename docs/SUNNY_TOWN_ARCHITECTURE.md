@@ -1,301 +1,329 @@
 # Sunny Town Architecture
 
-Sunny Town is a planned multiplayer game mode launched from the student Pet page. It is a shared overhead 2D town, similar in feel to an old Zelda-style map, where students can move their pet/avatar around the same world and see nearby players in real time.
-
-Sunny Town should be implemented as a separate realtime service from the main HQ app. The main HQ service remains the owner of account identity, student roles, pet state, cookies, assignments, rewards, and durable persistence. Sunny Town owns live world state, player movement, rooms, and realtime fan-out.
-
-## Goals
-
-- Launch Sunny Town from the existing student Pet page.
-- Let multiple authenticated students join a shared 2D map.
-- Show each student's avatar/pet moving around the map in near real time.
-- Keep movement responsive while making the server authoritative.
-- Keep durable student and pet data in the existing HQ service.
-- Let Sunny Town grow into a larger game without forcing all realtime concerns into the main app server.
-
-## Non-Goals for the First Version
-
-- No public internet hosting requirement.
-- No combat, trading, moderation tools, or complex inventory.
-- No persistent open-world simulation while nobody is connected.
-- No cross-server sharding at launch.
-- No hard dependency on Redis, NATS, or a message queue for the first single-node version.
-- No direct writes from Sunny Town to homework or account tables.
+Sunny Town is the realtime multiplayer game surface launched from the student Pet page. It is implemented as a separate Go WebSocket service with in-memory live world state. HQ remains the owner of identity, durable student state, wallet stars, inventory, equipment, and persisted Sunny Town return position.
 
 ## Service Boundary
 
 ```text
 Browser / Vue Frontend
-  Student Pet page
-  Sunny Town canvas/view
-  Connect/HTTP client for entry
-  WebSocket client for live gameplay
+  Sunny Town canvas
+  keyboard/pointer input
+  inventory, shop, and schoolwork overlays
+  WebSocket gameplay client
 
         |
-        | 1. CreateSunnyTownSession
+        | POST /api/student/sunny-town/session
         v
 
-HQ Main Service
-  Keycloak token validation
+HQ Service
+  Keycloak bearer-token validation
   student role checks
-  pet/avatar profile lookup
-  short-lived Sunny Town join token issuer
-  durable rewards and pet state
+  join-token issuer
+  wallet, inventory, equipment, and position persistence
+  service-authenticated internal Sunny Town endpoints
 
         |
-        | 2. WebSocket connect with join token
+        | GET /sunny-town/ws?token=...
         v
 
 Sunny Town Service
-  WebSocket endpoint
-  join-token validation
-  in-memory room state
-  server tick loop
-  movement samples and presence
-  presence and snapshots
-  gameplay event emission
+  WebSocket authentication
+  map-backed in-memory rooms
+  accepted movement state
+  portals, collectibles, resource nodes, and gameplay validation
+  snapshot fan-out
 ```
 
-The core ownership rule is:
+Core ownership rule:
 
 ```text
-Sunny Town owns live world state.
-HQ Main Service owns durable account and pet state.
+Sunny Town owns live realtime world state.
+HQ owns durable account, student, wallet, inventory, equipment, and persisted return-position state.
 ```
 
-## Runtime Shape
+Sunny Town does not write the HQ database directly. It calls HQ internal HTTP endpoints with `X-HQ-Service-Secret`.
 
-The first implementation should add a new Go command:
+## Runtime
+
+Current commands and default local ports:
 
 ```text
-cmd/sunny-town/
+cmd/hq           http://localhost:18080 in Docker Compose, 8080 by Go default
+cmd/sunny-town   http://localhost:18082
+Keycloak         http://localhost:18081
+PostgreSQL       localhost:55432
 ```
 
-Suggested local ports:
-
-```text
-HQ Main Service:      http://localhost:18080
-Sunny Town Service:  http://localhost:18082
-Keycloak:            http://localhost:18081
-PostgreSQL:          localhost:55432
-```
-
-The Sunny Town service should be runnable as a local Go process during development and later as a separate container. It should expose:
+Sunny Town exposes:
 
 ```text
 GET /healthz
 GET /sunny-town/ws
 ```
 
-The main HQ service should expose a normal authenticated entry endpoint, using either Connect RPC or JSON HTTP:
+HQ exposes the authenticated student entry endpoint:
 
 ```text
 POST /api/student/sunny-town/session
 ```
 
-or:
-
-```text
-POST /hq.sunnytown.v1.SunnyTownEntryService/CreateSession
-```
-
-Connect RPC is a good fit for the entry/session endpoint because it is request/response application logic. WebSocket is the better fit for the movement and presence channel because Sunny Town needs low-latency bidirectional updates.
+The Docker Compose workflow builds `hq` and `sunny-town` as separate containers. The two services must share `SUNNY_TOWN_JOIN_SECRET` and `SUNNY_TOWN_SERVICE_SECRET`. HQ returns the browser-reachable WebSocket URL from `SUNNY_TOWN_WS_URL`.
 
 ## Entry Flow
 
-```text
-1. Student opens the Pet page.
-2. Student clicks Sunny Town.
-3. Frontend calls the HQ Main Service with the normal bearer token.
-4. HQ validates the Keycloak token and requires the student role.
-5. HQ loads the student profile and pet/avatar state.
-6. HQ returns a short-lived Sunny Town session:
-   - room_id
-   - map_id
-   - avatar appearance
-   - websocket_url
-   - join_token
-   - expires_at
-7. Frontend opens the Sunny Town WebSocket with the join token.
-8. Sunny Town validates the join token.
-9. Sunny Town places the player in the room and starts sending snapshots.
-```
+1. The student opens Sunny Town from the Pet page.
+2. The frontend calls `POST /api/student/sunny-town/session` with the normal Keycloak bearer token.
+3. HQ validates the token and requires the `student` role.
+4. HQ loads the student profile, star wallet, and last saved Sunny Town position.
+5. HQ signs a short-lived Sunny Town join token scoped to the room and current map.
+6. The frontend opens `/sunny-town/ws?token=...`.
+7. Sunny Town validates the join token, loads equipment from HQ, loads saved position from HQ, and joins the player to the target map room.
+8. Sunny Town sends `hello`, then periodic `snapshot` messages.
 
-The join token should be short lived, signed by HQ, and scoped to Sunny Town. A simple HMAC-signed token is enough for the local-network first version. JWT is also acceptable if the project already wants a standard claims format.
-
-Recommended join-token claims:
+The session response includes:
 
 ```json
 {
-  "sub": "keycloak-user-subject",
-  "app_user_id": 123,
-  "display_name": "Student",
-  "roles": ["student"],
   "room_id": "sunny-town-main",
   "map_id": "sunny-town-v1",
   "avatar_id": "pet-default",
-  "exp": 1780617600
+  "websocket_url": "ws://127.0.0.1:18082/sunny-town/ws",
+  "join_token": "...",
+  "expires_at": "2026-06-06T18:30:00Z",
+  "wallet": {
+    "star_balance": 12
+  }
 }
 ```
 
-The Sunny Town service should reject expired tokens, tokens without the `student` role, tokens for unknown rooms, and tokens signed with the wrong secret.
+Join tokens are HMAC-signed by HQ and validated by Sunny Town through `internal/sunnytownauth`. They include the app user id, Keycloak subject, display name, roles, room id, map id, avatar id, and expiry.
 
-## Realtime Protocol
+## Maps and Rooms
 
-Use WebSocket for the live session.
+Map JSON files live in:
 
-Client-to-server movement messages should represent the client's current avatar position. They are accepted into server state after basic validation, but raw message coordinates never trigger rewards directly:
-
-```json
-{ "type": "move", "seq": 42, "x": 640, "y": 480, "facing": "down", "moving": true }
-{ "type": "emote", "emote": "wave" }
-{ "type": "ping", "client_time_ms": 123456 }
+```text
+sunny-town/maps/
 ```
 
-Server-to-client messages should represent authoritative state:
+Current checked-in maps:
+
+- `sunny-town-v1`
+- `sunny-town-house-1`
+- `sunny-town-classroom`
+- `forest-crossing-v1`
+
+Sunny Town loads every JSON map at startup. Each map becomes one in-memory room, while the logical shared room id remains `sunny-town-main`.
+
+Map fields currently used by the server and client:
+
+- `id`, `name`, `tileSize`, `width`, `height`
+- `spawns`
+- `blockedRects`
+- `starSpawns`
+- `portals`
+- `npcs`
+- `resourceNodes`
+
+Portals transfer a player between map rooms after overlap is detected from the server-accepted player rectangle. Transfers send a `map_changed` message containing the new map, players, collectibles, and resource nodes. Presence is scoped per map, so players in different maps do not appear in each other's snapshots.
+
+The portal target coordinates should not place the player inside the destination portal trigger. The server also keeps a portal re-entry guard so the player must leave a portal before triggering another transfer.
+
+## Movement
+
+Sunny Town uses client-owned movement feel with server-accepted position samples.
+
+Client-to-server movement:
+
+```json
+{
+  "type": "move",
+  "seq": 42,
+  "x": 640,
+  "y": 480,
+  "facing": "down",
+  "moving": true,
+  "clientTimeMs": 1760000000000
+}
+```
+
+Server snapshots:
 
 ```json
 {
   "type": "snapshot",
-  "serverTimeMs": 123456,
+  "serverTimeMs": 1760000000000,
   "tick": 991,
-  "selfId": "123",
+  "mapId": "sunny-town-v1",
   "players": [
     {
-      "id": "123",
+      "id": "player-123",
       "displayName": "Student",
-      "x": 128,
-      "y": 96,
+      "x": 640,
+      "y": 480,
       "facing": "down",
       "moving": true,
       "avatarId": "pet-default",
+      "equipment": {
+        "gear": "sunny_hoodie",
+        "accessory": "star_cap",
+        "tool": "pickaxe"
+      },
       "lastProcessedSeq": 42
     }
   ]
 }
 ```
 
-The `lastProcessedSeq` value tells the client which movement sample the server has accepted. The first version uses JSON messages for simplicity. If message volume becomes a problem later, the protocol can move to protobuf binary messages without changing the service boundary.
+The client renders the local player from local prediction and renders remote players from interpolated snapshots. The server ignores out-of-order movement samples, rejects invalid numeric coordinates, clamps map bounds, and uses only accepted server state for gameplay effects.
 
-## Simulation Model
+See [SUNNY_TOWN_MOVEMENT_MODEL.md](./SUNNY_TOWN_MOVEMENT_MODEL.md) for the detailed movement model.
 
-The server should be authoritative over:
+## Collision
 
-- room membership
-- spawn points
-- map boundaries
-- interaction eligibility
-- accepted player position used by gameplay effects
+The frontend uses `blockedRects` for local movement feel. The server currently clamps accepted positions to map bounds and uses accepted positions for portals, collectibles, and mining. `blockedRects` are loaded as part of the map contract, but the server does not currently pathfind or choose collision fallback positions.
 
-The client owns local avatar movement feel. It simulates its current player immediately, sends position samples to Sunny Town, and renders the local player from that local state. The server accepts finite samples, clamps map bounds, and stores the accepted position. Rewards and other gameplay effects run only from the server-accepted position, never from raw client coordinates.
+## Collectibles and Stars
 
-Server snapshots do not correct the local player's rendered `x`/`y` during normal play. They are used to update server-accepted metadata and to show the player to other clients. Remote players are interpolated between server snapshots.
+Maps can define `starSpawns`. Sunny Town creates in-memory star collectibles from those spawn points.
 
-Initial tick settings:
+When the server-accepted player position is within pickup radius:
 
-```text
-Simulation tick:       20 ticks/second
-Snapshot broadcast:    10-20 snapshots/second
-Move sample send rate: on movement change plus repeat at 10-20/second while moving
-Idle timeout:          60 seconds without pong or input
-```
+1. Sunny Town marks the collectible inactive.
+2. Sunny Town increments that collectible's spawn sequence and schedules a respawn.
+3. Sunny Town sends an idempotent reward event to HQ.
+4. HQ inserts into `student_star_ledger` with unique `event_id` protection.
+5. HQ updates `student_wallet`.
+6. Sunny Town sends `reward_committed` or `reward_failed` to the client.
 
-For the first version, one in-memory room is enough:
+Stars are wallet currency, not inventory.
 
-```text
-room_id: sunny-town-main
-map_id:  sunny-town-v1
-```
+## Equipment
 
-## Map and Collision
-
-The first map should be static and checked into the repo. The map can start as a JSON file that the Sunny Town service and frontend both understand.
-
-Suggested location:
+HQ is the source of truth for equipment. Sunny Town loads equipment through:
 
 ```text
-sunny-town/maps/sunny-town-v1.json
+GET /api/internal/sunny-town/student-equipment?app_user_id=...
 ```
 
-The map should define:
+The endpoint is protected by `X-HQ-Service-Secret`.
 
-- dimensions in tiles
-- tile size in pixels
-- spawn points
-- blocked rectangles or blocked tile ids for client-side movement feel
-- decorative layers for the client
-- interactive zones for later features
+When the student changes equipment in Sunny Town, the frontend first updates HQ through the student equipment API, then sends:
 
-The server only needs bounds, spawn, and reward data for the current movement model. The client owns rendering detail and local collision feel.
+```json
+{ "type": "equipment_changed" }
+```
 
-## Persistence and Events
+Sunny Town reloads equipment from HQ and includes visual equipment keys in future snapshots.
 
-Sunny Town should not write directly to the core HQ tables in the first version. Instead, it should emit or report durable events back to the main HQ service when needed.
+## NPCs, Shops, and Schoolwork
 
-First-version events may be handled with direct HTTP/Connect calls from Sunny Town to HQ:
+Maps can include `npcs`. NPCs can be dialogue-only, shop-backed, or activity-backed.
+
+Current activity type:
+
+```json
+{ "type": "schoolwork" }
+```
+
+Schoolwork NPCs open the existing student assignment flow from inside Sunny Town. Shop NPCs use the HQ shop API and currently support buying cookies with wallet stars.
+
+## Mining and Resources
+
+`forest-crossing-v1` contains mineable rock resource nodes. Resource node definitions are loaded from map JSON:
+
+```json
+{
+  "id": "rock-node-001",
+  "kind": "rock",
+  "x": 704,
+  "y": 352,
+  "radius": 24,
+  "interactionRadius": 58,
+  "respawnSeconds": 15
+}
+```
+
+The client sends the existing tool-use message:
+
+```json
+{
+  "type": "tool_use",
+  "toolKey": "pickaxe",
+  "x": 704,
+  "y": 352,
+  "facing": "down",
+  "clientTimeMs": 1760000000000
+}
+```
+
+Sunny Town validates that the player is in a room, has the requested tool equipped, is using `pickaxe`, is within range of the nearest active resource node, and is not inside the tool cooldown. Mining currently requires three accepted pickaxe hits. On the third hit, Sunny Town depletes the node, schedules respawn, rolls a drop, and sends an idempotent resource event to HQ.
+
+Current drop table:
 
 ```text
-player_entered_town
-player_left_town
-emote_used
-interaction_completed
-reward_earned
+85% -> 1 rock
+10% -> 2 rock
+5%  -> 1 crystal
 ```
 
-Later, if the game grows, these events can move to a queue such as NATS or Redis Streams. That should wait until there is a real need for buffering, replay, or multi-process fan-out.
+HQ commits mining resources through:
+
+```text
+POST /api/internal/sunny-town/resource-events
+```
+
+HQ records the event in `student_inventory_ledger`, then increments `student_inventory_item` only if the event id was new. Retries with the same event id do not double-award resources. Sunny Town sends `resource_committed` or `resource_failed` after HQ responds.
+
+Resource node active/depleted state is in Sunny Town memory. If Sunny Town restarts, nodes reset.
+
+## Persisted Return Position
+
+When a Sunny Town WebSocket leaves a room, Sunny Town asks HQ to save the player's last accepted map, coordinates, and facing:
+
+```text
+POST /api/internal/sunny-town/player-position
+GET  /api/internal/sunny-town/player-position?app_user_id=...
+```
+
+HQ stores this in `student_sunny_town_position`. The next Sunny Town session starts on that saved map when possible.
+
+## WebSocket Messages
+
+Client-to-server:
+
+```text
+move
+equipment_changed
+tool_use
+ping
+```
+
+Server-to-client:
+
+```text
+hello
+snapshot
+map_changed
+reward_committed
+reward_failed
+resource_committed
+resource_failed
+error
+```
+
+Move messages are capped by a simple per-connection input rate window while moving. WebSocket read size is capped. Unknown messages receive a small error response.
 
 ## Scaling Path
 
-Version 1 should run as one Sunny Town process with in-memory room state.
+The current design is intentionally single-process with in-memory map rooms.
 
-The next scaling steps are:
+Next scaling steps, if needed:
 
-1. Multiple rooms in one process.
-2. Sticky routing by room id.
+1. Multiple logical rooms in one Sunny Town process.
+2. Sticky routing by room id or map id.
 3. Multiple Sunny Town processes with each room assigned to one process.
-4. Presence and event fan-out through Redis or NATS.
-5. Region or shard assignment if the game becomes public internet hosted.
+4. Shared event fan-out through Redis or NATS.
+5. Durable world-state persistence for node depletion or other map state that must survive restarts.
 
-Do not add distributed state before the single-process model is working and measured.
-
-## Security
-
-- Students must authenticate through the existing HQ frontend flow.
-- HQ Main Service validates Keycloak access tokens.
-- Sunny Town should accept only short-lived HQ-issued join tokens.
-- Join tokens should expire quickly, for example after 60 seconds.
-- WebSocket connections should have connection limits and message size limits.
-- The server should rate-limit input messages per connection.
-- The server must ignore client-provided coordinates.
-- Display names should come from trusted token/session data, not client messages.
-
-## Observability
-
-Sunny Town should log:
-
-- service startup config
-- room creation
-- player join and leave
-- WebSocket authentication failures
-- unexpected disconnects
-- message decode errors with safe metadata only
-
-Useful counters:
-
-- active connections
-- active rooms
-- players per room
-- move messages per second
-- snapshots sent per second
-- invalid move samples
-- disconnect reasons
-- tick duration
-
-## Initial Decision Summary
-
-- Build Sunny Town as a separate Go service.
-- Use WebSocket for realtime gameplay.
-- Use Connect RPC or JSON HTTP on the main HQ service for session creation.
-- Keep the first world single-node and in-memory.
-- Keep durable account, pet, and reward state in the main HQ service.
-- Add queues, Redis, or sharding only after the single-process design has proven it needs them.
+Do not add distributed state until the single-process model has a measured need for it.

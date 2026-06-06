@@ -55,6 +55,13 @@ Main tables:
 - `assignment`: teacher-created questions
 - `assignment_attempt`: per-student answers, grading, feedback, resets
 - `pet_state`: per-student virtual pet state
+- `student_wallet`: current per-student star balance
+- `student_star_ledger`: idempotent star reward and spend records
+- `inventory_item_type`: inventory catalog
+- `student_inventory_item`: current per-student item quantities
+- `student_inventory_ledger`: idempotent Sunny Town resource event records
+- `student_equipped_item`: current gear/accessory/tool equipment
+- `student_sunny_town_position`: last accepted Sunny Town map position
 
 The Go app also runs schema-safety upgrades at startup in `cmd/hq/schema.go`.
 
@@ -245,11 +252,15 @@ Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 18080,18081
 - `cmd/hq/main.go`: JSON API routing and assignment workflows
 - `cmd/hq/auth.go`: Keycloak JWT/JWKS validation
 - `cmd/hq/schema.go`: runtime schema upgrades and app-user sync
+- `cmd/hq/inventory.go`: inventory query and mutation helpers
+- `cmd/hq/equipment.go`: equipment slot validation and updates
 - `cmd/hq/pet_service.go`: Connect RPC pet service
+- `cmd/sunny-town/main.go`: Sunny Town WebSocket service, rooms, portals, rewards, and mining
 - `deploy/docker-compose.yml`: PostgreSQL and Keycloak services
 - `deploy/sunny-town/Dockerfile`: Sunny Town container build
 - `deploy/keycloak/hq-realm.json`: initial Keycloak realm/client/roles
 - `deploy/postgres/init/001_create_assignment.sql`: fresh app database schema
+- `sunny-town/maps/`: checked-in Sunny Town map JSON files
 - `frontend/src/auth.ts`: local-network OIDC login helper
 - `frontend/src/App.vue`: app shell, route outlet, game overlay, and floating pet
 - `frontend/src/features/student/`: student workflow pages and tabs

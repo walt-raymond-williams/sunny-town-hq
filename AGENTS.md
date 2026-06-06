@@ -31,7 +31,7 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 - Do not revert unrelated user changes.
 - Keep generated or local noise out of commits unless explicitly requested.
 - `hq-local.err.log` and `hq-local.out.log` are intentionally visible in `git status`; do not stage them unless explicitly asked.
-- The planning doc `docs/SUNNY_TOWN_FOREST_CROSSING_MINING_PLAN.md` may be untracked during active work; do not stage it unless the user asks.
+- Historical planning docs may be removed after their decisions are captured in current-state architecture docs.
 
 ## Verification
 

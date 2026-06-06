@@ -68,7 +68,7 @@ Raw client coordinates must not trigger rewards.
 
 The server's accepted player position is the only position used for stars, rewards, interactions, and future gameplay effects. This means a client can own its movement feel without being able to claim rewards from arbitrary raw coordinates.
 
-## Test Plan
+## Testing Checklist
 
 Backend:
 

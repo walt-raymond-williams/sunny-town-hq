@@ -86,7 +86,7 @@ Inventory should not contain a `star` item type.
 
 ## Seeding and Existing Accounts
 
-`ensureSchema` and `deploy/postgres/init/001_create_assignment.sql` seed the item catalog.
+`deploy/postgres/init/001_create_assignment.sql` creates the base schema for a fresh app database. `ensureSchema` in `cmd/hq/schema.go` is the runtime source of truth for additive schema updates and catalog backfills.
 
 Existing student accounts receive:
 
@@ -379,7 +379,7 @@ Current priority:
 - If a nearby NPC or activity can be interacted with, `F` uses that interaction.
 - Otherwise, if a tool is equipped, `F` uses the equipped tool.
 
-For MVP, using `pickaxe` plays a local swing animation and sends this WebSocket message:
+Using `pickaxe` plays a local swing animation and sends this WebSocket message:
 
 ```json
 {
@@ -392,7 +392,9 @@ For MVP, using `pickaxe` plays a local swing animation and sends this WebSocket 
 }
 ```
 
-The Sunny Town server validates that the player currently has the requested tool equipped. World-object effects such as mining, combat, fishing, harvesting, or object state changes should be added behind this server handler later.
+The Sunny Town server validates that the player currently has the requested tool equipped. For mining, the server also validates that the tool is `pickaxe`, the player is close enough to the nearest active resource node, and the tool is not inside cooldown.
+
+Mining currently requires three accepted pickaxe hits. On the third hit, Sunny Town depletes the node, schedules the node respawn, rolls the resource drop, and commits the resource event to HQ through `POST /api/internal/sunny-town/resource-events`. HQ writes `student_inventory_ledger` first and increments `student_inventory_item` only when the ledger event id is new.
 
 ## Important Rules
 
