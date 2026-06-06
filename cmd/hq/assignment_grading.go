@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 	gradeSourceTeacherOverride = "teacher_override"
 
 	aiReviewStatusPending    = "pending_review"
+	aiReviewStatusReviewed   = "reviewed"
 	aiReviewStatusOverridden = "overridden"
 )
 
@@ -36,7 +38,27 @@ type gradeAttemptCommand struct {
 	PreserveAIReview bool
 }
 
+type assignmentGradeQuerier interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 func (app *app) gradeAssignmentAttempt(ctx context.Context, command gradeAttemptCommand) error {
+	tx, err := app.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if err := gradeAssignmentAttempt(ctx, tx, command); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func gradeAssignmentAttempt(ctx context.Context, querier assignmentGradeQuerier, command gradeAttemptCommand) error {
 	command.Feedback = strings.TrimSpace(command.Feedback)
 	command.GradedByType = strings.TrimSpace(command.GradedByType)
 	command.GradedByService = strings.TrimSpace(command.GradedByService)
@@ -55,18 +77,10 @@ func (app *app) gradeAssignmentAttempt(ctx context.Context, command gradeAttempt
 		command.AIReviewStatus = aiReviewStatusPending
 	}
 
-	tx, err := app.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
 	var studentUserID int64
 	var cookieAwarded bool
 	var existingAIGradeID *int64
-	err = tx.QueryRow(
+	err := querier.QueryRow(
 		ctx,
 		`
 			select aa.student_user_id, aa.cookie_awarded, aa.ai_grade_id
@@ -93,7 +107,7 @@ func (app *app) gradeAssignmentAttempt(ctx context.Context, command gradeAttempt
 		}
 	}
 
-	_, err = tx.Exec(
+	_, err = querier.Exec(
 		ctx,
 		`
 			update assignment_attempt
@@ -127,10 +141,10 @@ func (app *app) gradeAssignmentAttempt(ctx context.Context, command gradeAttempt
 	}
 
 	if command.Passed && !cookieAwarded {
-		if err := incrementStudentInventoryItem(ctx, tx, studentUserID, cookieInventoryKey, 1); err != nil {
+		if err := incrementStudentInventoryItem(ctx, querier, studentUserID, cookieInventoryKey, 1); err != nil {
 			return err
 		}
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }

@@ -37,10 +37,11 @@ type AIGradeResultRequest struct {
 }
 
 type AIGradeResultResponse struct {
-	ID        int64  `json:"id"`
-	RequestID string `json:"request_id"`
-	Status    string `json:"status"`
-	Applied   bool   `json:"applied"`
+	ID                 int64  `json:"id"`
+	RequestID          string `json:"request_id"`
+	Status             string `json:"status"`
+	Applied            bool   `json:"applied"`
+	ApplySkippedReason string `json:"apply_skipped_reason,omitempty"`
 }
 
 type GradeAssignmentRequest struct {

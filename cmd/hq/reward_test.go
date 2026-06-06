@@ -737,6 +737,9 @@ func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
 	if response.Applied {
 		t.Fatal("expected AI result to be stored without auto-applying grade")
 	}
+	if response.ApplySkippedReason != aiApplySkippedAutoApplyDisabled {
+		t.Fatalf("apply skipped reason = %q, want %q", response.ApplySkippedReason, aiApplySkippedAutoApplyDisabled)
+	}
 
 	var count int
 	var currentPassed *bool
@@ -862,6 +865,201 @@ func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
 	}
 	if gradedByType != graderTypeTeacher || gradeSource != gradeSourceTeacherOverride || reviewStatus != aiReviewStatusOverridden || currentPassed {
 		t.Fatalf("override metadata type=%q source=%q review=%q passed=%v, want teacher override failure", gradedByType, gradeSource, reviewStatus, currentPassed)
+	}
+}
+
+func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.aiAutoApplyGrades = true
+
+	ctx := context.Background()
+	assignmentID, attemptID := seedAssignmentAttempt(t, app)
+	passed := true
+	request := aiapi.AIGradeResultRequest{
+		RequestID:           "assignment-attempt-1:assignment-grader-v1",
+		Status:              aiGradeStatusCompleted,
+		RecommendedPassed:   &passed,
+		RecommendedFeedback: "Correct.",
+		Model:               "fake-grader",
+		PromptVersion:       "assignment-grader-v1",
+	}
+	if _, err := app.recordAIGradeResult(ctx, attemptID, request); err != nil {
+		t.Fatalf("record initial ai grade result: %v", err)
+	}
+
+	teacherID := int64(124)
+	if _, err := app.db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
+		t.Fatalf("seed teacher: %v", err)
+	}
+	if err := app.gradeAssignmentAttempt(ctx, gradeAttemptCommand{
+		AssignmentID:     assignmentID,
+		AttemptID:        attemptID,
+		Passed:           false,
+		Feedback:         "Try again.",
+		GradedByType:     graderTypeTeacher,
+		GradedByUserID:   &teacherID,
+		GradeSource:      gradeSourceManual,
+		PreserveAIReview: false,
+	}); err != nil {
+		t.Fatalf("teacher override grade: %v", err)
+	}
+
+	response, err := app.recordAIGradeResult(ctx, attemptID, request)
+	if err != nil {
+		t.Fatalf("retry ai grade result: %v", err)
+	}
+	if response.Applied || response.ApplySkippedReason != aiApplySkippedTeacherOverride {
+		t.Fatalf("retry applied=%v reason=%q, want skipped teacher override", response.Applied, response.ApplySkippedReason)
+	}
+
+	var gradedByType string
+	var gradeSource string
+	var reviewStatus string
+	var currentPassed bool
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select graded_by_type, grade_source, ai_review_status, passed
+			from assignment_attempt
+			where id = $1
+		`,
+		attemptID,
+	).Scan(&gradedByType, &gradeSource, &reviewStatus, &currentPassed); err != nil {
+		t.Fatalf("load retry metadata: %v", err)
+	}
+	if gradedByType != graderTypeTeacher || gradeSource != gradeSourceTeacherOverride || reviewStatus != aiReviewStatusOverridden || currentPassed {
+		t.Fatalf("retry metadata type=%q source=%q review=%q passed=%v, want teacher override preserved", gradedByType, gradeSource, reviewStatus, currentPassed)
+	}
+}
+
+func TestAIGradeRetryDoesNotOverwriteReviewedAttempt(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.aiAutoApplyGrades = true
+
+	ctx := context.Background()
+	_, attemptID := seedAssignmentAttempt(t, app)
+	passed := true
+	request := aiapi.AIGradeResultRequest{
+		RequestID:           "assignment-attempt-1:assignment-grader-v1",
+		Status:              aiGradeStatusCompleted,
+		RecommendedPassed:   &passed,
+		RecommendedFeedback: "Correct.",
+		Model:               "fake-grader",
+		PromptVersion:       "assignment-grader-v1",
+	}
+	if _, err := app.recordAIGradeResult(ctx, attemptID, request); err != nil {
+		t.Fatalf("record initial ai grade result: %v", err)
+	}
+	if _, err := app.db.Exec(ctx, "update assignment_attempt set ai_review_status = $2 where id = $1", attemptID, aiReviewStatusReviewed); err != nil {
+		t.Fatalf("mark ai grade reviewed: %v", err)
+	}
+
+	passed = false
+	request.RecommendedPassed = &passed
+	request.RecommendedFeedback = "Incorrect."
+	response, err := app.recordAIGradeResult(ctx, attemptID, request)
+	if err != nil {
+		t.Fatalf("retry ai grade result: %v", err)
+	}
+	if response.Applied || response.ApplySkippedReason != aiApplySkippedTeacherReviewed {
+		t.Fatalf("retry applied=%v reason=%q, want skipped teacher reviewed", response.Applied, response.ApplySkippedReason)
+	}
+
+	var reviewStatus string
+	var currentPassed bool
+	if err := app.db.QueryRow(ctx, "select ai_review_status, passed from assignment_attempt where id = $1", attemptID).Scan(&reviewStatus, &currentPassed); err != nil {
+		t.Fatalf("load reviewed attempt: %v", err)
+	}
+	if reviewStatus != aiReviewStatusReviewed || !currentPassed {
+		t.Fatalf("review=%q passed=%v, want reviewed AI pass preserved", reviewStatus, currentPassed)
+	}
+}
+
+func TestAIGradeDuplicateRequestIDSameAttemptIsIdempotent(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.aiAutoApplyGrades = true
+
+	ctx := context.Background()
+	_, attemptID := seedAssignmentAttempt(t, app)
+	passed := true
+	request := aiapi.AIGradeResultRequest{
+		RequestID:           "assignment-attempt-1:assignment-grader-v1",
+		Status:              aiGradeStatusCompleted,
+		RecommendedPassed:   &passed,
+		RecommendedFeedback: "Correct.",
+		Model:               "fake-grader",
+		PromptVersion:       "assignment-grader-v1",
+	}
+	first, err := app.recordAIGradeResult(ctx, attemptID, request)
+	if err != nil {
+		t.Fatalf("record first ai grade result: %v", err)
+	}
+	request.RecommendedFeedback = "Still correct."
+	second, err := app.recordAIGradeResult(ctx, attemptID, request)
+	if err != nil {
+		t.Fatalf("record second ai grade result: %v", err)
+	}
+	if !first.Applied || !second.Applied || first.ID != second.ID {
+		t.Fatalf("first=%#v second=%#v, want same applied AI grade", first, second)
+	}
+
+	var aiGradeCount int
+	var cookieQuantity int
+	if err := app.db.QueryRow(ctx, "select count(*) from assignment_ai_grade where assignment_attempt_id = $1", attemptID).Scan(&aiGradeCount); err != nil {
+		t.Fatalf("count ai grades: %v", err)
+	}
+	if err := app.db.QueryRow(
+		ctx,
+		`
+			select sii.quantity
+			from student_inventory_item sii
+			join inventory_item_type iit on iit.id = sii.item_type_id
+			where sii.app_user_id = 123 and iit.key = 'cookie'
+		`,
+	).Scan(&cookieQuantity); err != nil {
+		t.Fatalf("load cookie quantity: %v", err)
+	}
+	if aiGradeCount != 1 || cookieQuantity != 1 {
+		t.Fatalf("aiGradeCount=%d cookieQuantity=%d, want one idempotent AI grade and one cookie", aiGradeCount, cookieQuantity)
+	}
+}
+
+func TestAIGradeDuplicateRequestIDDifferentAttemptIsRejected(t *testing.T) {
+	app, cleanup := testRewardApp(t)
+	defer cleanup()
+	app.aiAutoApplyGrades = true
+
+	ctx := context.Background()
+	_, firstAttemptID := seedAssignmentAttempt(t, app)
+	_, secondAttemptID := seedAssignmentAttempt(t, app)
+	passed := true
+	request := aiapi.AIGradeResultRequest{
+		RequestID:           "assignment-attempt-1:assignment-grader-v1",
+		Status:              aiGradeStatusCompleted,
+		RecommendedPassed:   &passed,
+		RecommendedFeedback: "Correct.",
+		Model:               "fake-grader",
+		PromptVersion:       "assignment-grader-v1",
+	}
+	if _, err := app.recordAIGradeResult(ctx, firstAttemptID, request); err != nil {
+		t.Fatalf("record first ai grade result: %v", err)
+	}
+
+	_, err := app.recordAIGradeResult(ctx, secondAttemptID, request)
+	if !errors.Is(err, errAIGradeRequestAttemptMismatch) {
+		t.Fatalf("second ai grade error = %v, want request attempt mismatch", err)
+	}
+
+	var secondAIGradeID *int64
+	var secondPassed *bool
+	if err := app.db.QueryRow(ctx, "select ai_grade_id, passed from assignment_attempt where id = $1", secondAttemptID).Scan(&secondAIGradeID, &secondPassed); err != nil {
+		t.Fatalf("load second attempt: %v", err)
+	}
+	if secondAIGradeID != nil || secondPassed != nil {
+		t.Fatalf("second ai_grade_id=%v passed=%v, want untouched second attempt", secondAIGradeID, secondPassed)
 	}
 }
 

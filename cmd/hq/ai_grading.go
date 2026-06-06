@@ -22,7 +22,22 @@ const (
 	aiGradeStatusPending   = "pending"
 	aiGradeStatusCompleted = "completed"
 	aiGradeStatusFailed    = "failed"
+
+	aiApplySkippedNotCompleted         = "not_completed"
+	aiApplySkippedAutoApplyDisabled    = "auto_apply_disabled"
+	aiApplySkippedTeacherOverride      = "teacher_override"
+	aiApplySkippedTeacherReviewed      = "teacher_reviewed"
+	aiApplySkippedAlreadyTeacherGraded = "already_teacher_graded"
 )
+
+var errAIGradeRequestAttemptMismatch = errors.New("ai grade request id belongs to a different assignment attempt")
+
+type aiAttemptGradeState struct {
+	Passed         *bool
+	GradedByType   *string
+	GradeSource    *string
+	AIReviewStatus *string
+}
 
 func (app *app) handleInternalAIAssignmentAttempt(w http.ResponseWriter, r *http.Request) {
 	if !serviceauth.Authorized(r.Header, serviceauth.HQServiceSecret, app.aiToHQServiceSecret) {
@@ -186,8 +201,16 @@ func (app *app) recordAIGradeResult(ctx context.Context, attemptID int64, reques
 		rawResponse = nil
 	}
 
+	tx, err := app.db.Begin(ctx)
+	if err != nil {
+		return aiapi.AIGradeResultResponse{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
 	var id int64
-	err = app.db.QueryRow(
+	err = tx.QueryRow(
 		ctx,
 		`
 			insert into assignment_ai_grade (
@@ -229,6 +252,7 @@ func (app *app) recordAIGradeResult(ctx context.Context, attemptID int64, reques
 				raw_response = excluded.raw_response,
 				error_message = excluded.error_message,
 				completed_at = excluded.completed_at
+			where assignment_ai_grade.assignment_attempt_id = excluded.assignment_attempt_id
 			returning id
 		`,
 		attemptID,
@@ -243,51 +267,105 @@ func (app *app) recordAIGradeResult(ctx context.Context, attemptID int64, reques
 		rawResponse,
 		request.ErrorMessage,
 	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return aiapi.AIGradeResultResponse{}, errAIGradeRequestAttemptMismatch
+	}
 	if err != nil {
 		return aiapi.AIGradeResultResponse{}, err
 	}
 
+	applied := false
+	skipReason := aiApplySkippedNotCompleted
 	if request.Status == aiGradeStatusCompleted {
-		if _, err := app.db.Exec(
-			ctx,
-			`
-				update assignment_attempt
-				set ai_grade_id = $2,
-					ai_review_status = coalesce(ai_review_status, 'pending_review')
-				where id = $1
-			`,
-			attemptID,
-			id,
-		); err != nil {
+		state, err := loadAIAttemptGradeState(ctx, tx, attemptID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return aiapi.AIGradeResultResponse{}, errAnsweredAssignmentNotFound
+		}
+		if err != nil {
 			return aiapi.AIGradeResultResponse{}, err
+		}
+
+		skipReason = app.aiApplySkipReason(state)
+		if skipReason == "" {
+			if err := gradeAssignmentAttempt(ctx, tx, gradeAttemptCommand{
+				AssignmentID:     contextResponse.AssignmentID,
+				AttemptID:        attemptID,
+				Passed:           *request.RecommendedPassed,
+				Feedback:         request.RecommendedFeedback,
+				GradedByType:     graderTypeAI,
+				GradedByService:  "ai",
+				GradeSource:      gradeSourceAIAuto,
+				AIGradeID:        &id,
+				AIReviewStatus:   aiReviewStatusPending,
+				PreserveAIReview: true,
+			}); err != nil {
+				return aiapi.AIGradeResultResponse{}, err
+			}
+			applied = true
+		} else if skipReason == aiApplySkippedAutoApplyDisabled {
+			if _, err := tx.Exec(
+				ctx,
+				`
+					update assignment_attempt
+					set ai_grade_id = $2,
+						ai_review_status = coalesce(ai_review_status, 'pending_review')
+					where id = $1
+				`,
+				attemptID,
+				id,
+			); err != nil {
+				return aiapi.AIGradeResultResponse{}, err
+			}
 		}
 	}
 
-	applied := false
-	if app.aiAutoApplyGrades && request.Status == aiGradeStatusCompleted {
-		if err := app.gradeAssignmentAttempt(ctx, gradeAttemptCommand{
-			AssignmentID:     contextResponse.AssignmentID,
-			AttemptID:        attemptID,
-			Passed:           *request.RecommendedPassed,
-			Feedback:         request.RecommendedFeedback,
-			GradedByType:     graderTypeAI,
-			GradedByService:  "ai",
-			GradeSource:      gradeSourceAIAuto,
-			AIGradeID:        &id,
-			AIReviewStatus:   aiReviewStatusPending,
-			PreserveAIReview: true,
-		}); err != nil {
-			return aiapi.AIGradeResultResponse{}, err
-		}
-		applied = true
+	if err := tx.Commit(ctx); err != nil {
+		return aiapi.AIGradeResultResponse{}, err
 	}
 
 	return aiapi.AIGradeResultResponse{
-		ID:        id,
-		RequestID: request.RequestID,
-		Status:    request.Status,
-		Applied:   applied,
+		ID:                 id,
+		RequestID:          request.RequestID,
+		Status:             request.Status,
+		Applied:            applied,
+		ApplySkippedReason: skipReason,
 	}, nil
+}
+
+func loadAIAttemptGradeState(ctx context.Context, querier assignmentGradeQuerier, attemptID int64) (aiAttemptGradeState, error) {
+	var state aiAttemptGradeState
+	err := querier.QueryRow(
+		ctx,
+		`
+			select passed, graded_by_type, grade_source, ai_review_status
+			from assignment_attempt
+			where id = $1
+				and reset_at is null
+			for update
+		`,
+		attemptID,
+	).Scan(&state.Passed, &state.GradedByType, &state.GradeSource, &state.AIReviewStatus)
+	return state, err
+}
+
+func (app *app) aiApplySkipReason(state aiAttemptGradeState) string {
+	if stringPtrEquals(state.AIReviewStatus, aiReviewStatusOverridden) || stringPtrEquals(state.GradeSource, gradeSourceTeacherOverride) {
+		return aiApplySkippedTeacherOverride
+	}
+	if stringPtrEquals(state.AIReviewStatus, aiReviewStatusReviewed) {
+		return aiApplySkippedTeacherReviewed
+	}
+	if stringPtrEquals(state.GradedByType, graderTypeTeacher) {
+		return aiApplySkippedAlreadyTeacherGraded
+	}
+	if !app.aiAutoApplyGrades {
+		return aiApplySkippedAutoApplyDisabled
+	}
+	return ""
+}
+
+func stringPtrEquals(value *string, expected string) bool {
+	return value != nil && *value == expected
 }
 
 func (app *app) triggerAIGradingForAttempt(attemptID int64) {
