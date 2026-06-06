@@ -26,7 +26,7 @@ HQ is a local-network homework app. A Go server serves the built Vue app, expose
 
 - Source: `frontend/`
 - Framework: Vue 3 + Vuetify + Pinia
-- Build output: `web/`
+- Build output: local ignored `web/`
 - Build command:
 
 ```powershell
@@ -245,7 +245,7 @@ Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 18080,18081
 ```
 
 - Keycloak realm import is not a live migration. For existing Keycloak data, update the realm/client through the admin UI/API.
-- Existing uncommitted work may include generated frontend assets in `web/`; avoid deleting unrelated user changes.
+- Generated frontend assets in `web/` are ignored. Rebuild them with `npm run build` or through the Docker HQ image instead of committing them.
 
 ## Important Files
 

@@ -13,7 +13,7 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 - Sunny Town map JSON lives in `sunny-town/maps`.
 - Vue frontend code lives in `frontend/src`.
 - Project docs, plans, setup notes, and testing guidance live in `docs/`.
-- Production frontend assets are emitted into `web/` by `npm run build`.
+- Production frontend assets are generated into local `web/` by `npm run build`; `web/` is ignored and should not be committed.
 - Integration/runtime configuration lives under `deploy/`.
 
 ## Ownership Boundaries
@@ -89,14 +89,14 @@ Expected response for both is `ok`.
 
 - Do not build a landing page for app features; build the usable interface.
 - Keep controls compact and operational. This project is closer to an app/tool than a marketing site.
-- After frontend changes, run `npm run build` from `frontend/`; this updates the checked-in `web/` bundle when the production build changes.
+- After frontend changes, run `npm run build` from `frontend/` for local production-bundle checks. This updates ignored local `web/` assets.
 - After significant local frontend changes, smoke-test the container-served app at `http://127.0.0.1:18080` when practical.
 
 ## Commit Hygiene
 
 - Check `git status --short` before staging and before final response.
 - Stage files explicitly. Avoid `git add .` unless the user specifically wants everything.
-- Include generated `web/` asset changes when they result from a deliberate production build.
+- Do not stage generated `web/` assets; rebuild them locally or through the Docker HQ image.
 - Leave local logs untracked unless the user explicitly asks to commit them.
 
 ## Learning Loop
