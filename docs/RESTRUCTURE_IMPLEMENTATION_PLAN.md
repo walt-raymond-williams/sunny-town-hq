@@ -65,6 +65,7 @@ Tasks:
 - [ ] Move WebSocket server setup and request handling into `internal/sunnytown/server`.
 - [x] Split Sunny Town server/WebSocket wiring into `cmd/sunny-town/server.go` as a preparatory step.
 - [x] Split Sunny Town client WebSocket pumps and send/rate-limit helpers into `cmd/sunny-town/client_io.go` as a preparatory step.
+- [x] Split Sunny Town client gameplay handlers into `cmd/sunny-town/client_gameplay.go` as a preparatory step.
 - [x] Split Sunny Town reward and resource commit workers into `cmd/sunny-town/server_workers.go` as a preparatory step.
 - [ ] Update Sunny Town tests to import/use the new packages.
 
@@ -241,3 +242,6 @@ Verification:
 - 2026-06-06: Phase 2 split Sunny Town reward and resource commit workers into `cmd/sunny-town/server_workers.go` as a preparatory step before moving server logic to `internal/sunnytown/server`.
 - 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town worker split.
 - 2026-06-06: `go test ./...` passed after Sunny Town worker split.
+- 2026-06-06: Phase 2 split Sunny Town client gameplay handlers into `cmd/sunny-town/client_gameplay.go` as a preparatory step before moving server/world logic to internal packages.
+- 2026-06-06: `go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth` passed after Sunny Town client gameplay split.
+- 2026-06-06: `go test ./...` passed after Sunny Town client gameplay split.
