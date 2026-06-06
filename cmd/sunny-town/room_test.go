@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	stmaps "hq/internal/sunnytown/maps"
 	"hq/internal/sunnytownauth"
 )
 
@@ -322,7 +323,7 @@ func TestWorldTransfersPlayerThroughPortal(t *testing.T) {
 }
 
 func TestWorldTransfersPlayerToForestCrossing(t *testing.T) {
-	maps, err := loadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -709,7 +710,7 @@ func TestLoadMapsRejectsDuplicateMapIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected duplicate map ID to be rejected")
 	}
 }
@@ -721,13 +722,13 @@ func TestLoadMapsRejectsUnknownPortalTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected unknown portal target to be rejected")
 	}
 }
 
 func TestLoadMapsAcceptsCheckedInMaps(t *testing.T) {
-	maps, err := loadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "sunny-town", "maps"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -755,7 +756,7 @@ func TestLoadMapsRejectsDuplicateResourceNodeIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected duplicate resource node ID to be rejected")
 	}
 }
@@ -767,7 +768,7 @@ func TestLoadMapsRejectsInvalidResourceNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected invalid resource node to be rejected")
 	}
 }
@@ -779,7 +780,7 @@ func TestLoadMapsAcceptsNPCDefinitions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	maps, err := loadMaps(dir)
+	maps, err := stmaps.LoadMaps(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,7 +799,7 @@ func TestLoadMapsRejectsDuplicateNPCIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected duplicate npc ID to be rejected")
 	}
 }
@@ -810,7 +811,7 @@ func TestLoadMapsRejectsInvalidNPCs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected invalid npc to be rejected")
 	}
 }
@@ -822,7 +823,7 @@ func TestLoadMapsRejectsInvalidNPCActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected invalid npc activity to be rejected")
 	}
 }
@@ -834,7 +835,7 @@ func TestLoadMapsRejectsInvalidNPCShop(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := loadMaps(dir); err == nil {
+	if _, err := stmaps.LoadMaps(dir); err == nil {
 		t.Fatal("expected invalid npc shop to be rejected")
 	}
 }

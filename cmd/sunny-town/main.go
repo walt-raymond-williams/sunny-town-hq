@@ -14,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -22,6 +21,8 @@ import (
 	"time"
 
 	stconfig "hq/internal/sunnytown/config"
+	stmaps "hq/internal/sunnytown/maps"
+	stprotocol "hq/internal/sunnytown/protocol"
 	"hq/internal/sunnytownauth"
 
 	"github.com/gorilla/websocket"
@@ -53,137 +54,21 @@ const (
 	worldObjectKindStoneBlock = "stone_block"
 )
 
-type gameMap struct {
-	ID            string                   `json:"id"`
-	Name          string                   `json:"name"`
-	TileSize      int                      `json:"tileSize"`
-	Width         int                      `json:"width"`
-	Height        int                      `json:"height"`
-	Spawns        []point                  `json:"spawns"`
-	BlockedRects  []rect                   `json:"blockedRects"`
-	StarSpawns    []point                  `json:"starSpawns"`
-	Portals       []portal                 `json:"portals"`
-	NPCs          []npc                    `json:"npcs"`
-	ResourceNodes []resourceNodeDefinition `json:"resourceNodes"`
-}
+type gameMap = stmaps.GameMap
+type point = stmaps.Point
+type rect = stmaps.Rect
+type portal = stmaps.Portal
+type npc = stmaps.NPC
+type activity = stmaps.Activity
+type shop = stmaps.Shop
+type shopItem = stmaps.ShopItem
+type resourceNodeDefinition = stmaps.ResourceNodeDefinition
 
-type point struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
-type rect struct {
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Width  float64 `json:"width"`
-	Height float64 `json:"height"`
-}
-
-type portal struct {
-	ID           string  `json:"id"`
-	X            float64 `json:"x"`
-	Y            float64 `json:"y"`
-	Width        float64 `json:"width"`
-	Height       float64 `json:"height"`
-	TargetMapID  string  `json:"targetMapId"`
-	TargetX      float64 `json:"targetX"`
-	TargetY      float64 `json:"targetY"`
-	TargetFacing string  `json:"targetFacing"`
-}
-
-type npc struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	X         float64   `json:"x"`
-	Y         float64   `json:"y"`
-	Facing    string    `json:"facing"`
-	SpriteKey string    `json:"spriteKey"`
-	Dialogue  []string  `json:"dialogue"`
-	Shop      *shop     `json:"shop,omitempty"`
-	Activity  *activity `json:"activity,omitempty"`
-}
-
-type activity struct {
-	Type string `json:"type"`
-}
-
-type shop struct {
-	ID    string     `json:"id"`
-	Items []shopItem `json:"items"`
-}
-
-type shopItem struct {
-	ItemKey     string `json:"itemKey"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	PriceStars  int    `json:"priceStars"`
-}
-
-type resourceNodeDefinition struct {
-	ID                string  `json:"id"`
-	Kind              string  `json:"kind"`
-	X                 float64 `json:"x"`
-	Y                 float64 `json:"y"`
-	Radius            float64 `json:"radius"`
-	InteractionRadius float64 `json:"interactionRadius"`
-	RespawnSeconds    int     `json:"respawnSeconds"`
-}
-
-type clientMessage struct {
-	Type         string  `json:"type"`
-	Seq          int64   `json:"seq,omitempty"`
-	ClientTimeMS int64   `json:"client_time_ms,omitempty"`
-	X            float64 `json:"x,omitempty"`
-	Y            float64 `json:"y,omitempty"`
-	Facing       string  `json:"facing,omitempty"`
-	Moving       bool    `json:"moving,omitempty"`
-	ToolKey      string  `json:"toolKey,omitempty"`
-	ItemKey      string  `json:"itemKey,omitempty"`
-	GridX        int     `json:"gridX,omitempty"`
-	GridY        int     `json:"gridY,omitempty"`
-}
-
-type equipmentSnapshot map[string]string
-type inventorySnapshot map[string]int
-
-type serverMessage struct {
-	Type           string                 `json:"type"`
-	SelfID         string                 `json:"selfId,omitempty"`
-	RoomID         string                 `json:"roomId,omitempty"`
-	MapID          string                 `json:"mapId,omitempty"`
-	Map            *gameMap               `json:"map,omitempty"`
-	Tick           int64                  `json:"tick,omitempty"`
-	ServerTimeMS   int64                  `json:"serverTimeMs,omitempty"`
-	Players        []playerSnapshot       `json:"players,omitempty"`
-	Collectibles   []collectibleSnapshot  `json:"collectibles,omitempty"`
-	ResourceNodes  []resourceNodeSnapshot `json:"resourceNodes,omitempty"`
-	PlacedObjects  []placedObjectSnapshot `json:"placedObjects,omitempty"`
-	PlacedObject   *placedObjectSnapshot  `json:"placedObject,omitempty"`
-	WorldObjects   []worldObjectSnapshot  `json:"worldObjects,omitempty"`
-	WorldObject    *worldObjectSnapshot   `json:"worldObject,omitempty"`
-	Code           string                 `json:"code,omitempty"`
-	EventID        string                 `json:"eventId,omitempty"`
-	Kind           string                 `json:"kind,omitempty"`
-	Amount         int                    `json:"amount,omitempty"`
-	NewStarBalance int                    `json:"newStarBalance,omitempty"`
-	CollectibleID  string                 `json:"collectibleId,omitempty"`
-	NodeID         string                 `json:"nodeId,omitempty"`
-	ResourceKey    string                 `json:"resourceKey,omitempty"`
-	Quantity       int                    `json:"quantity,omitempty"`
-	Reason         string                 `json:"reason,omitempty"`
-}
-
-type playerSnapshot struct {
-	ID               string            `json:"id"`
-	DisplayName      string            `json:"displayName"`
-	X                float64           `json:"x"`
-	Y                float64           `json:"y"`
-	Facing           string            `json:"facing"`
-	Moving           bool              `json:"moving"`
-	AvatarID         string            `json:"avatarId"`
-	Equipment        equipmentSnapshot `json:"equipment"`
-	LastProcessedSeq int64             `json:"lastProcessedSeq"`
-}
+type clientMessage = stprotocol.ClientMessage
+type equipmentSnapshot = stprotocol.EquipmentSnapshot
+type inventorySnapshot = stprotocol.InventorySnapshot
+type serverMessage = stprotocol.ServerMessage
+type playerSnapshot = stprotocol.PlayerSnapshot
 
 type player struct {
 	appUserID     int64
@@ -257,14 +142,6 @@ type collectible struct {
 	respawnAt time.Time
 }
 
-type collectibleSnapshot struct {
-	ID     string  `json:"id"`
-	Kind   string  `json:"kind"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Active bool    `json:"active"`
-}
-
 type worldObject struct {
 	id                string
 	kind              string
@@ -296,50 +173,10 @@ type worldObject struct {
 type resourceNode = worldObject
 type placedObject = worldObject
 
-type resourceNodeSnapshot struct {
-	ID     string  `json:"id"`
-	Kind   string  `json:"kind"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
-	Radius float64 `json:"radius"`
-	Active bool    `json:"active"`
-	Hits   int     `json:"hits"`
-	Needed int     `json:"needed"`
-}
-
-type placedObjectSnapshot struct {
-	ID                string  `json:"id"`
-	ItemKey           string  `json:"itemKey"`
-	GridX             int     `json:"gridX"`
-	GridY             int     `json:"gridY"`
-	X                 float64 `json:"x"`
-	Y                 float64 `json:"y"`
-	Width             float64 `json:"width"`
-	Height            float64 `json:"height"`
-	PlacedByAppUserID int64   `json:"placedByAppUserId,omitempty"`
-}
-
-type worldObjectSnapshot struct {
-	ID                string  `json:"id"`
-	Kind              string  `json:"kind"`
-	Source            string  `json:"source"`
-	ItemKey           string  `json:"itemKey,omitempty"`
-	ResourceKind      string  `json:"resourceKind,omitempty"`
-	X                 float64 `json:"x"`
-	Y                 float64 `json:"y"`
-	Width             float64 `json:"width,omitempty"`
-	Height            float64 `json:"height,omitempty"`
-	Radius            float64 `json:"radius,omitempty"`
-	Active            bool    `json:"active"`
-	Collision         bool    `json:"collision"`
-	Breakable         bool    `json:"breakable"`
-	ReservesPlacement bool    `json:"reservesPlacement"`
-	Hits              int     `json:"hits,omitempty"`
-	Needed            int     `json:"needed,omitempty"`
-	GridX             int     `json:"gridX,omitempty"`
-	GridY             int     `json:"gridY,omitempty"`
-	PlacedByAppUserID int64   `json:"placedByAppUserId,omitempty"`
-}
+type collectibleSnapshot = stprotocol.CollectibleSnapshot
+type resourceNodeSnapshot = stprotocol.ResourceNodeSnapshot
+type placedObjectSnapshot = stprotocol.PlacedObjectSnapshot
+type worldObjectSnapshot = stprotocol.WorldObjectSnapshot
 
 type rewardEvent struct {
 	eventID       string
@@ -468,7 +305,7 @@ type equipmentItemResponse struct {
 
 func main() {
 	cfg := stconfig.Load()
-	maps, err := loadMaps(cfg.MapsDir)
+	maps, err := stmaps.LoadMaps(cfg.MapsDir)
 	if err != nil {
 		log.Fatalf("load maps: %v", err)
 	}
@@ -873,7 +710,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 	if position.Found && position.RoomID == room.id && position.MapID == room.gameMap.ID {
 		x = room.clampX(position.X)
 		y = room.clampY(position.Y)
-		if isFacing(position.Facing) {
+		if stmaps.IsFacing(position.Facing) {
 			facing = position.Facing
 		}
 	}
@@ -969,7 +806,7 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 
 	player.x = target.clampX(usedPortal.TargetX)
 	player.y = target.clampY(usedPortal.TargetY)
-	if isFacing(usedPortal.TargetFacing) {
+	if stmaps.IsFacing(usedPortal.TargetFacing) {
 		player.facing = usedPortal.TargetFacing
 	}
 	player.moving = false
@@ -1322,7 +1159,7 @@ func (room *room) updateMove(playerID string, seq int64, x float64, y float64, f
 			player.y = acceptedY
 			player.lastMoveAt = now
 		}
-		if isFacing(facing) {
+		if stmaps.IsFacing(facing) {
 			player.facing = facing
 		}
 		player.moving = moving && ok
@@ -1868,122 +1705,11 @@ func (srv *server) commitReward(ctx context.Context, event rewardEvent) (rewardC
 	return committed, nil
 }
 
-func loadMap(path string) (gameMap, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return gameMap{}, err
-	}
-	defer file.Close()
-
-	var loaded gameMap
-	if err := json.NewDecoder(file).Decode(&loaded); err != nil {
-		return gameMap{}, err
-	}
-	if loaded.ID == "" || loaded.TileSize < 1 || loaded.Width < 1 || loaded.Height < 1 {
-		return gameMap{}, errors.New("map is missing required dimensions")
-	}
-	for _, portal := range loaded.Portals {
-		if portal.ID == "" || portal.Width <= 0 || portal.Height <= 0 || portal.TargetMapID == "" {
-			return gameMap{}, fmt.Errorf("map %q has an invalid portal", loaded.ID)
-		}
-		if !isFacing(portal.TargetFacing) {
-			return gameMap{}, fmt.Errorf("map %q portal %q has invalid target facing", loaded.ID, portal.ID)
-		}
-	}
-	npcIDs := map[string]bool{}
-	for _, loadedNPC := range loaded.NPCs {
-		if loadedNPC.ID == "" || loadedNPC.Name == "" || len(loadedNPC.Dialogue) == 0 {
-			return gameMap{}, fmt.Errorf("map %q has an invalid npc", loaded.ID)
-		}
-		if npcIDs[loadedNPC.ID] {
-			return gameMap{}, fmt.Errorf("map %q has duplicate npc id %q", loaded.ID, loadedNPC.ID)
-		}
-		npcIDs[loadedNPC.ID] = true
-		if loadedNPC.Facing != "" && !isFacing(loadedNPC.Facing) {
-			return gameMap{}, fmt.Errorf("map %q npc %q has invalid facing", loaded.ID, loadedNPC.ID)
-		}
-		for _, line := range loadedNPC.Dialogue {
-			if strings.TrimSpace(line) == "" {
-				return gameMap{}, fmt.Errorf("map %q npc %q has blank dialogue", loaded.ID, loadedNPC.ID)
-			}
-		}
-		if loadedNPC.Shop != nil {
-			if loadedNPC.Shop.ID == "" || len(loadedNPC.Shop.Items) == 0 {
-				return gameMap{}, fmt.Errorf("map %q npc %q has an invalid shop", loaded.ID, loadedNPC.ID)
-			}
-			shopItemKeys := map[string]bool{}
-			for _, item := range loadedNPC.Shop.Items {
-				if item.ItemKey == "" || item.Name == "" || item.PriceStars < 1 {
-					return gameMap{}, fmt.Errorf("map %q npc %q has an invalid shop item", loaded.ID, loadedNPC.ID)
-				}
-				if shopItemKeys[item.ItemKey] {
-					return gameMap{}, fmt.Errorf("map %q npc %q has duplicate shop item %q", loaded.ID, loadedNPC.ID, item.ItemKey)
-				}
-				shopItemKeys[item.ItemKey] = true
-			}
-		}
-		if loadedNPC.Activity != nil && loadedNPC.Activity.Type != "schoolwork" {
-			return gameMap{}, fmt.Errorf("map %q npc %q has invalid activity type %q", loaded.ID, loadedNPC.ID, loadedNPC.Activity.Type)
-		}
-	}
-	resourceNodeIDs := map[string]bool{}
-	for _, node := range loaded.ResourceNodes {
-		if node.ID == "" || node.Kind == "" || node.X < 0 || node.Y < 0 || node.Radius <= 0 || node.InteractionRadius <= 0 || node.RespawnSeconds < 1 {
-			return gameMap{}, fmt.Errorf("map %q has an invalid resource node", loaded.ID)
-		}
-		if resourceNodeIDs[node.ID] {
-			return gameMap{}, fmt.Errorf("map %q has duplicate resource node id %q", loaded.ID, node.ID)
-		}
-		resourceNodeIDs[node.ID] = true
-		if node.Kind != "rock" {
-			return gameMap{}, fmt.Errorf("map %q resource node %q has unsupported kind %q", loaded.ID, node.ID, node.Kind)
-		}
-	}
-	return loaded, nil
-}
-
-func loadMaps(dir string) (map[string]gameMap, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	maps := map[string]gameMap{}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		loaded, err := loadMap(filepath.Join(dir, entry.Name()))
-		if err != nil {
-			return nil, err
-		}
-		if _, exists := maps[loaded.ID]; exists {
-			return nil, fmt.Errorf("duplicate map id %q", loaded.ID)
-		}
-		maps[loaded.ID] = loaded
-	}
-	if len(maps) == 0 {
-		return nil, fmt.Errorf("no maps found in %s", dir)
-	}
-	for _, loaded := range maps {
-		for _, portal := range loaded.Portals {
-			if _, ok := maps[portal.TargetMapID]; !ok {
-				return nil, fmt.Errorf("map %q portal %q targets unknown map %q", loaded.ID, portal.ID, portal.TargetMapID)
-			}
-		}
-	}
-	return maps, nil
-}
-
 func rectsOverlap(a rect, b rect) bool {
 	return a.X < b.X+b.Width &&
 		a.X+a.Width > b.X &&
 		a.Y < b.Y+b.Height &&
 		a.Y+a.Height > b.Y
-}
-
-func isFacing(value string) bool {
-	return value == "up" || value == "down" || value == "left" || value == "right"
 }
 
 func initialCollectibles(gameMap gameMap) map[string]*collectible {
