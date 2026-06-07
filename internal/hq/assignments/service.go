@@ -27,7 +27,7 @@ func (err *LoadAfterWriteError) Unwrap() error {
 }
 
 func LoadByID(ctx context.Context, store Store, id int64) (Response, error) {
-	assignments, err := Load(ctx, store, "where a.id = $1", id)
+	assignments, err := load(ctx, store, "where a.id = $1", id)
 	if err != nil {
 		return Response{}, err
 	}

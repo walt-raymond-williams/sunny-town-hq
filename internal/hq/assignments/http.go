@@ -118,35 +118,6 @@ func (handler HTTPHandler) HandleNextStudentAssignment(w http.ResponseWriter, r 
 	}
 
 	category := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("category")))
-	suffixArgs := []any{}
-	assignmentSuffix := `
-		where not exists (
-			select 1
-			from assignment_attempt aa
-			where aa.assignment_id = a.id
-				and aa.student_user_id = $1
-				and aa.reset_at is null
-		)
-		and a.category = (
-			select eligible_categories.category
-			from (
-				select c.category
-				from assignment c
-				where not exists (
-					select 1
-					from assignment_attempt caa
-					where caa.assignment_id = c.id
-						and caa.student_user_id = $1
-						and caa.reset_at is null
-				)
-				group by c.category
-			) eligible_categories
-			order by random()
-			limit 1
-		)
-		order by a.id asc
-		limit 1
-	`
 	if category != "" {
 		if !IsValidCategory(category) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -154,28 +125,9 @@ func (handler HTTPHandler) HandleNextStudentAssignment(w http.ResponseWriter, r 
 			})
 			return
 		}
-
-		assignmentSuffix = `
-			where not exists (
-				select 1
-				from assignment_attempt aa
-				where aa.assignment_id = a.id
-					and aa.student_user_id = $1
-					and aa.reset_at is null
-			)
-			and a.category = $2
-			order by a.id asc
-			limit 1
-		`
-		suffixArgs = append(suffixArgs, category)
 	}
 
-	assignments, err := Load(
-		r.Context(),
-		handler.store,
-		assignmentSuffix,
-		append([]any{user.ID}, suffixArgs...)...,
-	)
+	assignments, err := ListNextForStudent(r.Context(), handler.store, user.ID, category)
 	if err != nil {
 		log.Printf("load next student assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -207,21 +159,7 @@ func (handler HTTPHandler) HandleStudentGradedAssignments(w http.ResponseWriter,
 		return
 	}
 
-	assignments, err := Load(
-		r.Context(),
-		handler.store,
-		`
-			where exists (
-				select 1
-				from assignment_attempt aa
-				where aa.assignment_id = a.id
-					and aa.student_user_id = $1
-					and aa.passed is not null
-			)
-			order by a.category asc, a.id desc
-		`,
-		user.ID,
-	)
+	assignments, err := ListGradedForStudent(r.Context(), handler.store, user.ID)
 	if err != nil {
 		log.Printf("list student graded assignments: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -249,33 +187,7 @@ func (handler HTTPHandler) HandleAnsweredAssignments(w http.ResponseWriter, r *h
 		return
 	}
 
-	assignments, err := Load(
-		r.Context(),
-		handler.store,
-		`
-			where exists (
-				select 1
-				from assignment_attempt aa
-				where aa.assignment_id = a.id
-					and aa.reset_at is null
-			)
-			order by (
-				select case when aa.passed is null then 0 else 1 end
-				from assignment_attempt aa
-				where aa.assignment_id = a.id
-					and aa.reset_at is null
-				order by aa.attempt_number desc
-				limit 1
-			), (
-				select aa.date_submitted
-				from assignment_attempt aa
-				where aa.assignment_id = a.id
-					and aa.reset_at is null
-				order by aa.attempt_number desc
-				limit 1
-			) desc, a.id desc
-		`,
-	)
+	assignments, err := ListAnswered(r.Context(), handler.store)
 	if err != nil {
 		log.Printf("list answered assignments: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -487,8 +399,8 @@ func (handler HTTPHandler) listAssignments(w http.ResponseWriter, r *http.Reques
 	category := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("category")))
 	studentIDText := strings.TrimSpace(r.URL.Query().Get("student_id"))
 
-	suffix := "order by a.id desc"
-	args := []any{}
+	var assignments []Response
+	var err error
 	if category != "" {
 		if !IsValidCategory(category) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{
@@ -496,11 +408,11 @@ func (handler HTTPHandler) listAssignments(w http.ResponseWriter, r *http.Reques
 			})
 			return
 		}
-		suffix = "where a.category = $1 order by a.id desc"
-		args = append(args, category)
+		assignments, err = ListByCategory(r.Context(), handler.store, category)
+	} else {
+		assignments, err = ListAll(r.Context(), handler.store)
 	}
 
-	assignments, err := Load(r.Context(), handler.store, suffix, args...)
 	if err != nil {
 		log.Printf("list assignments: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{

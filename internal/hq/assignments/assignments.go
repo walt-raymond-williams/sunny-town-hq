@@ -2,6 +2,7 @@ package assignments
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -63,7 +64,100 @@ type Loader interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }
 
-func Load(ctx context.Context, loader Loader, suffix string, args ...any) ([]Response, error) {
+func ListAll(ctx context.Context, loader Loader) ([]Response, error) {
+	return load(ctx, loader, "order by a.id desc")
+}
+
+func ListByCategory(ctx context.Context, loader Loader, category string) ([]Response, error) {
+	return load(ctx, loader, "where a.category = $1 order by a.id desc", category)
+}
+
+func ListNextForStudent(ctx context.Context, loader Loader, studentUserID int64, category string) ([]Response, error) {
+	if strings.TrimSpace(category) != "" {
+		return load(ctx, loader, `
+			where not exists (
+				select 1
+				from assignment_attempt aa
+				where aa.assignment_id = a.id
+					and aa.student_user_id = $1
+					and aa.reset_at is null
+			)
+			and a.category = $2
+			order by a.id asc
+			limit 1
+		`, studentUserID, category)
+	}
+
+	return load(ctx, loader, `
+		where not exists (
+			select 1
+			from assignment_attempt aa
+			where aa.assignment_id = a.id
+				and aa.student_user_id = $1
+				and aa.reset_at is null
+		)
+		and a.category = (
+			select eligible_categories.category
+			from (
+				select c.category
+				from assignment c
+				where not exists (
+					select 1
+					from assignment_attempt caa
+					where caa.assignment_id = c.id
+						and caa.student_user_id = $1
+						and caa.reset_at is null
+				)
+				group by c.category
+			) eligible_categories
+			order by random()
+			limit 1
+		)
+		order by a.id asc
+		limit 1
+	`, studentUserID)
+}
+
+func ListGradedForStudent(ctx context.Context, loader Loader, studentUserID int64) ([]Response, error) {
+	return load(ctx, loader, `
+		where exists (
+			select 1
+			from assignment_attempt aa
+			where aa.assignment_id = a.id
+				and aa.student_user_id = $1
+				and aa.passed is not null
+		)
+		order by a.category asc, a.id desc
+	`, studentUserID)
+}
+
+func ListAnswered(ctx context.Context, loader Loader) ([]Response, error) {
+	return load(ctx, loader, `
+		where exists (
+			select 1
+			from assignment_attempt aa
+			where aa.assignment_id = a.id
+				and aa.reset_at is null
+		)
+		order by (
+			select case when aa.passed is null then 0 else 1 end
+			from assignment_attempt aa
+			where aa.assignment_id = a.id
+				and aa.reset_at is null
+			order by aa.attempt_number desc
+			limit 1
+		), (
+			select aa.date_submitted
+			from assignment_attempt aa
+			where aa.assignment_id = a.id
+				and aa.reset_at is null
+			order by aa.attempt_number desc
+			limit 1
+		) desc, a.id desc
+	`)
+}
+
+func load(ctx context.Context, loader Loader, suffix string, args ...any) ([]Response, error) {
 	query := `
 		select a.id, a.category, a.prompt, a.expected_answer, a.created_at
 		from assignment a
