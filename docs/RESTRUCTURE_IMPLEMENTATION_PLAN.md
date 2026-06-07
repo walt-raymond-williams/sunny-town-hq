@@ -175,8 +175,8 @@ Slice plan:
 
 - [x] Slice 4.1: Move HQ config loading into `internal/hq/app` while keeping behavior unchanged.
 - [x] Slice 4.2: Split HQ route registration out of startup into `cmd/hq/routes.go` as a no-behavior-change waypoint.
-- [ ] Slice 4.3: Move app construction into `internal/hq/app` once the `app` type can move cleanly.
-- [ ] Slice 4.4: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`.
+- [ ] Slice 4.3: Move app construction into `internal/hq/app` once the `app` type can move cleanly. Deferred because the current `app` type still intentionally owns command-package auth, adapters, and route wiring.
+- [ ] Slice 4.4: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`. Deferred until route wiring can depend on narrow handler interfaces instead of the command-package `app`.
 - [x] Slice 4.5: Move pet domain into `internal/hq/pet`.
   - [x] Slice 4.5a: Move deterministic pet rules, game result normalization, and proto mood mapping into `internal/hq/pet`.
   - [x] Slice 4.5b: Move the Connect RPC handler into `internal/hq/pet` behind a narrow backend interface.
@@ -197,7 +197,7 @@ Slice plan:
 - [x] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
 - [x] Slice 4.9: Move AI grading integration behind `internal/hq/ai`.
 - [x] Slice 4.10: Prepare schema ownership boundaries for Phase 5 migrations without changing the migration story yet.
-- [ ] Slice 4.11: Final HQ cleanup: keep `cmd/hq/main.go` as a thin binary entrypoint, remove dead code, update docs, and run full verification.
+- [x] Slice 4.11: Final HQ cleanup: keep `cmd/hq/main.go` as a thin binary entrypoint, remove dead code, update docs, and run full verification.
 
 Pet module direction:
 
@@ -209,9 +209,9 @@ Pet module direction:
 Original task coverage:
 
 - [x] Move app config into `internal/hq/app`.
-- [ ] Move app construction into `internal/hq/app`.
+- [ ] Move app construction into `internal/hq/app` after the remaining command-package adapters are retired.
 - [x] Split route registration out of HQ startup.
-- [ ] Move route registration and HTTP helpers into `internal/hq/httpapi`.
+- [ ] Move route registration and HTTP helpers into `internal/hq/httpapi` after route dependencies are narrow enough to avoid moving the whole command package.
 - [x] Move assignment handlers and assignment service logic.
 - [x] Replace temporary raw SQL suffix APIs with typed package operations where package boundaries now own the queries.
 - [x] Add direct package tests for extracted HQ domain packages, starting with assignments and inventory.
@@ -221,7 +221,7 @@ Original task coverage:
 - [x] Move Sunny Town bridge endpoints.
 - [x] Move AI integration behind the chosen HQ package boundaries.
 - [x] Prepare schema ownership boundaries for Phase 5 migration conversion.
-- [ ] Keep `cmd/hq/main.go` as a thin binary entrypoint.
+- [x] Keep `cmd/hq/main.go` as a thin binary entrypoint.
 
 Verification:
 
@@ -400,3 +400,6 @@ Verification:
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.9.
 - 2026-06-07: Phase 4 Slice 4.10 documented HQ schema ownership boundaries in `docs/current/SCHEMA_OWNERSHIP.md` and linked the migration map from `docs/current/DATABASE.md`.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.10.
+- 2026-06-07: Phase 4 Slice 4.11 split remaining HQ HTTP handlers into `cmd/hq/handlers.go` and shared HTTP/server helpers into `cmd/hq/http_helpers.go`, reducing `cmd/hq/main.go` to a thin 73-line binary entrypoint.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.11.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.11.
