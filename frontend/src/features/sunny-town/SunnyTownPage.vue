@@ -14,6 +14,7 @@ import { useSunnyTownLocalPlayer } from '../../composables/useSunnyTownLocalPlay
 import { useSunnyTownRemotePlayers } from '../../composables/useSunnyTownRemotePlayers'
 import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
+import { useSunnyTownToolUseAnimation } from '../../composables/useSunnyTownToolUseAnimation'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { Assignment } from '../../types/assignment'
 import type { EquipmentSlot } from '../../types/inventory'
@@ -45,13 +46,6 @@ import {
   worldObjectToResourceNode,
 } from './worldObjects'
 
-interface ToolUseAnimation {
-  toolKey: string
-  startedAt: number
-  durationMs: number
-  facing: SunnyTownPlayer['facing']
-}
-
 const npcInteractionRadius = 54
 const toolUseDurationMs = 360
 
@@ -60,6 +54,7 @@ const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
 const localPlayerState = useSunnyTownLocalPlayer()
 const remotePlayerState = useSunnyTownRemotePlayers()
+const toolUseAnimation = useSunnyTownToolUseAnimation()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
@@ -95,7 +90,6 @@ const isSubmittingSchoolwork = ref(false)
 let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
-let activeToolUse: ToolUseAnimation | null = null
 
 const {
   connected,
@@ -521,7 +515,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   remotePlayerState.clear()
   localPlayerState.clear()
   lastSentMoveJson = ''
-  activeToolUse = null
+  toolUseAnimation.clear()
   placementHoverGrid.value = null
   movement.clear()
   closeNpcOverlays()
@@ -583,12 +577,7 @@ function useEquippedTool() {
     return
   }
 
-  activeToolUse = {
-    toolKey,
-    startedAt: performance.now(),
-    durationMs: toolUseDurationMs,
-    facing: player.facing,
-  }
+  toolUseAnimation.start(toolKey, player.facing, performance.now(), toolUseDurationMs)
 
   if (isSunnyTownSocketOpen()) {
     const message: SunnyTownToolUseMessage = {
@@ -1128,15 +1117,7 @@ function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, 
 }
 
 function currentToolUseProgress(toolKey: string): number | null {
-  if (!activeToolUse || activeToolUse.toolKey !== toolKey) {
-    return null
-  }
-  const progress = (performance.now() - activeToolUse.startedAt) / activeToolUse.durationMs
-  if (progress >= 1) {
-    activeToolUse = null
-    return null
-  }
-  return clamp(progress, 0, 1)
+  return toolUseAnimation.progress(toolKey, performance.now())
 }
 
 function drawPickaxe(
