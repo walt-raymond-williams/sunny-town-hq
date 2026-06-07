@@ -5,7 +5,8 @@ The app database is PostgreSQL 16. Docker Compose starts it as the `postgres` se
 Fresh database initialization currently starts from:
 
 ```text
-deploy/postgres/init/001_create_assignment.sql
+deploy/postgres/001_run_migrations.sh
+deploy/postgres/migrations/
 ```
 
 The HQ service also runs schema-safety upgrades at startup in:
@@ -14,7 +15,7 @@ The HQ service also runs schema-safety upgrades at startup in:
 cmd/hq/schema.go
 ```
 
-This mixed model is acceptable for early development but should be replaced by explicit ordered migrations after active AI schema work settles.
+Runtime schema safety checks are still retained for existing local databases while the migration path is being stabilized.
 
 Schema ownership for the migration conversion is tracked in:
 
@@ -53,4 +54,4 @@ deploy/postgres/migrations/
   0005_ai_grading.sql
 ```
 
-Do not start this migration conversion until the current HQ package-boundary cleanup is finished. Use `docs/current/SCHEMA_OWNERSHIP.md` as the table and migration ownership map.
+Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. The next step is replacing runtime schema patching in `cmd/hq/schema.go` with a migration runner that records applied versions and can upgrade existing databases without relying on Docker init.

@@ -247,17 +247,17 @@ deploy/postgres/migrations/
 
 Tasks:
 
-- [ ] Convert current schema state into ordered migration files.
-- [ ] Choose migration runner: lightweight Go runner or an external migration tool.
-- [ ] Update Docker fresh database startup to apply migrations.
+- [x] Convert current schema state into ordered migration files.
+- [ ] Choose migration runner: lightweight Go runner or an external migration tool. Current fresh-db runner is the Docker Postgres init script; existing DB runtime migration is still pending.
+- [x] Update Docker fresh database startup to apply migrations.
 - [ ] Reduce `ensureSchema` to migration execution or remove it.
 - [ ] Document reset and migration workflows.
 
 Verification:
 
-- [ ] Fresh Docker Compose startup creates a working database.
+- [x] Fresh Docker Compose startup creates a working database.
 - [ ] Existing local database can migrate without data loss.
-- [ ] `go test ./...`
+- [x] `go test ./...`
 
 ## Phase 6: CI And Guardrails
 
@@ -403,3 +403,7 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.11 split remaining HQ HTTP handlers into `cmd/hq/handlers.go` and shared HTTP/server helpers into `cmd/hq/http_helpers.go`, reducing `cmd/hq/main.go` to a thin 73-line binary entrypoint.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.11.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.11.
+- 2026-06-07: Phase 5 started by replacing the single fresh-database init SQL file with ordered SQL migrations under `deploy/postgres/migrations/` and a Postgres init script that applies them for fresh Docker databases. Runtime `ensureSchema` remains in place for existing local database compatibility.
+- 2026-06-07: Disposable Postgres migration smoke test passed with all 15 expected public tables, all 7 inventory item types, and all 6 AI grading columns on `assignment_attempt`.
+- 2026-06-07: `go test ./...` passed after Phase 5 migration file creation.
+- 2026-06-07: `docker compose -f deploy\docker-compose.yml config` passed after Phase 5 migration mount update.
