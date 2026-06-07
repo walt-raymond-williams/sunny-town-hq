@@ -21,7 +21,13 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/students", app.handleStudents)
 	apiMux.HandleFunc("/api/teacher/login", app.handleTeacherLogin)
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
-	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
+	petStore := app.petStore()
+	petHandlers := hqpet.NewHTTPHandler(hqpet.HTTPHandlerConfig{
+		Store:          petStore,
+		RequireRole:    petRequireRole,
+		NoCookiesError: errNoCookies,
+	})
+	apiMux.HandleFunc("/api/student/profile", petHandlers.HandleStudentProfile)
 	inventoryHandlers := hqinventory.NewHTTPHandler(hqinventory.HTTPHandlerConfig{
 		Store:       app.db,
 		RequireRole: inventoryRequireRole,
@@ -34,7 +40,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/student/equipment/equip", inventoryHandlers.HandleEquipStudentItem)
 	apiMux.HandleFunc("/api/student/equipment/unequip", inventoryHandlers.HandleUnequipStudentItem)
 	apiMux.HandleFunc("/api/student/shop/purchase", inventoryHandlers.HandleStudentShopPurchase)
-	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
+	apiMux.HandleFunc("/api/student/pet/feed", petHandlers.HandleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{
 		Store:                      app.db,
@@ -59,7 +65,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	mux.HandleFunc("/api/internal/ai/assignment-attempts/", app.handleInternalAIAssignmentAttempt)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
-	petServicePath, petServiceHandler := hqpet.NewServiceHandler(hqPetBackend{app: app}, requireStudentID, errNoCookies)
+	petServicePath, petServiceHandler := hqpet.NewServiceHandler(petStore, requireStudentID, errNoCookies)
 	mux.Handle(petServicePath, app.authenticated(petServiceHandler))
 
 	mux.HandleFunc("/", staticHandler(webRoot))

@@ -66,7 +66,7 @@ func main() {
 	if err := hqschema.RunMigrations(ctx, db, cfg.MigrationsDir); err != nil {
 		log.Fatalf("run schema migrations: %v", err)
 	}
-	app.startPetDecayTicker(ctx)
+	app.petStore().StartDecayTicker(ctx)
 
 	webRoot := filepath.Join(".", "web")
 

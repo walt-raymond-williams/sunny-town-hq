@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"hq/internal/aiapi"
 	hqinventory "hq/internal/hq/inventory"
+	hqpet "hq/internal/hq/pet"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -211,7 +213,7 @@ func TestApplyGameResultCreditsPetStarsOnce(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	first, err := app.applyGameResult(ctx, 123, 7, 9, "round-1")
+	first, err := app.petStore().ApplyGameResult(ctx, 123, 7, 9, "round-1")
 	if err != nil {
 		t.Fatalf("first game result error = %v", err)
 	}
@@ -219,7 +221,7 @@ func TestApplyGameResultCreditsPetStarsOnce(t *testing.T) {
 		t.Fatalf("first profile = %#v, want balance 9 happiness 57 energy 45", first)
 	}
 
-	second, err := app.applyGameResult(ctx, 123, 7, 9, "round-1")
+	second, err := app.petStore().ApplyGameResult(ctx, 123, 7, 9, "round-1")
 	if err != nil {
 		t.Fatalf("second game result error = %v", err)
 	}
@@ -249,7 +251,7 @@ func TestFeedStudentPetConsumesCookieInventory(t *testing.T) {
 		t.Fatalf("seed cookie inventory: %v", err)
 	}
 
-	profile, err := app.feedStudentPet(ctx, 123)
+	profile, err := app.petStore().Feed(ctx, 123)
 	if err != nil {
 		t.Fatalf("feed pet error = %v", err)
 	}
@@ -262,9 +264,35 @@ func TestFeedStudentPetRequiresCookieInventory(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
 
-	_, err := app.feedStudentPet(context.Background(), 123)
+	_, err := app.petStore().Feed(context.Background(), 123)
 	if err != errNoCookies {
 		t.Fatalf("feed pet error = %v, want errNoCookies", err)
+	}
+}
+
+func TestPetProfileJSONUsesStudentAPIFieldNames(t *testing.T) {
+	profile := hqpet.Profile{
+		ID:          123,
+		DisplayName: "Student",
+		Cookies:     2,
+		StarBalance: 7,
+		PetState: hqpet.State{
+			Hunger:    50,
+			Happiness: 60,
+			Energy:    70,
+			Mood:      "idle",
+		},
+	}
+
+	data, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatalf("marshal profile: %v", err)
+	}
+	body := string(data)
+	for _, field := range []string{`"display_name"`, `"star_balance"`, `"pet_state"`, `"last_decay_at"`} {
+		if !strings.Contains(body, field) {
+			t.Fatalf("profile json = %s, want field %s", body, field)
+		}
 	}
 }
 

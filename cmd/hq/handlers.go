@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -10,24 +8,6 @@ import (
 	hqinventory "hq/internal/hq/inventory"
 	"hq/internal/sunnytownauth"
 )
-
-type petStateResponse struct {
-	Hunger      int       `json:"hunger"`
-	Happiness   int       `json:"happiness"`
-	Energy      int       `json:"energy"`
-	Sleeping    bool      `json:"sleeping"`
-	Mood        string    `json:"mood"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	LastDecayAt time.Time `json:"last_decay_at"`
-}
-
-type studentProfileResponse struct {
-	ID          int64            `json:"id"`
-	DisplayName string           `json:"display_name"`
-	Cookies     int              `json:"cookies"`
-	StarBalance int              `json:"star_balance"`
-	PetState    petStateResponse `json:"pet_state"`
-}
 
 type sunnyTownSessionResponse struct {
 	RoomID       string                            `json:"room_id"`
@@ -108,56 +88,6 @@ func (app *app) handleStudents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, students)
 }
 
-func (app *app) handleStudentProfile(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	profile, err := app.loadStudentProfile(r.Context(), user.ID)
-	if err != nil {
-		log.Printf("load student profile: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "student profile could not be loaded",
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, profile)
-}
-
-func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	profile, err := app.feedStudentPet(r.Context(), user.ID)
-	if errors.Is(err, errNoCookies) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "no cookies available",
-		})
-		return
-	}
-	if err != nil {
-		log.Printf("feed student pet: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "pet could not be fed",
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, profile)
-}
-
 func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireRole(w, r, "student")
 	if !ok {
@@ -168,7 +98,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile, err := app.loadStudentProfile(r.Context(), user.ID)
+	profile, err := app.petStore().LoadProfile(r.Context(), user.ID)
 	if err != nil {
 		log.Printf("load sunny town student profile: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -247,9 +177,4 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		Inventory:    inventory,
 		Hotbar:       hotbar,
 	})
-}
-
-func (app *app) loadStudentProfile(ctx context.Context, userID int64) (studentProfileResponse, error) {
-	profile, err := app.petStore().LoadProfile(ctx, userID)
-	return fromPetProfile(profile), err
 }

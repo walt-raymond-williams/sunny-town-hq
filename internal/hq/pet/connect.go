@@ -13,21 +13,21 @@ import (
 )
 
 type State struct {
-	Hunger      int
-	Happiness   int
-	Energy      int
-	Sleeping    bool
-	Mood        string
-	UpdatedAt   time.Time
-	LastDecayAt time.Time
+	Hunger      int       `json:"hunger"`
+	Happiness   int       `json:"happiness"`
+	Energy      int       `json:"energy"`
+	Sleeping    bool      `json:"sleeping"`
+	Mood        string    `json:"mood"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	LastDecayAt time.Time `json:"last_decay_at"`
 }
 
 type Profile struct {
-	ID          int64
-	DisplayName string
-	Cookies     int
-	StarBalance int
-	PetState    State
+	ID          int64  `json:"id"`
+	DisplayName string `json:"display_name"`
+	Cookies     int    `json:"cookies"`
+	StarBalance int    `json:"star_balance"`
+	PetState    State  `json:"pet_state"`
 }
 
 type Backend interface {
