@@ -4,6 +4,10 @@ import { useRouter } from 'vue-router'
 import { getNextStudentAssignment, submitStudentAnswer } from '../../api/studentAssignmentsApi'
 import { purchaseShopItem } from '../../api/shopApi'
 import {
+  hotbarIndexForEvent,
+  useSunnyTownInventoryActions,
+} from '../../composables/useSunnyTownInventoryActions'
+import {
   nearestSunnyTownNpc,
   useSunnyTownNpcInteractions,
 } from '../../composables/useSunnyTownNpcInteractions'
@@ -21,7 +25,6 @@ import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useSunnyTownToolUseAnimation } from '../../composables/useSunnyTownToolUseAnimation'
 import { useSunnyTownWorldState } from '../../composables/useSunnyTownWorldState'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
-import type { EquipmentSlot } from '../../types/inventory'
 import type {
   SunnyTownEquipmentChangedMessage,
   SunnyTownMap,
@@ -60,6 +63,19 @@ const placement = useSunnyTownPlacement()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
 const worldState = useSunnyTownWorldState()
+const inventoryActions = useSunnyTownInventoryActions(inventoryStore, {
+  onEquipmentChanged() {
+    applyLocalEquipmentVisuals()
+    notifyEquipmentChanged()
+  },
+  onHotbarSelectionChanged() {
+    placement.clearHover()
+    draw()
+  },
+  onHotbarUpdated() {
+    draw()
+  },
+})
 const {
   activeDialogueLine,
   activeDialogueNpc,
@@ -97,11 +113,24 @@ const {
 const selfId = ref('')
 const starBalance = ref(0)
 const gameToast = ref('')
-const inventoryOpen = ref(false)
-const craftingPanelOpen = ref(false)
-const showAllCraftingRecipes = ref(false)
-const selectedHotbarIndex = ref(0)
 const placementHoverGrid = placement.hoverGrid
+const {
+  assignInventoryItemToSelectedHotbarSlot,
+  clearSelectedHotbarSlot,
+  craftInventoryRecipe,
+  craftingPanelOpen,
+  equipInventoryItem,
+  inventoryOpen,
+  placingStoneBlock,
+  selectedHotbarIndex,
+  selectedHotbarItemKey,
+  selectHotbarSlot,
+  showAllCraftingRecipes,
+  stoneBlockQuantity,
+  toggleCraftingPanel,
+  toggleInventory,
+  unequipInventorySlot,
+} = inventoryActions
 let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
@@ -133,11 +162,6 @@ const renderer = useSunnyTownRenderer(canvas, {
 const draw = renderer.draw
 
 const playerCount = computed(() => players.value.length)
-const stoneBlockQuantity = computed(() => inventoryStore.items.find((item) => item.key === 'stone_block')?.quantity || 0)
-const selectedHotbarSlot = computed(() => inventoryStore.hotbarSlots[selectedHotbarIndex.value] || null)
-const selectedHotbarItem = computed(() => selectedHotbarSlot.value?.item || null)
-const selectedHotbarItemKey = computed(() => selectedHotbarItem.value?.key || '')
-const placingStoneBlock = computed(() => selectedHotbarItemKey.value === 'stone_block' && stoneBlockQuantity.value > 0)
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeyDown, movementInputEventOptions)
@@ -348,41 +372,6 @@ function handleCanvasPointerLeave() {
   draw()
 }
 
-async function toggleInventory() {
-  inventoryOpen.value = !inventoryOpen.value
-  if (inventoryOpen.value) {
-    craftingPanelOpen.value = true
-    await inventoryStore.loadInventory()
-    await inventoryStore.loadHotbar()
-    await inventoryStore.loadCraftingRecipes()
-  }
-}
-
-async function toggleCraftingPanel() {
-  craftingPanelOpen.value = !craftingPanelOpen.value
-  if (craftingPanelOpen.value) {
-    await inventoryStore.loadCraftingRecipes()
-  }
-}
-
-async function craftInventoryRecipe(recipeKey: string) {
-  await inventoryStore.craftRecipe(recipeKey)
-  await inventoryStore.loadHotbar()
-}
-
-function selectHotbarSlot(index: number) {
-  selectedHotbarIndex.value = index
-  placement.clearHover()
-  draw()
-}
-
-function hotbarIndexForEvent(event: KeyboardEvent): number | null {
-  if (!/^Digit[1-5]$/.test(event.code)) {
-    return null
-  }
-  return Number(event.code.slice(5)) - 1
-}
-
 function placeStoneBlockAtPointer(event: PointerEvent) {
   const grid = placement.gridFromPointer(event, activeMap.value, canvas.value, cameraForCanvas())
   if (!grid || stoneBlockQuantity.value < 1 || !isSunnyTownSocketOpen()) {
@@ -404,31 +393,6 @@ function notifyEquipmentChanged() {
   }
   const message: SunnyTownEquipmentChangedMessage = { type: 'equipment_changed' }
   sendSunnyTownMessage(JSON.stringify(message))
-}
-
-async function equipInventoryItem(itemKey: string, slot: EquipmentSlot | '') {
-  if (!slot) {
-    return
-  }
-  await inventoryStore.equipItem(slot, itemKey)
-  applyLocalEquipmentVisuals()
-  notifyEquipmentChanged()
-}
-
-async function unequipInventorySlot(slot: EquipmentSlot) {
-  await inventoryStore.unequipItem(slot)
-  applyLocalEquipmentVisuals()
-  notifyEquipmentChanged()
-}
-
-async function assignInventoryItemToSelectedHotbarSlot(itemKey: string) {
-  await inventoryStore.setHotbarSlot(selectedHotbarIndex.value + 1, itemKey)
-  draw()
-}
-
-async function clearSelectedHotbarSlot() {
-  await inventoryStore.setHotbarSlot(selectedHotbarIndex.value + 1, '')
-  draw()
 }
 
 function applyLocalEquipmentVisuals() {
