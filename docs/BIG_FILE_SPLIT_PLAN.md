@@ -17,7 +17,7 @@ Current state:
 - Slice 2 is complete: `frontend/src/features/sunny-town/SunnyTownPage.vue` is down from 1,554 lines to about 699 lines and now mainly orchestrates input, socket ordering, camera, and rendering composition.
 - Slice 3 is complete: `cmd/hq/reward_test.go` was removed after moving its regression tests into owning packages.
 - Slice 4 is complete: `internal/sunnytown/server/room_test.go` is down from 974 lines to 166 lines after moving map-loader, room movement, mining/resource, and world/portal tests into focused files.
-- Slice 5 is in progress: `internal/hq/assignments/http.go` is down from 517 lines to 300 lines after moving HTTP helpers and student handlers into focused files with unit tests.
+- Slice 5 is complete: `internal/hq/assignments/http.go` is down from 517 lines to 58 lines after moving HTTP helpers, student handlers, and teacher handlers into focused files with unit tests.
 - Slice 2 completed sub-slices:
   - `frontend/src/features/sunny-town/worldObjects.ts` plus tests for world-object conversion helpers.
   - `frontend/src/composables/useSunnyTownRemotePlayers.ts` plus tests for remote snapshot history/interpolation.
@@ -43,7 +43,8 @@ Current state:
 - Slice 5 completed sub-slices:
   - Moved category validation, assignment ID parsing, and JSON writing helpers into `internal/hq/assignments/http_helpers.go`, with focused helper tests in `internal/hq/assignments/http_helpers_test.go`.
   - Moved student next-assignment, graded-assignment, and submit handlers into `internal/hq/assignments/http_student.go`, with focused validation tests in `internal/hq/assignments/http_student_test.go`.
-- Next recommended step: continue Slice 5 by moving assignment teacher handlers into `internal/hq/assignments/http_teacher.go`.
+  - Moved teacher list, create, answered, grade, reset, and delete handlers into `internal/hq/assignments/http_teacher.go`, with focused validation tests in `internal/hq/assignments/http_teacher_test.go`.
+- Next recommended step: start Slice 6 by splitting `internal/hq/pet/store.go` into profile, game reward, feed, sleep/decay, and row-mapping files.
 - AI grading file cleanup should wait if another agent is actively refactoring the AI service.
 
 Verification baseline:
@@ -103,7 +104,7 @@ Snapshot generated on 2026-06-07:
 | `frontend/src/features/sunny-town/SunnyTownPage.vue` | 699 | Complete | Now mainly holds orchestration, socket ordering, movement send, camera/input routing, and rendering composition. |
 | `internal/sunnytown/server/room_test.go` | 166 | Complete | Now holds collectible pickup tests and shared Sunny Town server test fixtures. |
 | `internal/hq/sunnytownbridge/bridge.go` | 848 | High | Store operations, ledgers, positions, map objects, service HTTP handlers, auth, parsing, and JSON helpers in one file. |
-| `internal/hq/assignments/http.go` | 300 | Medium | Teacher handlers remain; package HTTP helpers and student handlers have moved. |
+| `internal/hq/assignments/http.go` | 58 | Complete | Now holds the assignment HTTP handler type, constructor, and route dispatchers. |
 | `internal/hq/pet/store.go` | 488 | Medium | Profile actions, game rewards, sleep/wake, decay ticker, decay math, and profile loading in one file. |
 | `internal/hq/ai/grading.go` | 460 | Low for now | Handler, context loading, grade recording, auto-apply policy, outbound request, async trigger, and JSON helper. Defer if AI refactor is active. |
 | `internal/hq/auth/auth.go` | 370 | Low | JWT verification, context helpers, role checks. Large but cohesive enough for now. |
@@ -118,7 +119,7 @@ Snapshot generated on 2026-06-07:
 - [x] Slice 2: Split `frontend/src/features/sunny-town/SunnyTownPage.vue`.
 - [x] Slice 3: Split `cmd/hq/reward_test.go` by package ownership.
 - [x] Slice 4: Split `internal/sunnytown/server/room_test.go` by behavior area.
-- [ ] Slice 5: Split `internal/hq/assignments/http.go`.
+- [x] Slice 5: Split `internal/hq/assignments/http.go`.
 - [ ] Slice 6: Split `internal/hq/pet/store.go`.
 - [ ] Slice 7: Reassess `internal/hq/ai/grading.go` after AI refactor status is clear.
 - [ ] Slice 8: Reassess lower-priority files and duplicate helper opportunities.
@@ -432,3 +433,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 - 2026-06-07: Completed Slice 4 by moving Sunny Town world transfer, portal, join-target, NPC, cell snapshot, and indoor reward tests into `internal/sunnytown/server/world_test.go`. Verified with `go test ./internal/sunnytown/server` and `go test ./...`.
 - 2026-06-07: Started Slice 5 by moving assignment HTTP category validation, assignment ID parsing, and JSON response helpers into `internal/hq/assignments/http_helpers.go`, then adding focused helper tests in `internal/hq/assignments/http_helpers_test.go`. Verified with `go test ./internal/hq/assignments` and `go test ./...`.
 - 2026-06-07: Continued Slice 5 by moving assignment student HTTP handlers into `internal/hq/assignments/http_student.go`, then adding focused student-handler validation tests in `internal/hq/assignments/http_student_test.go`. Verified with `go test ./internal/hq/assignments` and `go test ./...`.
+- 2026-06-07: Completed Slice 5 by moving assignment teacher HTTP handlers into `internal/hq/assignments/http_teacher.go`, then adding focused teacher-handler validation tests in `internal/hq/assignments/http_teacher_test.go`. Verified with `go test ./internal/hq/assignments` and `go test ./...`.
