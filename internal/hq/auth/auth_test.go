@@ -44,6 +44,68 @@ func TestHasRole(t *testing.T) {
 	}
 }
 
+func TestRequireRole(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	user := User{ID: 7, Roles: []string{"teacher"}}
+	request = request.WithContext(WithUser(request.Context(), user))
+	response := httptest.NewRecorder()
+
+	got, ok := RequireRole(response, request, "teacher")
+	if !ok {
+		t.Fatal("expected role check to pass")
+	}
+	if got.ID != user.ID {
+		t.Fatalf("RequireRole() ID = %d, want %d", got.ID, user.ID)
+	}
+	if response.Code != http.StatusOK {
+		t.Fatalf("unexpected response status: %d", response.Code)
+	}
+}
+
+func TestRequireRoleRejectsMissingLogin(t *testing.T) {
+	response := httptest.NewRecorder()
+	_, ok := RequireRole(response, httptest.NewRequest(http.MethodGet, "/", nil), "teacher")
+	if ok {
+		t.Fatal("expected role check to fail")
+	}
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestRequireRoleRejectsWrongRole(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	request = request.WithContext(WithUser(request.Context(), User{ID: 7, Roles: []string{"student"}}))
+	response := httptest.NewRecorder()
+
+	_, ok := RequireRole(response, request, "teacher")
+	if ok {
+		t.Fatal("expected role check to fail")
+	}
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+}
+
+func TestRequireStudentID(t *testing.T) {
+	user := User{ID: 7, Roles: []string{"student"}}
+
+	got, err := RequireStudentID(WithUser(context.Background(), user))
+	if err != nil {
+		t.Fatalf("RequireStudentID() error = %v", err)
+	}
+	if got != user.ID {
+		t.Fatalf("RequireStudentID() = %d, want %d", got, user.ID)
+	}
+}
+
+func TestRequireStudentIDRejectsMissingStudentRole(t *testing.T) {
+	_, err := RequireStudentID(WithUser(context.Background(), User{ID: 7, Roles: []string{"teacher"}}))
+	if !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("RequireStudentID() error = %v, want %v", err, ErrInvalidToken)
+	}
+}
+
 func TestRolesForAudienceKeepsKnownRolesInStableOrder(t *testing.T) {
 	claims := tokenClaims{
 		RealmAccess: roleClaim{Roles: []string{"ignored", "student"}},

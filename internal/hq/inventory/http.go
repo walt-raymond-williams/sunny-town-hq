@@ -6,14 +6,13 @@ import (
 	"log"
 	"net/http"
 
+	hqauth "hq/internal/hq/auth"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type RoleUser struct {
-	ID int64
-}
-
-type RequireRoleFunc func(http.ResponseWriter, *http.Request, string) (RoleUser, bool)
+type RoleUser = hqauth.RoleUser
+type RequireRoleFunc = hqauth.RequireRoleFunc
 
 type HTTPHandler struct {
 	store       *pgxpool.Pool

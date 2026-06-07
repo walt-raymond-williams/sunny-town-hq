@@ -37,25 +37,6 @@ func (app *app) authenticated(next http.Handler) http.Handler {
 	})
 }
 
-func requireRole(w http.ResponseWriter, r *http.Request, role string) (hqauth.User, bool) {
-	user, ok := hqauth.UserFromContext(r.Context())
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "login required",
-		})
-		return hqauth.User{}, false
-	}
-
-	if !hqauth.HasRole(user, role) {
-		writeJSON(w, http.StatusForbidden, map[string]string{
-			"error": role + " role required",
-		})
-		return hqauth.User{}, false
-	}
-
-	return user, true
-}
-
 func staticHandler(webRoot string) http.HandlerFunc {
 	fileServer := http.FileServer(http.Dir(webRoot))
 

@@ -28,7 +28,7 @@ type sunnyTownWalletResponse struct {
 }
 
 func (app *app) handleTeacherLogin(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireRole(w, r, "teacher"); !ok {
+	if _, ok := hqauth.RequireRole(w, r, "teacher"); !ok {
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -70,7 +70,7 @@ func (app *app) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) handleStudents(w http.ResponseWriter, r *http.Request) {
-	if _, ok := requireRole(w, r, "teacher"); !ok {
+	if _, ok := hqauth.RequireRole(w, r, "teacher"); !ok {
 		return
 	}
 	if r.Method != http.MethodGet {
@@ -91,7 +91,7 @@ func (app *app) handleStudents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
+	roleUser, ok := hqauth.RequireRole(w, r, "student")
 	if !ok {
 		return
 	}
@@ -100,7 +100,15 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	profile, err := app.petStore().LoadProfile(r.Context(), user.ID)
+	user, ok := hqauth.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "login required",
+		})
+		return
+	}
+
+	profile, err := app.petStore().LoadProfile(r.Context(), roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town student profile: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -109,7 +117,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	position, err := hqsunnytownbridge.Store{DB: app.db}.LoadPosition(r.Context(), user.ID)
+	position, err := hqsunnytownbridge.Store{DB: app.db}.LoadPosition(r.Context(), roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town position: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -127,7 +135,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	expiresAt := time.Now().UTC().Add(time.Minute)
 	avatarID := "pet-default"
 	token, err := sunnytownauth.Sign(sunnytownauth.Claims{
-		AppUserID:       user.ID,
+		AppUserID:       roleUser.ID,
 		KeycloakSubject: user.KeycloakSubject,
 		DisplayName:     profile.DisplayName,
 		Roles:           user.Roles,
@@ -143,7 +151,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	starBalance, err := hqinventory.EnsureStudentWallet(r.Context(), app.db, user.ID)
+	starBalance, err := hqinventory.EnsureStudentWallet(r.Context(), app.db, roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town wallet: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -151,7 +159,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	inventory, err := hqinventory.LoadStudent(r.Context(), app.db, user.ID)
+	inventory, err := hqinventory.LoadStudent(r.Context(), app.db, roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town inventory: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -159,7 +167,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	hotbar, err := hqinventory.LoadStudentHotbar(r.Context(), app.db, user.ID)
+	hotbar, err := hqinventory.LoadStudentHotbar(r.Context(), app.db, roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town hotbar: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{

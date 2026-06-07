@@ -43,6 +43,12 @@ type User struct {
 	Roles           []string `json:"roles"`
 }
 
+type RoleUser struct {
+	ID int64
+}
+
+type RequireRoleFunc func(http.ResponseWriter, *http.Request, string) (RoleUser, bool)
+
 type tokenClaims struct {
 	Subject           string               `json:"sub"`
 	Issuer            string               `json:"iss"`
@@ -144,6 +150,39 @@ func HasRole(user User, role string) bool {
 		}
 	}
 	return false
+}
+
+func RequireRole(w http.ResponseWriter, r *http.Request, role string) (RoleUser, bool) {
+	user, ok := UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "login required",
+		})
+		return RoleUser{}, false
+	}
+
+	if !HasRole(user, role) {
+		writeJSON(w, http.StatusForbidden, map[string]string{
+			"error": role + " role required",
+		})
+		return RoleUser{}, false
+	}
+
+	return RoleUser{ID: user.ID}, true
+}
+
+func RequireStudentID(ctx context.Context) (int64, error) {
+	user, ok := UserFromContext(ctx)
+	if !ok || !HasRole(user, "student") {
+		return 0, ErrInvalidToken
+	}
+	return user.ID, nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func (verifier *Verifier) verifyToken(ctx context.Context, token string) (tokenClaims, error) {

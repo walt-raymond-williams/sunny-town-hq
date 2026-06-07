@@ -6,6 +6,7 @@ import (
 
 	hqai "hq/internal/hq/ai"
 	hqassignments "hq/internal/hq/assignments"
+	hqauth "hq/internal/hq/auth"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
@@ -27,13 +28,13 @@ func (app *app) routes(webRoot string) http.Handler {
 	petStore := app.petStore()
 	petHandlers := hqpet.NewHTTPHandler(hqpet.HTTPHandlerConfig{
 		Store:          petStore,
-		RequireRole:    petRequireRole,
+		RequireRole:    hqauth.RequireRole,
 		NoCookiesError: errNoCookies,
 	})
 	apiMux.HandleFunc("/api/student/profile", petHandlers.HandleStudentProfile)
 	inventoryHandlers := hqinventory.NewHTTPHandler(hqinventory.HTTPHandlerConfig{
 		Store:       app.db,
-		RequireRole: inventoryRequireRole,
+		RequireRole: hqauth.RequireRole,
 	})
 	apiMux.HandleFunc("/api/student/inventory", inventoryHandlers.HandleStudentInventory)
 	apiMux.HandleFunc("/api/student/hotbar", inventoryHandlers.HandleStudentHotbar)
@@ -46,14 +47,8 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/student/pet/feed", petHandlers.HandleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{
-		Store: app.db,
-		RequireRole: func(w http.ResponseWriter, r *http.Request, role string) (hqassignments.RoleUser, bool) {
-			user, ok := requireRole(w, r, role)
-			if !ok {
-				return hqassignments.RoleUser{}, false
-			}
-			return hqassignments.RoleUser{ID: user.ID}, true
-		},
+		Store:       app.db,
+		RequireRole: hqauth.RequireRole,
 		GradeAttempt: func(ctx context.Context, command hqassignments.GradeAttemptCommand) error {
 			return hqassignments.GradeAttemptInTx(ctx, app.db, command)
 		},
@@ -91,7 +86,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	mux.HandleFunc("/api/internal/ai/assignment-attempts/", aiHandler.HandleAssignmentAttempt)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
-	petServicePath, petServiceHandler := hqpet.NewServiceHandler(petStore, requireStudentID, errNoCookies)
+	petServicePath, petServiceHandler := hqpet.NewServiceHandler(petStore, hqauth.RequireStudentID, errNoCookies)
 	mux.Handle(petServicePath, app.authenticated(petServiceHandler))
 
 	mux.HandleFunc("/", staticHandler(webRoot))

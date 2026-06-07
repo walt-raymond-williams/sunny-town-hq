@@ -10,14 +10,13 @@ import (
 	"strconv"
 	"strings"
 
+	hqauth "hq/internal/hq/auth"
+
 	"github.com/jackc/pgx/v5"
 )
 
-type RoleUser struct {
-	ID int64
-}
-
-type RequireRoleFunc func(http.ResponseWriter, *http.Request, string) (RoleUser, bool)
+type RoleUser = hqauth.RoleUser
+type RequireRoleFunc = hqauth.RequireRoleFunc
 type GradeAttemptFunc func(context.Context, GradeAttemptCommand) error
 
 type HTTPHandler struct {

@@ -8,29 +8,30 @@ Last updated: 2026-06-07.
 
 Current state:
 
-- Phase 8 Slice 8.2 is implemented and verified.
-- Next work is Phase 8 Slice 8.3: replace command-local role adapters with shared auth/user helpers or narrow exported adapters.
+- Phase 8 Slice 8.3 is implemented and verified.
+- Next work is Phase 8 Slice 8.4: move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API stays small.
 - Phase 7 adapter retirement is complete: inventory, pet, Sunny Town bridge, AI grading, and assignment adapters have been retired.
-- Current `cmd/hq` shape after Phase 8 Slice 8.2:
+- Current `cmd/hq` shape after Phase 8 Slice 8.3:
   - `main.go`: 78 lines
-  - `routes.go`: 92 lines
-  - `handlers.go`: 163 lines
+  - `routes.go`: 87 lines
+  - `handlers.go`: 170 lines
+  - `http_helpers.go`: 95 lines
   - `reward_test.go`: 1,358 lines
-  - `internal/hq/auth/auth.go`: 287 lines
-  - `internal/hq/auth/auth_test.go`: 148 lines
+  - `internal/hq/auth/auth.go`: 319 lines
+  - `internal/hq/auth/auth_test.go`: 202 lines
   - `internal/hq/users/users.go`: 135 lines
   - `internal/hq/users/users_test.go`: 36 lines
-- After committing Phase 8 Slice 8.2, `git status --short` should show only known untracked local logs:
+- After committing Phase 8 Slice 8.3, `git status --short` should show only known untracked local logs:
   - `hq-local.err.log`
   - `hq-local.out.log`
 - Phases 1 through 6 are complete except for deferred future guardrails noted below.
-- Remaining structural work should focus on moving authenticated user persistence/sync and command HTTP helpers behind internal boundaries before moving app construction.
+- Remaining structural work should focus on command HTTP helpers before reassessing route and app construction moves.
 
 Recommended next work:
 
-1. Replace remaining command-local role adapters with shared auth package adapters or narrow exported helpers.
-2. Move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API is small and boring.
-3. After auth/user management moves, reassess moving route construction into `internal/hq/httpapi`, then reassess moving app construction into `internal/hq/app`.
+1. Move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API is small and boring.
+2. Reassess moving route construction into `internal/hq/httpapi`.
+3. Reassess moving app construction into `internal/hq/app`.
 
 ```powershell
 go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
@@ -330,7 +331,7 @@ Recommended slice order:
 
 - [x] Slice 8.1: Move Keycloak JWT verification and auth user types from `cmd/hq/auth.go` into `internal/hq/auth`.
 - [x] Slice 8.2: Move authenticated-user sync, role persistence, default student provisioning, student listing, and `requireUser` from `cmd/hq/schema.go` into the auth/user package or a focused `internal/hq/users` package.
-- [ ] Slice 8.3: Replace command-local role adapters (`inventory_auth.go`, `pet_auth.go`, inline assignment role bridge, `requireStudentID`) with shared auth package adapters or narrow exported helpers.
+- [x] Slice 8.3: Replace command-local role adapters (`inventory_auth.go`, `pet_auth.go`, inline assignment role bridge, `requireStudentID`) with shared auth package adapters or narrow exported helpers.
 - [ ] Slice 8.4: Move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API is small and boring.
 - [ ] Slice 8.5: Reassess route registration after auth/user cleanup; move route construction only if it reduces `cmd/hq` coupling without creating a large configuration object.
 - [ ] Slice 8.6: Reassess app construction in `internal/hq/app`; move only if `cmd/hq/main.go` can remain a readable binary entrypoint and tests stay straightforward.
@@ -510,3 +511,6 @@ Verification:
 - 2026-06-07: Phase 8 Slice 8.2 moved authenticated user sync, role persistence, default student provisioning, student listing, and the context-backed require helper into `internal/hq/users`; deleted `cmd/hq/schema.go` and wired HQ middleware/student handlers through `users.Store`.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 8 Slice 8.2.
 - 2026-06-07: `go test ./...` passed after Phase 8 Slice 8.2.
+- 2026-06-07: Phase 8 Slice 8.3 moved standard HTTP role enforcement and student-id extraction into `internal/hq/auth`, wired inventory, pet, assignment, and command handlers to the shared helpers, and deleted `cmd/hq/inventory_auth.go` plus `cmd/hq/pet_auth.go`.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 8 Slice 8.3.
+- 2026-06-07: `go test ./...` passed after Phase 8 Slice 8.3.

@@ -6,13 +6,12 @@ import (
 	"errors"
 	"log"
 	"net/http"
+
+	hqauth "hq/internal/hq/auth"
 )
 
-type RoleUser struct {
-	ID int64
-}
-
-type RequireRoleFunc func(http.ResponseWriter, *http.Request, string) (RoleUser, bool)
+type RoleUser = hqauth.RoleUser
+type RequireRoleFunc = hqauth.RequireRoleFunc
 
 type HTTPStore interface {
 	LoadProfile(ctx context.Context, userID int64) (Profile, error)
