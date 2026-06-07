@@ -174,15 +174,16 @@ Tasks:
 Slice plan:
 
 - [x] Slice 4.1: Move HQ config loading into `internal/hq/app` while keeping behavior unchanged.
-- [ ] Slice 4.2: Move app construction into `internal/hq/app` once the `app` type can move cleanly.
-- [ ] Slice 4.3: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`.
-- [ ] Slice 4.4: Move pet state rules, decay ticker, game-result logic, and Connect RPC handler into `internal/hq/pet`.
-- [ ] Slice 4.5: Move inventory, equipment, hotbar, crafting, wallet, and shop logic into `internal/hq/inventory`.
-- [ ] Slice 4.6: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
-- [ ] Slice 4.7: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
-- [ ] Slice 4.8: Move AI grading integration behind `internal/hq/ai`.
-- [ ] Slice 4.9: Prepare schema ownership boundaries for Phase 5 migrations without changing the migration story yet.
-- [ ] Slice 4.10: Final HQ cleanup: keep `cmd/hq/main.go` as a thin binary entrypoint, remove dead code, update docs, and run full verification.
+- [x] Slice 4.2: Split HQ route registration out of startup into `cmd/hq/routes.go` as a no-behavior-change waypoint.
+- [ ] Slice 4.3: Move app construction into `internal/hq/app` once the `app` type can move cleanly.
+- [ ] Slice 4.4: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`.
+- [ ] Slice 4.5: Move pet state rules, decay ticker, game-result logic, and Connect RPC handler into `internal/hq/pet`.
+- [ ] Slice 4.6: Move inventory, equipment, hotbar, crafting, wallet, and shop logic into `internal/hq/inventory`.
+- [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
+- [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
+- [ ] Slice 4.9: Move AI grading integration behind `internal/hq/ai`.
+- [ ] Slice 4.10: Prepare schema ownership boundaries for Phase 5 migrations without changing the migration story yet.
+- [ ] Slice 4.11: Final HQ cleanup: keep `cmd/hq/main.go` as a thin binary entrypoint, remove dead code, update docs, and run full verification.
 
 Pet module direction:
 
@@ -195,6 +196,7 @@ Original task coverage:
 
 - [x] Move app config into `internal/hq/app`.
 - [ ] Move app construction into `internal/hq/app`.
+- [x] Split route registration out of HQ startup.
 - [ ] Move route registration and HTTP helpers into `internal/hq/httpapi`.
 - [ ] Move assignment handlers and assignment service logic.
 - [ ] Move inventory, equipment, hotbar, and crafting logic.
@@ -327,3 +329,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.1 moved HQ runtime config loading into `internal/hq/app`.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.1.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.1.
+- 2026-06-07: Phase 4 Slice 4.2 split HQ route registration into `cmd/hq/routes.go` without changing handlers or auth wiring.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.2.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.2.
