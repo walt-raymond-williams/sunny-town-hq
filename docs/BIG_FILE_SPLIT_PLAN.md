@@ -29,6 +29,8 @@ npm run build
 
 Run the narrow command first for the area touched, then run `go test ./...` or `npm run build` before committing. For mixed backend/frontend slices, run both.
 
+Before committing any Go production-code change, confirm that the touched package has meaningful unit tests. If it does not, add focused unit tests for the moved or changed behavior in the same slice, then run them before committing. Existing broad integration coverage is useful, but it is not a substitute for package-level unit coverage when a package has no direct tests.
+
 ## Goals
 
 - Make the largest files easier to review, merge, and assign to different people or agents.
@@ -369,10 +371,11 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 3. Move code in one behavior-preserving slice.
 4. Prefer file moves/splits over API redesign.
 5. Consolidate duplicate helpers only when behavior is identical and tests cover it.
-6. Run narrow tests first, then broad tests.
-7. Update this document with completed work, verification, and next slice.
-8. Stage files explicitly. Do not stage `hq-local.err.log`, `hq-local.out.log`, ignored `web/`, or unrelated changes.
-9. Commit every completed slice.
+6. For Go production changes, verify package-level unit coverage exists for the touched behavior; add focused unit tests if none exist.
+7. Run narrow tests first, then broad tests, before committing.
+8. Update this document with completed work, verification, and next slice.
+9. Stage files explicitly. Do not stage `hq-local.err.log`, `hq-local.out.log`, ignored `web/`, or unrelated changes.
+10. Commit every completed slice only after the relevant tests pass.
 
 ## Current Verification Log
 
