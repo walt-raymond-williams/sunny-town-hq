@@ -1,4 +1,4 @@
-package main
+package ai
 
 import (
 	"context"
@@ -9,25 +9,23 @@ import (
 	"time"
 
 	"hq/internal/aiapi"
-	hqai "hq/internal/hq/ai"
 	hqassignments "hq/internal/hq/assignments"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
-	app, cleanup := testRewardApp(t)
+	db, cleanup := testAIDB(t)
 	defer cleanup()
-	app.aiAutoApplyGrades = false
 
 	ctx := context.Background()
-	assignmentID, attemptID := seedAssignmentAttempt(t, app)
+	assignmentID, attemptID := seedAIAssignmentAttempt(t, db)
 	passed := true
 	confidence := 0.91
 
-	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, aiapi.AIGradeResultRequest{
+	response, err := RecordGradeResult(ctx, db, attemptID, aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              hqai.GradeStatusCompleted,
+		Status:              GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Confidence:          &confidence,
@@ -38,23 +36,23 @@ func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
 		}},
 		Model:         "fake-grader",
 		PromptVersion: "assignment-grader-v1",
-	}, app.aiAutoApplyGrades)
+	}, false)
 	if err != nil {
 		t.Fatalf("record ai grade result: %v", err)
 	}
 	if response.Applied {
 		t.Fatal("expected AI result to be stored without auto-applying grade")
 	}
-	if response.ApplySkippedReason != hqai.ApplySkippedAutoApplyDisabled {
-		t.Fatalf("apply skipped reason = %q, want %q", response.ApplySkippedReason, hqai.ApplySkippedAutoApplyDisabled)
+	if response.ApplySkippedReason != ApplySkippedAutoApplyDisabled {
+		t.Fatalf("apply skipped reason = %q, want %q", response.ApplySkippedReason, ApplySkippedAutoApplyDisabled)
 	}
 
 	var count int
 	var currentPassed *bool
-	if err := app.db.QueryRow(ctx, "select count(*) from assignment_ai_grade where assignment_attempt_id = $1", attemptID).Scan(&count); err != nil {
+	if err := db.QueryRow(ctx, "select count(*) from assignment_ai_grade where assignment_attempt_id = $1", attemptID).Scan(&count); err != nil {
 		t.Fatalf("count ai grades: %v", err)
 	}
-	if err := app.db.QueryRow(ctx, "select passed from assignment_attempt where id = $1 and assignment_id = $2", attemptID, assignmentID).Scan(&currentPassed); err != nil {
+	if err := db.QueryRow(ctx, "select passed from assignment_attempt where id = $1 and assignment_id = $2", attemptID, assignmentID).Scan(&currentPassed); err != nil {
 		t.Fatalf("load attempt passed: %v", err)
 	}
 	if count != 1 || currentPassed != nil {
@@ -63,24 +61,23 @@ func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
 }
 
 func TestRecordAIGradeResultAutoAppliesThroughSharedGradeCommand(t *testing.T) {
-	app, cleanup := testRewardApp(t)
+	db, cleanup := testAIDB(t)
 	defer cleanup()
-	app.aiAutoApplyGrades = true
 
 	ctx := context.Background()
-	_, attemptID := seedAssignmentAttempt(t, app)
+	_, attemptID := seedAIAssignmentAttempt(t, db)
 	passed := true
 	confidence := 0.97
 
-	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, aiapi.AIGradeResultRequest{
+	response, err := RecordGradeResult(ctx, db, attemptID, aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              hqai.GradeStatusCompleted,
+		Status:              GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Confidence:          &confidence,
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
-	}, app.aiAutoApplyGrades)
+	}, true)
 	if err != nil {
 		t.Fatalf("record ai grade result: %v", err)
 	}
@@ -93,7 +90,7 @@ func TestRecordAIGradeResultAutoAppliesThroughSharedGradeCommand(t *testing.T) {
 	var reviewStatus string
 	var cookieAwarded bool
 	var cookieQuantity int
-	if err := app.db.QueryRow(
+	if err := db.QueryRow(
 		ctx,
 		`
 			select graded_by_type, grade_source, ai_review_status, cookie_awarded
@@ -104,7 +101,7 @@ func TestRecordAIGradeResultAutoAppliesThroughSharedGradeCommand(t *testing.T) {
 	).Scan(&gradedByType, &gradeSource, &reviewStatus, &cookieAwarded); err != nil {
 		t.Fatalf("load graded attempt metadata: %v", err)
 	}
-	if err := app.db.QueryRow(
+	if err := db.QueryRow(
 		ctx,
 		`
 			select sii.quantity
@@ -121,29 +118,28 @@ func TestRecordAIGradeResultAutoAppliesThroughSharedGradeCommand(t *testing.T) {
 }
 
 func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
-	app, cleanup := testRewardApp(t)
+	db, cleanup := testAIDB(t)
 	defer cleanup()
-	app.aiAutoApplyGrades = true
 
 	ctx := context.Background()
-	assignmentID, attemptID := seedAssignmentAttempt(t, app)
+	assignmentID, attemptID := seedAIAssignmentAttempt(t, db)
 	passed := true
-	if _, err := hqai.RecordGradeResult(ctx, app.db, attemptID, aiapi.AIGradeResultRequest{
+	if _, err := RecordGradeResult(ctx, db, attemptID, aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              hqai.GradeStatusCompleted,
+		Status:              GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
-	}, app.aiAutoApplyGrades); err != nil {
+	}, true); err != nil {
 		t.Fatalf("record ai grade result: %v", err)
 	}
 
 	teacherID := int64(124)
-	if _, err := app.db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
+	if _, err := db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
 		t.Fatalf("seed teacher: %v", err)
 	}
-	if err := hqassignments.GradeAttemptInTx(ctx, app.db, hqassignments.GradeAttemptCommand{
+	if err := hqassignments.GradeAttemptInTx(ctx, db, hqassignments.GradeAttemptCommand{
 		AssignmentID:     assignmentID,
 		AttemptID:        attemptID,
 		Passed:           false,
@@ -160,7 +156,7 @@ func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
 	var gradeSource string
 	var reviewStatus string
 	var currentPassed bool
-	if err := app.db.QueryRow(
+	if err := db.QueryRow(
 		ctx,
 		`
 			select graded_by_type, grade_source, ai_review_status, passed
@@ -177,30 +173,29 @@ func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
 }
 
 func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
-	app, cleanup := testRewardApp(t)
+	db, cleanup := testAIDB(t)
 	defer cleanup()
-	app.aiAutoApplyGrades = true
 
 	ctx := context.Background()
-	assignmentID, attemptID := seedAssignmentAttempt(t, app)
+	assignmentID, attemptID := seedAIAssignmentAttempt(t, db)
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              hqai.GradeStatusCompleted,
+		Status:              GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	if _, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades); err != nil {
+	if _, err := RecordGradeResult(ctx, db, attemptID, request, true); err != nil {
 		t.Fatalf("record initial ai grade result: %v", err)
 	}
 
 	teacherID := int64(124)
-	if _, err := app.db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
+	if _, err := db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
 		t.Fatalf("seed teacher: %v", err)
 	}
-	if err := hqassignments.GradeAttemptInTx(ctx, app.db, hqassignments.GradeAttemptCommand{
+	if err := hqassignments.GradeAttemptInTx(ctx, db, hqassignments.GradeAttemptCommand{
 		AssignmentID:     assignmentID,
 		AttemptID:        attemptID,
 		Passed:           false,
@@ -213,11 +208,11 @@ func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
 		t.Fatalf("teacher override grade: %v", err)
 	}
 
-	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
+	response, err := RecordGradeResult(ctx, db, attemptID, request, true)
 	if err != nil {
 		t.Fatalf("retry ai grade result: %v", err)
 	}
-	if response.Applied || response.ApplySkippedReason != hqai.ApplySkippedTeacherOverride {
+	if response.Applied || response.ApplySkippedReason != ApplySkippedTeacherOverride {
 		t.Fatalf("retry applied=%v reason=%q, want skipped teacher override", response.Applied, response.ApplySkippedReason)
 	}
 
@@ -225,7 +220,7 @@ func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
 	var gradeSource string
 	var reviewStatus string
 	var currentPassed bool
-	if err := app.db.QueryRow(
+	if err := db.QueryRow(
 		ctx,
 		`
 			select graded_by_type, grade_source, ai_review_status, passed
@@ -242,42 +237,41 @@ func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
 }
 
 func TestAIGradeRetryDoesNotOverwriteReviewedAttempt(t *testing.T) {
-	app, cleanup := testRewardApp(t)
+	db, cleanup := testAIDB(t)
 	defer cleanup()
-	app.aiAutoApplyGrades = true
 
 	ctx := context.Background()
-	_, attemptID := seedAssignmentAttempt(t, app)
+	_, attemptID := seedAIAssignmentAttempt(t, db)
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              hqai.GradeStatusCompleted,
+		Status:              GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	if _, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades); err != nil {
+	if _, err := RecordGradeResult(ctx, db, attemptID, request, true); err != nil {
 		t.Fatalf("record initial ai grade result: %v", err)
 	}
-	if _, err := app.db.Exec(ctx, "update assignment_attempt set ai_review_status = $2 where id = $1", attemptID, hqassignments.AIReviewStatusReviewed); err != nil {
+	if _, err := db.Exec(ctx, "update assignment_attempt set ai_review_status = $2 where id = $1", attemptID, hqassignments.AIReviewStatusReviewed); err != nil {
 		t.Fatalf("mark ai grade reviewed: %v", err)
 	}
 
 	passed = false
 	request.RecommendedPassed = &passed
 	request.RecommendedFeedback = "Incorrect."
-	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
+	response, err := RecordGradeResult(ctx, db, attemptID, request, true)
 	if err != nil {
 		t.Fatalf("retry ai grade result: %v", err)
 	}
-	if response.Applied || response.ApplySkippedReason != hqai.ApplySkippedTeacherReviewed {
+	if response.Applied || response.ApplySkippedReason != ApplySkippedTeacherReviewed {
 		t.Fatalf("retry applied=%v reason=%q, want skipped teacher reviewed", response.Applied, response.ApplySkippedReason)
 	}
 
 	var reviewStatus string
 	var currentPassed bool
-	if err := app.db.QueryRow(ctx, "select ai_review_status, passed from assignment_attempt where id = $1", attemptID).Scan(&reviewStatus, &currentPassed); err != nil {
+	if err := db.QueryRow(ctx, "select ai_review_status, passed from assignment_attempt where id = $1", attemptID).Scan(&reviewStatus, &currentPassed); err != nil {
 		t.Fatalf("load reviewed attempt: %v", err)
 	}
 	if reviewStatus != hqassignments.AIReviewStatusReviewed || !currentPassed {
@@ -286,27 +280,26 @@ func TestAIGradeRetryDoesNotOverwriteReviewedAttempt(t *testing.T) {
 }
 
 func TestAIGradeDuplicateRequestIDSameAttemptIsIdempotent(t *testing.T) {
-	app, cleanup := testRewardApp(t)
+	db, cleanup := testAIDB(t)
 	defer cleanup()
-	app.aiAutoApplyGrades = true
 
 	ctx := context.Background()
-	_, attemptID := seedAssignmentAttempt(t, app)
+	_, attemptID := seedAIAssignmentAttempt(t, db)
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              hqai.GradeStatusCompleted,
+		Status:              GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	first, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
+	first, err := RecordGradeResult(ctx, db, attemptID, request, true)
 	if err != nil {
 		t.Fatalf("record first ai grade result: %v", err)
 	}
 	request.RecommendedFeedback = "Still correct."
-	second, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
+	second, err := RecordGradeResult(ctx, db, attemptID, request, true)
 	if err != nil {
 		t.Fatalf("record second ai grade result: %v", err)
 	}
@@ -316,10 +309,10 @@ func TestAIGradeDuplicateRequestIDSameAttemptIsIdempotent(t *testing.T) {
 
 	var aiGradeCount int
 	var cookieQuantity int
-	if err := app.db.QueryRow(ctx, "select count(*) from assignment_ai_grade where assignment_attempt_id = $1", attemptID).Scan(&aiGradeCount); err != nil {
+	if err := db.QueryRow(ctx, "select count(*) from assignment_ai_grade where assignment_attempt_id = $1", attemptID).Scan(&aiGradeCount); err != nil {
 		t.Fatalf("count ai grades: %v", err)
 	}
-	if err := app.db.QueryRow(
+	if err := db.QueryRow(
 		ctx,
 		`
 			select sii.quantity
@@ -336,34 +329,33 @@ func TestAIGradeDuplicateRequestIDSameAttemptIsIdempotent(t *testing.T) {
 }
 
 func TestAIGradeDuplicateRequestIDDifferentAttemptIsRejected(t *testing.T) {
-	app, cleanup := testRewardApp(t)
+	db, cleanup := testAIDB(t)
 	defer cleanup()
-	app.aiAutoApplyGrades = true
 
 	ctx := context.Background()
-	_, firstAttemptID := seedAssignmentAttempt(t, app)
-	_, secondAttemptID := seedAssignmentAttempt(t, app)
+	_, firstAttemptID := seedAIAssignmentAttempt(t, db)
+	_, secondAttemptID := seedAIAssignmentAttempt(t, db)
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              hqai.GradeStatusCompleted,
+		Status:              GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	if _, err := hqai.RecordGradeResult(ctx, app.db, firstAttemptID, request, app.aiAutoApplyGrades); err != nil {
+	if _, err := RecordGradeResult(ctx, db, firstAttemptID, request, true); err != nil {
 		t.Fatalf("record first ai grade result: %v", err)
 	}
 
-	_, err := hqai.RecordGradeResult(ctx, app.db, secondAttemptID, request, app.aiAutoApplyGrades)
-	if !errors.Is(err, hqai.ErrGradeRequestAttemptMismatch) {
+	_, err := RecordGradeResult(ctx, db, secondAttemptID, request, true)
+	if !errors.Is(err, ErrGradeRequestAttemptMismatch) {
 		t.Fatalf("second ai grade error = %v, want request attempt mismatch", err)
 	}
 
 	var secondAIGradeID *int64
 	var secondPassed *bool
-	if err := app.db.QueryRow(ctx, "select ai_grade_id, passed from assignment_attempt where id = $1", secondAttemptID).Scan(&secondAIGradeID, &secondPassed); err != nil {
+	if err := db.QueryRow(ctx, "select ai_grade_id, passed from assignment_attempt where id = $1", secondAttemptID).Scan(&secondAIGradeID, &secondPassed); err != nil {
 		t.Fatalf("load second attempt: %v", err)
 	}
 	if secondAIGradeID != nil || secondPassed != nil {
@@ -371,12 +363,12 @@ func TestAIGradeDuplicateRequestIDDifferentAttemptIsRejected(t *testing.T) {
 	}
 }
 
-func seedAssignmentAttempt(t *testing.T, app *app) (int64, int64) {
+func seedAIAssignmentAttempt(t *testing.T, db *pgxpool.Pool) (int64, int64) {
 	t.Helper()
 	ctx := context.Background()
 
 	var assignmentID int64
-	if err := app.db.QueryRow(
+	if err := db.QueryRow(
 		ctx,
 		"insert into assignment (category, prompt, expected_answer) values ('MATH', 'What is 2 + 2?', '4') returning id",
 	).Scan(&assignmentID); err != nil {
@@ -384,7 +376,7 @@ func seedAssignmentAttempt(t *testing.T, app *app) (int64, int64) {
 	}
 
 	var attemptID int64
-	if err := app.db.QueryRow(
+	if err := db.QueryRow(
 		ctx,
 		`
 			insert into assignment_attempt (
@@ -404,7 +396,7 @@ func seedAssignmentAttempt(t *testing.T, app *app) (int64, int64) {
 	return assignmentID, attemptID
 }
 
-func testRewardApp(t *testing.T) (*app, func()) {
+func testAIDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 
 	databaseURL := os.Getenv("HQ_TEST_DATABASE_URL")
@@ -418,7 +410,7 @@ func testRewardApp(t *testing.T) (*app, func()) {
 		t.Fatalf("connect admin pool: %v", err)
 	}
 
-	schema := fmt.Sprintf("reward_test_%d", time.Now().UnixNano())
+	schema := fmt.Sprintf("ai_test_%d", time.Now().UnixNano())
 	if _, err := adminPool.Exec(ctx, "create schema "+schema); err != nil {
 		adminPool.Close()
 		t.Fatalf("create schema: %v", err)
@@ -440,37 +432,6 @@ func testRewardApp(t *testing.T) (*app, func()) {
 		`create table app_user (
 			id bigint primary key,
 			display_name text not null
-		)`,
-		`create table student_wallet (
-			app_user_id bigint primary key references app_user(id) on delete cascade,
-			star_balance integer not null default 0,
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now(),
-			constraint student_wallet_star_balance_nonnegative check (star_balance >= 0)
-		)`,
-		`create table student_star_ledger (
-			id bigserial primary key,
-			app_user_id bigint not null references app_user(id) on delete cascade,
-			event_id text not null unique,
-			source text not null,
-			delta integer not null,
-			room_id text null,
-			map_id text null,
-			collectible_id text null,
-			metadata jsonb not null default '{}'::jsonb,
-			created_at timestamptz not null default now(),
-			constraint student_star_ledger_delta_nonzero check (delta <> 0)
-		)`,
-		`create table pet_state (
-			user_id bigint primary key references app_user(id) on delete cascade,
-			hunger integer not null default 50,
-			happiness integer not null default 50,
-			energy integer not null default 50,
-			sleeping boolean not null default false,
-			updated_at timestamptz not null default now(),
-			last_decay_at timestamptz not null default now(),
-			sleep_started_at timestamptz null,
-			sleep_started_energy integer null
 		)`,
 		`create table assignment (
 			id bigserial primary key,
@@ -530,16 +491,6 @@ func testRewardApp(t *testing.T) (*app, func()) {
 		)`,
 		`insert into inventory_item_type (key, name, description)
 			values ('cookie', 'Cookie', 'A treat for your pet.')`,
-		`insert into inventory_item_type (key, name, description, equip_slot, visual_key)
-			values
-				('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie'),
-				('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap'),
-				('pickaxe', 'Pickaxe', 'A sturdy starter tool.', 'tool', 'pickaxe')`,
-		`insert into inventory_item_type (key, name, description)
-			values
-				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
-				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
-				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
@@ -549,63 +500,7 @@ func testRewardApp(t *testing.T) (*app, func()) {
 			primary key (app_user_id, item_type_id),
 			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
 		)`,
-		`create table student_inventory_ledger (
-			id bigserial primary key,
-			app_user_id bigint not null references app_user(id) on delete cascade,
-			event_id text not null unique,
-			source text not null,
-			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
-			delta integer not null,
-			room_id text null,
-			map_id text null,
-			node_id text null,
-			metadata jsonb not null default '{}'::jsonb,
-			created_at timestamptz not null default now(),
-			constraint student_inventory_ledger_delta_nonzero check (delta <> 0)
-		)`,
-		`create table student_equipped_item (
-			app_user_id bigint not null references app_user(id) on delete cascade,
-			slot text not null,
-			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now(),
-			primary key (app_user_id, slot),
-			constraint student_equipped_item_slot_check check (slot in ('gear', 'accessory', 'tool'))
-		)`,
-		`create table student_hotbar_slot (
-			app_user_id bigint not null references app_user(id) on delete cascade,
-			slot_index integer not null,
-			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now(),
-			primary key (app_user_id, slot_index),
-			constraint student_hotbar_slot_index_check check (slot_index between 1 and 5)
-		)`,
-		`create table student_sunny_town_position (
-			app_user_id bigint primary key references app_user(id) on delete cascade,
-			room_id text not null,
-			map_id text not null,
-			x double precision not null,
-			y double precision not null,
-			facing text not null,
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now(),
-			constraint student_sunny_town_position_facing_check check (facing in ('up', 'down', 'left', 'right'))
-		)`,
-		`create table sunny_town_map_object (
-			id bigserial primary key,
-			room_id text not null,
-			map_id text not null,
-			grid_x integer not null,
-			grid_y integer not null,
-			item_key text not null references inventory_item_type(key) on delete restrict,
-			placed_by_app_user_id bigint not null references app_user(id) on delete cascade,
-			created_at timestamptz not null default now(),
-			updated_at timestamptz not null default now(),
-			constraint sunny_town_map_object_location_key unique (room_id, map_id, grid_x, grid_y)
-		)`,
 		`insert into app_user (id, display_name) values (123, 'Student')`,
-		`insert into pet_state (user_id, hunger, happiness, energy) values (123, 50, 50, 50)`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(ctx, statement); err != nil {
@@ -616,7 +511,7 @@ func testRewardApp(t *testing.T) (*app, func()) {
 		}
 	}
 
-	return &app{db: db}, func() {
+	return db, func() {
 		db.Close()
 		_, _ = adminPool.Exec(ctx, "drop schema "+schema+" cascade")
 		adminPool.Close()
