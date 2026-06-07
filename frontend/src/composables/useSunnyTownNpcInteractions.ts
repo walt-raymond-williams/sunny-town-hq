@@ -1,5 +1,6 @@
-import { computed, ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import type { Assignment } from '../types/assignment'
+import type { StudentInventory } from '../types/inventory'
 import type { SunnyTownNpc, SunnyTownPlayer } from '../types/sunnyTown'
 
 export interface NpcInteractionResult {
@@ -7,7 +8,27 @@ export interface NpcInteractionResult {
   openedSchoolwork: boolean
 }
 
-export function useSunnyTownNpcInteractions() {
+interface ShopPurchaseRequest {
+  shopId: string
+  itemKey: string
+  quantity: number
+}
+
+interface ShopPurchaseResult {
+  starBalance: number
+  inventory: StudentInventory
+}
+
+interface SunnyTownNpcInteractionOptions {
+  loadInventory?: () => Promise<void>
+  loadNextAssignment?: () => Promise<Assignment | null>
+  purchaseShopItem?: (purchase: ShopPurchaseRequest) => Promise<ShopPurchaseResult>
+  setInventoryItems?: (items: StudentInventory['items']) => void
+  starBalance?: Ref<number>
+  submitStudentAnswer?: (assignmentId: number, answer: string) => Promise<unknown>
+}
+
+export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOptions = {}) {
   const nearbyNpc = ref<SunnyTownNpc | null>(null)
   const activeDialogueNpc = ref<SunnyTownNpc | null>(null)
   const activeDialogueLineIndex = ref(0)
@@ -124,6 +145,109 @@ export function useSunnyTownNpcInteractions() {
     }
   }
 
+  async function startSchoolwork() {
+    if (!activeSchoolworkNpc.value || isLoadingSchoolwork.value) {
+      return
+    }
+    schoolworkOpen.value = true
+    schoolworkAssignment.value = null
+    schoolworkAnswer.value = ''
+    schoolworkError.value = ''
+    schoolworkNotice.value = ''
+    isLoadingSchoolwork.value = true
+
+    try {
+      schoolworkAssignment.value = await loadNextAssignment()
+    } catch (caught) {
+      schoolworkError.value = errorMessage(caught)
+    } finally {
+      isLoadingSchoolwork.value = false
+    }
+  }
+
+  async function openTrade() {
+    if (!activeShopNpc.value?.shop) {
+      return
+    }
+    shopOpen.value = true
+    shopError.value = ''
+    shopNotice.value = ''
+    await options.loadInventory?.()
+  }
+
+  async function buyShopItem(itemKey: string) {
+    const shop = activeShopNpc.value?.shop
+    if (!shop || isPurchasing.value) {
+      return
+    }
+    isPurchasing.value = true
+    shopError.value = ''
+    shopNotice.value = ''
+
+    try {
+      const purchase = await purchaseItem({
+        shopId: shop.id,
+        itemKey,
+        quantity: 1,
+      })
+      if (options.starBalance) {
+        options.starBalance.value = purchase.starBalance
+      }
+      options.setInventoryItems?.(purchase.inventory.items)
+      shopNotice.value = 'Purchased.'
+    } catch (caught) {
+      shopError.value = errorMessage(caught)
+    } finally {
+      isPurchasing.value = false
+    }
+  }
+
+  async function submitSchoolworkAnswer() {
+    if (!schoolworkAssignment.value || isSubmittingSchoolwork.value) {
+      return
+    }
+
+    isSubmittingSchoolwork.value = true
+    schoolworkError.value = ''
+    schoolworkNotice.value = ''
+
+    try {
+      await submitAnswer(schoolworkAssignment.value.id, schoolworkAnswer.value.trim())
+      schoolworkNotice.value = 'Answer submitted.'
+      schoolworkAnswer.value = ''
+      schoolworkAssignment.value = await loadNextAssignment()
+    } catch (caught) {
+      schoolworkError.value = errorMessage(caught)
+    } finally {
+      isSubmittingSchoolwork.value = false
+    }
+  }
+
+  async function loadNextAssignment(): Promise<Assignment | null> {
+    if (options.loadNextAssignment) {
+      return options.loadNextAssignment()
+    }
+    const assignmentsApi = await import('../api/studentAssignmentsApi')
+    return assignmentsApi.getNextStudentAssignment()
+  }
+
+  async function submitAnswer(assignmentId: number, answer: string): Promise<void> {
+    if (options.submitStudentAnswer) {
+      await options.submitStudentAnswer(assignmentId, answer)
+      return
+    }
+    const assignmentsApi = await import('../api/studentAssignmentsApi')
+    await assignmentsApi.submitStudentAnswer(assignmentId, answer)
+  }
+
+  async function purchaseItem(purchase: ShopPurchaseRequest): Promise<ShopPurchaseResult> {
+    if (options.purchaseShopItem) {
+      return options.purchaseShopItem(purchase)
+    }
+    const shopApi = await import('../api/shopApi')
+    return shopApi.purchaseShopItem(purchase)
+  }
+
   return {
     activeDialogueLine,
     activeDialogueLineIndex,
@@ -132,6 +256,7 @@ export function useSunnyTownNpcInteractions() {
     activeShopNpc,
     closeDialogue,
     closeOverlays,
+    buyShopItem,
     dialogueProgress,
     hasActiveOverlay,
     interactWith,
@@ -139,6 +264,7 @@ export function useSunnyTownNpcInteractions() {
     isPurchasing,
     isSubmittingSchoolwork,
     nearbyNpc,
+    openTrade,
     openSchoolworkMenu,
     openShopMenu,
     refreshNearby,
@@ -150,7 +276,13 @@ export function useSunnyTownNpcInteractions() {
     shopError,
     shopNotice,
     shopOpen,
+    startSchoolwork,
+    submitSchoolworkAnswer,
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export function nearestSunnyTownNpc(

@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { ref } from 'vue'
+import { describe, expect, it, vi } from 'vitest'
+import type { Assignment } from '../types/assignment'
+import type { InventoryItem } from '../types/inventory'
 import type { SunnyTownNpc, SunnyTownPlayer } from '../types/sunnyTown'
 import { nearestSunnyTownNpc, useSunnyTownNpcInteractions } from './useSunnyTownNpcInteractions'
 
@@ -69,6 +72,63 @@ describe('useSunnyTownNpcInteractions', () => {
     expect(nearestSunnyTownNpc([far], self, 54)).toBeNull()
     expect(nearestSunnyTownNpc([near], null, 54)).toBeNull()
   })
+
+  it('loads schoolwork and submits answers through injected APIs', async () => {
+    const nextAssignment = createAssignment({ id: 1, prompt: 'First' })
+    const followupAssignment = createAssignment({ id: 2, prompt: 'Second' })
+    const loadNextAssignment = vi.fn()
+      .mockResolvedValueOnce(nextAssignment)
+      .mockResolvedValueOnce(followupAssignment)
+    const submitStudentAnswer = vi.fn().mockResolvedValue(createAssignment())
+    const interactions = useSunnyTownNpcInteractions({
+      loadNextAssignment,
+      submitStudentAnswer,
+    })
+
+    interactions.openSchoolworkMenu(createNpc({ activity: { type: 'schoolwork' } }))
+    await interactions.startSchoolwork()
+    interactions.schoolworkAnswer.value = '  done  '
+    await interactions.submitSchoolworkAnswer()
+
+    expect(interactions.schoolworkOpen.value).toBe(true)
+    expect(submitStudentAnswer).toHaveBeenCalledWith(1, 'done')
+    expect(interactions.schoolworkNotice.value).toBe('Answer submitted.')
+    expect(interactions.schoolworkAnswer.value).toBe('')
+    expect(interactions.schoolworkAssignment.value?.id).toBe(2)
+  })
+
+  it('opens trade and applies purchases through injected inventory hooks', async () => {
+    const starBalance = ref(5)
+    const loadInventory = vi.fn()
+    const setInventoryItems = vi.fn()
+    const purchaseShopItem = vi.fn().mockResolvedValue({
+      starBalance: 2,
+      inventory: {
+        items: [createInventoryItem({ key: 'star_cap', quantity: 1 })],
+      },
+    })
+    const interactions = useSunnyTownNpcInteractions({
+      loadInventory,
+      purchaseShopItem,
+      setInventoryItems,
+      starBalance,
+    })
+
+    interactions.openShopMenu(createNpc({ shop: { id: 'shop-1', items: [] } }))
+    await interactions.openTrade()
+    await interactions.buyShopItem('star_cap')
+
+    expect(interactions.shopOpen.value).toBe(true)
+    expect(loadInventory).toHaveBeenCalledOnce()
+    expect(purchaseShopItem).toHaveBeenCalledWith({
+      shopId: 'shop-1',
+      itemKey: 'star_cap',
+      quantity: 1,
+    })
+    expect(starBalance.value).toBe(2)
+    expect(setInventoryItems).toHaveBeenCalledWith([createInventoryItem({ key: 'star_cap', quantity: 1 })])
+    expect(interactions.shopNotice.value).toBe('Purchased.')
+  })
 })
 
 function createNpc(overrides: Partial<SunnyTownNpc> = {}): SunnyTownNpc {
@@ -94,6 +154,32 @@ function createPlayer(overrides: Partial<SunnyTownPlayer> = {}): SunnyTownPlayer
     moving: false,
     avatarId: 'default',
     lastProcessedSeq: 0,
+    ...overrides,
+  }
+}
+
+function createAssignment(overrides: Partial<Assignment> = {}): Assignment {
+  return {
+    id: 1,
+    category: 'MATH',
+    prompt: 'What is 1 + 1?',
+    expected_answer: '2',
+    created_at: '2026-06-07T00:00:00Z',
+    current_attempt: null,
+    attempts: [],
+    ...overrides,
+  }
+}
+
+function createInventoryItem(overrides: Partial<InventoryItem> = {}): InventoryItem {
+  return {
+    key: 'rock',
+    name: 'Rock',
+    description: 'A rock.',
+    quantity: 1,
+    equipSlot: '',
+    visualKey: '',
+    equipped: false,
     ...overrides,
   }
 }

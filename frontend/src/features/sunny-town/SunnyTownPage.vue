@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getNextStudentAssignment, submitStudentAnswer } from '../../api/studentAssignmentsApi'
-import { purchaseShopItem } from '../../api/shopApi'
 import {
   hotbarIndexForEvent,
   useSunnyTownInventoryActions,
@@ -64,6 +62,9 @@ const placement = useSunnyTownPlacement()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
 const worldState = useSunnyTownWorldState()
+const selfId = ref('')
+const starBalance = ref(0)
+const gameToast = ref('')
 const inventoryActions = useSunnyTownInventoryActions(inventoryStore, {
   onEquipmentChanged() {
     applyLocalEquipmentVisuals()
@@ -91,6 +92,8 @@ const {
   isPurchasing,
   isSubmittingSchoolwork,
   nearbyNpc,
+  buyShopItem,
+  openTrade,
   refreshNearby: refreshNearbyNpc,
   schoolworkAnswer,
   schoolworkAssignment,
@@ -100,7 +103,13 @@ const {
   shopError,
   shopNotice,
   shopOpen,
-} = useSunnyTownNpcInteractions()
+  startSchoolwork,
+  submitSchoolworkAnswer,
+} = useSunnyTownNpcInteractions({
+  loadInventory: () => inventoryStore.loadInventory(),
+  setInventoryItems: (items) => inventoryStore.setItems(items),
+  starBalance,
+})
 const canvas = ref<HTMLCanvasElement | null>(null)
 const {
   activeMap,
@@ -111,9 +120,6 @@ const {
   players,
   worldObjects,
 } = worldState
-const selfId = ref('')
-const starBalance = ref(0)
-const gameToast = ref('')
 const placementHoverGrid = placement.hoverGrid
 const {
   assignInventoryItemToSelectedHotbarSlot,
@@ -464,82 +470,6 @@ function useEquippedTool() {
   draw()
 }
 
-async function startSchoolwork() {
-  if (!activeSchoolworkNpc.value || isLoadingSchoolwork.value) {
-    return
-  }
-  schoolworkOpen.value = true
-  schoolworkAssignment.value = null
-  schoolworkAnswer.value = ''
-  schoolworkError.value = ''
-  schoolworkNotice.value = ''
-  isLoadingSchoolwork.value = true
-
-  try {
-    schoolworkAssignment.value = await getNextStudentAssignment()
-  } catch (caught) {
-    schoolworkError.value = errorMessage(caught)
-  } finally {
-    isLoadingSchoolwork.value = false
-  }
-}
-
-async function openTrade() {
-  if (!activeShopNpc.value?.shop) {
-    return
-  }
-  shopOpen.value = true
-  shopError.value = ''
-  shopNotice.value = ''
-  await inventoryStore.loadInventory()
-}
-
-async function buyShopItem(itemKey: string) {
-  const shop = activeShopNpc.value?.shop
-  if (!shop || isPurchasing.value) {
-    return
-  }
-  isPurchasing.value = true
-  shopError.value = ''
-  shopNotice.value = ''
-
-  try {
-    const purchase = await purchaseShopItem({
-      shopId: shop.id,
-      itemKey,
-      quantity: 1,
-    })
-    starBalance.value = purchase.starBalance
-    inventoryStore.setItems(purchase.inventory.items)
-    shopNotice.value = 'Purchased.'
-  } catch (caught) {
-    shopError.value = caught instanceof Error ? caught.message : String(caught)
-  } finally {
-    isPurchasing.value = false
-  }
-}
-
-async function submitSchoolworkAnswer() {
-  if (!schoolworkAssignment.value || isSubmittingSchoolwork.value) {
-    return
-  }
-
-  isSubmittingSchoolwork.value = true
-  schoolworkError.value = ''
-  schoolworkNotice.value = ''
-
-  try {
-    await submitStudentAnswer(schoolworkAssignment.value.id, schoolworkAnswer.value.trim())
-    schoolworkNotice.value = 'Answer submitted.'
-    schoolworkAnswer.value = ''
-    schoolworkAssignment.value = await getNextStudentAssignment()
-  } catch (caught) {
-    schoolworkError.value = errorMessage(caught)
-  } finally {
-    isSubmittingSchoolwork.value = false
-  }
-}
-
 function refreshLocalMovementState() {
   localPlayerState.refreshMovement(movement.currentInput(), activeMap.value, worldObjects.value)
 }
@@ -681,10 +611,6 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 
   const tagName = target.tagName.toLowerCase()
   return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function clamp(value: number, min: number, max: number): number {
