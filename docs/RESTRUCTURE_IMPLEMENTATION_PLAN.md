@@ -185,7 +185,7 @@ Slice plan:
 - [ ] Slice 4.6: Move inventory, equipment, hotbar, crafting, wallet, and shop logic into `internal/hq/inventory`.
   - [x] Slice 4.6a: Move base inventory response types plus load/increment/consume operations into `internal/hq/inventory`.
   - [x] Slice 4.6b: Move equipment load/equip/unequip operations into `internal/hq/inventory`.
-  - [ ] Slice 4.6c: Move hotbar load/set/default-seed operations into `internal/hq/inventory`.
+  - [x] Slice 4.6c: Move hotbar load/set/default-seed operations into `internal/hq/inventory`.
   - [ ] Slice 4.6d: Move crafting recipes and craft operation into `internal/hq/inventory`.
   - [ ] Slice 4.6e: Move wallet/shop purchase operations into `internal/hq/inventory` or a clearer economy subpackage if the split calls for it.
 - [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
@@ -356,3 +356,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.6b moved equipment load/equip/unequip operations into `internal/hq/inventory`.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.6b.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.6b.
+- 2026-06-07: Phase 4 Slice 4.6c moved hotbar load/set/default-seed operations into `internal/hq/inventory`.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.6c.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.6c.
