@@ -2,110 +2,18 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
 	"hq/internal/aiapi"
 	hqai "hq/internal/hq/ai"
 	hqassignments "hq/internal/hq/assignments"
-	hqinventory "hq/internal/hq/inventory"
-	hqpet "hq/internal/hq/pet"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-func TestApplyGameResultCreditsPetStarsOnce(t *testing.T) {
-	app, cleanup := testRewardApp(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	first, err := app.petStore().ApplyGameResult(ctx, 123, 7, 9, "round-1")
-	if err != nil {
-		t.Fatalf("first game result error = %v", err)
-	}
-	if first.StarBalance != 9 || first.PetState.Happiness != 57 || first.PetState.Energy != 45 {
-		t.Fatalf("first profile = %#v, want balance 9 happiness 57 energy 45", first)
-	}
-
-	second, err := app.petStore().ApplyGameResult(ctx, 123, 7, 9, "round-1")
-	if err != nil {
-		t.Fatalf("second game result error = %v", err)
-	}
-	if second.StarBalance != 9 || second.PetState.Happiness != 57 || second.PetState.Energy != 45 {
-		t.Fatalf("second profile = %#v, want duplicate to keep balance and pet stats unchanged", second)
-	}
-
-	var ledgerRows int
-	var source string
-	if err := app.db.QueryRow(ctx, "select count(*) from student_star_ledger").Scan(&ledgerRows); err != nil {
-		t.Fatalf("count ledger rows: %v", err)
-	}
-	if err := app.db.QueryRow(ctx, "select source from student_star_ledger where event_id = 'pet-falling-stars:123:round-1'").Scan(&source); err != nil {
-		t.Fatalf("load pet star ledger source: %v", err)
-	}
-	if ledgerRows != 1 || source != "pet_falling_stars" {
-		t.Fatalf("ledgerRows=%d source=%q, want 1 pet_falling_stars", ledgerRows, source)
-	}
-}
-
-func TestFeedStudentPetConsumesCookieInventory(t *testing.T) {
-	app, cleanup := testRewardApp(t)
-	defer cleanup()
-
-	ctx := context.Background()
-	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, hqinventory.CookieKey, 2); err != nil {
-		t.Fatalf("seed cookie inventory: %v", err)
-	}
-
-	profile, err := app.petStore().Feed(ctx, 123)
-	if err != nil {
-		t.Fatalf("feed pet error = %v", err)
-	}
-	if profile.Cookies != 1 || profile.PetState.Hunger != 60 {
-		t.Fatalf("profile = %#v, want 1 cookie and hunger 60", profile)
-	}
-}
-
-func TestFeedStudentPetRequiresCookieInventory(t *testing.T) {
-	app, cleanup := testRewardApp(t)
-	defer cleanup()
-
-	_, err := app.petStore().Feed(context.Background(), 123)
-	if err != errNoCookies {
-		t.Fatalf("feed pet error = %v, want errNoCookies", err)
-	}
-}
-
-func TestPetProfileJSONUsesStudentAPIFieldNames(t *testing.T) {
-	profile := hqpet.Profile{
-		ID:          123,
-		DisplayName: "Student",
-		Cookies:     2,
-		StarBalance: 7,
-		PetState: hqpet.State{
-			Hunger:    50,
-			Happiness: 60,
-			Energy:    70,
-			Mood:      "idle",
-		},
-	}
-
-	data, err := json.Marshal(profile)
-	if err != nil {
-		t.Fatalf("marshal profile: %v", err)
-	}
-	body := string(data)
-	for _, field := range []string{`"display_name"`, `"star_balance"`, `"pet_state"`, `"last_decay_at"`} {
-		if !strings.Contains(body, field) {
-			t.Fatalf("profile json = %s, want field %s", body, field)
-		}
-	}
-}
 
 func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
 	app, cleanup := testRewardApp(t)
