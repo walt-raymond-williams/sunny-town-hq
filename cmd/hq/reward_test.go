@@ -16,6 +16,7 @@ import (
 	"hq/internal/aiapi"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
+	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -30,7 +31,8 @@ func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	request := sunnyTownRewardEventRequest{
+	store := hqsunnytownbridge.Store{DB: app.db}
+	request := hqsunnytownbridge.RewardEventRequest{
 		EventID:       "sunny-town-main:star-0001:1:123",
 		AppUserID:     123,
 		RoomID:        "sunny-town-main",
@@ -40,7 +42,7 @@ func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
 		Amount:        1,
 	}
 
-	first, err := app.commitSunnyTownReward(ctx, request)
+	first, err := store.CommitReward(ctx, request)
 	if err != nil {
 		t.Fatalf("first commit error = %v", err)
 	}
@@ -48,7 +50,7 @@ func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
 		t.Fatalf("first commit = %#v, want accepted non-duplicate balance 1", first)
 	}
 
-	second, err := app.commitSunnyTownReward(ctx, request)
+	second, err := store.CommitReward(ctx, request)
 	if err != nil {
 		t.Fatalf("second commit error = %v", err)
 	}
@@ -74,7 +76,8 @@ func TestCommitSunnyTownResourceIdempotent(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	request := sunnyTownResourceEventRequest{
+	store := hqsunnytownbridge.Store{DB: app.db}
+	request := hqsunnytownbridge.ResourceEventRequest{
 		EventID:     "forest-crossing-v1:rock-node-001:1:123",
 		AppUserID:   123,
 		Source:      "sunny_town_mining",
@@ -85,7 +88,7 @@ func TestCommitSunnyTownResourceIdempotent(t *testing.T) {
 		Amount:      2,
 	}
 
-	first, err := app.commitSunnyTownResource(ctx, request)
+	first, err := store.CommitResource(ctx, request)
 	if err != nil {
 		t.Fatalf("first resource commit error = %v", err)
 	}
@@ -93,7 +96,7 @@ func TestCommitSunnyTownResourceIdempotent(t *testing.T) {
 		t.Fatalf("first resource commit = %#v, want accepted non-duplicate quantity 2", first)
 	}
 
-	second, err := app.commitSunnyTownResource(ctx, request)
+	second, err := store.CommitResource(ctx, request)
 	if err != nil {
 		t.Fatalf("second resource commit error = %v", err)
 	}
@@ -126,14 +129,15 @@ func TestCommitSunnyTownResourceRejectsInvalidRequest(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
 
-	requests := []sunnyTownResourceEventRequest{
+	store := hqsunnytownbridge.Store{DB: app.db}
+	requests := []hqsunnytownbridge.ResourceEventRequest{
 		{},
 		{EventID: "event", AppUserID: 123, Source: "sunny_town_mining", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "star", Amount: 1},
 		{EventID: "event", AppUserID: 123, Source: "sunny_town_mining", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "rock", Amount: 0},
 		{EventID: "event", AppUserID: 123, Source: "other", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "rock", Amount: 1},
 	}
 	for _, request := range requests {
-		if _, err := app.commitSunnyTownResource(context.Background(), request); err == nil {
+		if _, err := store.CommitResource(context.Background(), request); err == nil {
 			t.Fatalf("resource request %#v succeeded, want error", request)
 		}
 	}
@@ -144,7 +148,7 @@ func TestSunnyTownResourceEndpointRequiresServiceSecret(t *testing.T) {
 	defer cleanup()
 	app.sunnyTownServiceSecret = "test-secret"
 
-	body, err := json.Marshal(sunnyTownResourceEventRequest{
+	body, err := json.Marshal(hqsunnytownbridge.ResourceEventRequest{
 		EventID:     "forest-crossing-v1:rock-node-001:1:123",
 		AppUserID:   123,
 		Source:      "sunny_town_mining",
@@ -161,7 +165,10 @@ func TestSunnyTownResourceEndpointRequiresServiceSecret(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/internal/sunny-town/resource-events", bytes.NewReader(body))
 	response := httptest.NewRecorder()
 
-	app.handleSunnyTownResourceEvent(response, request)
+	hqsunnytownbridge.NewHTTPHandler(
+		hqsunnytownbridge.Store{DB: app.db},
+		app.sunnyTownServiceSecret,
+	).HandleResourceEvent(response, request)
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
@@ -173,7 +180,8 @@ func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	first, err := app.saveSunnyTownPosition(ctx, sunnyTownPositionRequest{
+	store := hqsunnytownbridge.Store{DB: app.db}
+	first, err := store.SavePosition(ctx, hqsunnytownbridge.PositionRequest{
 		AppUserID: 123,
 		RoomID:    "sunny-town-main",
 		MapID:     "sunny-town-v1",
@@ -188,7 +196,7 @@ func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
 		t.Fatalf("first position = %#v", first)
 	}
 
-	second, err := app.saveSunnyTownPosition(ctx, sunnyTownPositionRequest{
+	second, err := store.SavePosition(ctx, hqsunnytownbridge.PositionRequest{
 		AppUserID: 123,
 		RoomID:    "sunny-town-main",
 		MapID:     "sunny-town-classroom",
@@ -199,7 +207,7 @@ func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second save error = %v", err)
 	}
-	loaded, err := app.loadSunnyTownPosition(ctx, 123)
+	loaded, err := store.LoadPosition(ctx, 123)
 	if err != nil {
 		t.Fatalf("load position error = %v", err)
 	}
@@ -484,26 +492,27 @@ func TestPlaceSunnyTownMapObjectConsumesStoneBlock(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
+	store := hqsunnytownbridge.Store{DB: app.db}
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, hqsunnytownbridge.StoneBlockItemKey, 2); err != nil {
 		t.Fatalf("seed stone block inventory: %v", err)
 	}
 
-	placed, err := app.placeSunnyTownMapObject(ctx, sunnyTownPlaceMapObjectRequest{
+	placed, err := store.PlaceMapObject(ctx, hqsunnytownbridge.PlaceMapObjectRequest{
 		AppUserID: 123,
 		RoomID:    testSunnyTownRoomID,
 		MapID:     testSunnyTownMapID,
 		GridX:     4,
 		GridY:     5,
-		ItemKey:   stoneBlockItemKey,
+		ItemKey:   hqsunnytownbridge.StoneBlockItemKey,
 	})
 	if err != nil {
 		t.Fatalf("place map object error = %v", err)
 	}
-	if placed.ID == 0 || placed.ItemKey != stoneBlockItemKey || placed.GridX != 4 || placed.GridY != 5 || placed.RemainingItemAmount != 1 {
+	if placed.ID == 0 || placed.ItemKey != hqsunnytownbridge.StoneBlockItemKey || placed.GridX != 4 || placed.GridY != 5 || placed.RemainingItemAmount != 1 {
 		t.Fatalf("placed object = %#v, want stone block at 4,5 with 1 remaining", placed)
 	}
 
-	loaded, err := app.loadSunnyTownMapObjects(ctx, testSunnyTownRoomID, testSunnyTownMapID)
+	loaded, err := store.LoadMapObjects(ctx, testSunnyTownRoomID, testSunnyTownMapID)
 	if err != nil {
 		t.Fatalf("load map objects error = %v", err)
 	}
@@ -517,25 +526,26 @@ func TestPlaceSunnyTownMapObjectRollsBackInventoryWhenOccupied(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
+	store := hqsunnytownbridge.Store{DB: app.db}
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, hqsunnytownbridge.StoneBlockItemKey, 2); err != nil {
 		t.Fatalf("seed stone block inventory: %v", err)
 	}
-	request := sunnyTownPlaceMapObjectRequest{
+	request := hqsunnytownbridge.PlaceMapObjectRequest{
 		AppUserID: 123,
 		RoomID:    testSunnyTownRoomID,
 		MapID:     testSunnyTownMapID,
 		GridX:     4,
 		GridY:     5,
-		ItemKey:   stoneBlockItemKey,
+		ItemKey:   hqsunnytownbridge.StoneBlockItemKey,
 	}
-	if _, err := app.placeSunnyTownMapObject(ctx, request); err != nil {
+	if _, err := store.PlaceMapObject(ctx, request); err != nil {
 		t.Fatalf("first place map object error = %v", err)
 	}
-	_, err := app.placeSunnyTownMapObject(ctx, request)
-	if err != errMapObjectOccupied {
-		t.Fatalf("second place map object error = %v, want errMapObjectOccupied", err)
+	_, err := store.PlaceMapObject(ctx, request)
+	if err != hqsunnytownbridge.ErrMapObjectOccupied {
+		t.Fatalf("second place map object error = %v, want ErrMapObjectOccupied", err)
 	}
-	quantity, err := loadStudentInventoryQuantity(ctx, app.db, 123, stoneBlockItemKey)
+	quantity, err := hqsunnytownbridge.LoadStudentInventoryQuantity(ctx, app.db, 123, hqsunnytownbridge.StoneBlockItemKey)
 	if err != nil {
 		t.Fatalf("load stone block quantity: %v", err)
 	}
@@ -549,21 +559,22 @@ func TestRemoveSunnyTownMapObjectRefundsStoneBlock(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, stoneBlockItemKey, 1); err != nil {
+	store := hqsunnytownbridge.Store{DB: app.db}
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, hqsunnytownbridge.StoneBlockItemKey, 1); err != nil {
 		t.Fatalf("seed stone block inventory: %v", err)
 	}
-	if _, err := app.placeSunnyTownMapObject(ctx, sunnyTownPlaceMapObjectRequest{
+	if _, err := store.PlaceMapObject(ctx, hqsunnytownbridge.PlaceMapObjectRequest{
 		AppUserID: 123,
 		RoomID:    testSunnyTownRoomID,
 		MapID:     testSunnyTownMapID,
 		GridX:     4,
 		GridY:     5,
-		ItemKey:   stoneBlockItemKey,
+		ItemKey:   hqsunnytownbridge.StoneBlockItemKey,
 	}); err != nil {
 		t.Fatalf("place map object error = %v", err)
 	}
 
-	removed, err := app.removeSunnyTownMapObject(ctx, sunnyTownRemoveMapObjectRequest{
+	removed, err := store.RemoveMapObject(ctx, hqsunnytownbridge.RemoveMapObjectRequest{
 		AppUserID: 123,
 		RoomID:    testSunnyTownRoomID,
 		MapID:     testSunnyTownMapID,
@@ -573,11 +584,11 @@ func TestRemoveSunnyTownMapObjectRefundsStoneBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("remove map object error = %v", err)
 	}
-	if removed.ItemKey != stoneBlockItemKey || removed.RemainingItemAmount != 1 {
+	if removed.ItemKey != hqsunnytownbridge.StoneBlockItemKey || removed.RemainingItemAmount != 1 {
 		t.Fatalf("removed object = %#v, want refunded stone block", removed)
 	}
 
-	loaded, err := app.loadSunnyTownMapObjects(ctx, testSunnyTownRoomID, testSunnyTownMapID)
+	loaded, err := store.LoadMapObjects(ctx, testSunnyTownRoomID, testSunnyTownMapID)
 	if err != nil {
 		t.Fatalf("load map objects error = %v", err)
 	}

@@ -6,6 +6,7 @@ import (
 	hqassignments "hq/internal/hq/assignments"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
+	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
 )
 
 func (app *app) routes(webRoot string) http.Handler {
@@ -53,7 +54,10 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/assignments/answered", assignmentHandlers.HandleAnsweredAssignments)
 	apiMux.HandleFunc("/api/assignments", assignmentHandlers.HandleAssignments)
 	apiMux.HandleFunc("/api/assignments/", assignmentHandlers.HandleAssignmentByID)
-	sunnyTownBridge := app.sunnyTownBridgeHandler()
+	sunnyTownBridge := hqsunnytownbridge.NewHTTPHandler(
+		hqsunnytownbridge.Store{DB: app.db},
+		app.sunnyTownServiceSecret,
+	)
 	mux.HandleFunc("/api/internal/sunny-town/reward-events", sunnyTownBridge.HandleRewardEvent)
 	mux.HandleFunc("/api/internal/sunny-town/resource-events", sunnyTownBridge.HandleResourceEvent)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", sunnyTownBridge.HandleStudentEquipment)

@@ -15,13 +15,13 @@ Current state:
   - `hq-local.err.log`
   - `hq-local.out.log`
 - Phases 1 through 6 are complete except for deferred future guardrails noted below.
-- Remaining Phase 7 work is to reassess `cmd/hq/handlers.go` and choose the next adapter cluster after inventory and pet adapters.
+- Remaining Phase 7 work is to reassess `cmd/hq/handlers.go` and choose the next adapter cluster after inventory, pet, and Sunny Town bridge adapters.
 
 Recommended next work:
 
 1. Commit Phase 7 Slices 7.1 through 7.4 after full verification is recorded.
 2. Start Phase 7 Slice 7.5 by reviewing `cmd/hq/handlers.go` and remaining adapter clusters.
-3. Pick the next cluster: likely Sunny Town bridge, then AI/assignment compatibility adapters.
+3. Pick the next cluster: AI/assignment compatibility adapters.
 
 ```powershell
 go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
@@ -281,7 +281,7 @@ Current adapter clusters:
 
 - [x] Inventory/equipment/hotbar/crafting/shop adapters in `cmd/hq/inventory.go`, `cmd/hq/equipment.go`, `cmd/hq/hotbar.go`, `cmd/hq/crafting.go`, and `cmd/hq/shop.go`.
 - [x] Pet profile/service adapters in `cmd/hq/pet_adapter.go` and `cmd/hq/pet_service.go`.
-- [ ] Sunny Town bridge compatibility adapters in `cmd/hq/sunnytown_bridge.go`.
+- [x] Sunny Town bridge compatibility adapters in `cmd/hq/sunnytown_bridge.go`.
 - [ ] AI grading compatibility adapters in `cmd/hq/ai_grading.go`.
 - [ ] Assignment grading compatibility adapters in `cmd/hq/assignment_grading.go` and `cmd/hq/assignments.go`.
 
@@ -294,7 +294,8 @@ Recommended slice order:
 - [ ] Slice 7.5: Reassess `cmd/hq/handlers.go` line count and remaining adapter clusters before choosing the next domain.
 - [x] Slice 7.6: Retire pet profile/service adapters by using `internal/hq/pet.Store` directly for REST and Connect handlers, keeping only command auth/store construction glue.
 - [x] Slice 7.7: Add focused `internal/hq/pet` HTTP handler tests for role checks, method checks, profile JSON, and no-cookie error mapping.
-- [ ] Slice 7.8: Reassess remaining Sunny Town bridge, AI, and assignment compatibility adapters.
+- [x] Slice 7.8: Retire Sunny Town bridge adapters by wiring routes and tests directly to `internal/hq/sunnytownbridge` and deleting `cmd/hq/sunnytown_bridge.go`.
+- [ ] Slice 7.9: Reassess remaining AI and assignment compatibility adapters.
 
 Deferred until enough adapters are retired:
 
@@ -452,3 +453,6 @@ Verification:
 - 2026-06-07: Phase 7 Slices 7.6-7.7 retired the pet backend adapter by wiring REST and Connect handlers directly to `internal/hq/pet.Store`, deleted `cmd/hq/pet_adapter.go`, kept only command auth/store construction glue, and added direct `internal/hq/pet` HTTP handler tests.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slices 7.6-7.7.
 - 2026-06-07: `go test ./...` passed after Phase 7 Slices 7.6-7.7.
+- 2026-06-07: Phase 7 Slice 7.8 retired the Sunny Town bridge adapter by wiring internal routes directly to `internal/hq/sunnytownbridge.NewHTTPHandler`, updating HQ tests to call `internal/hq/sunnytownbridge.Store` and helper APIs directly, and deleting `cmd/hq/sunnytown_bridge.go`.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slice 7.8.
+- 2026-06-07: `go test ./...` passed after Phase 7 Slice 7.8.

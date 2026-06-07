@@ -6,6 +6,7 @@ import (
 	"time"
 
 	hqinventory "hq/internal/hq/inventory"
+	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
 	"hq/internal/sunnytownauth"
 )
 
@@ -107,7 +108,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	position, err := app.loadSunnyTownPosition(r.Context(), user.ID)
+	position, err := hqsunnytownbridge.Store{DB: app.db}.LoadPosition(r.Context(), user.ID)
 	if err != nil {
 		log.Printf("load sunny town position: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
