@@ -119,7 +119,7 @@ The built Vue app currently includes:
 - Student page opens a pet-state stream while visible so the floating avatar and Pet tab stats update without polling.
 - Waking the pet early stops sleep recovery and subtracts 30 happiness; letting sleep finish naturally adds 10 happiness.
 - Student virtual pet avatar remains visible on Student pages without the cookie counter badge.
-- Teacher login with the hard-coded demo password `local-demo-password`.
+- Teacher login with a hard-coded local demo password.
 - Teacher logout that clears the teacher cookie and returns to the splash page.
 - Unified Teacher Desk questions workspace.
 - Collapsible New Question form for category, prompt, and expected answer.

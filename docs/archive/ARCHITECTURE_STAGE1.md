@@ -176,7 +176,7 @@ Current implemented screens:
 - Student Pet tab with cookie count, hunger, happiness, and energy.
 - Student feed action that spends one cookie and increases hunger by 10.
 - Student virtual pet avatar that animates on the Student page.
-- Teacher password gate using the hard-coded password `local-demo-password`.
+- Teacher password gate using a hard-coded local demo password.
 - Teacher logout that clears the teacher cookie and returns to the splash page.
 - Unified Teacher Desk questions workspace with creation, filters, grading, reset, history, and delete.
 - Collapsible assignment creation with category, prompt, and expected answer.
@@ -280,7 +280,7 @@ The student can:
 
 The teacher can:
 
-- Log in with the hard-coded demo password `local-demo-password`.
+- Log in with the hard-coded local demo password.
 - Create assignments.
 - View all assignments.
 - View student submissions.
@@ -490,7 +490,7 @@ The current demo uses one hard-coded teacher password and no student credentials
 
 Current approach:
 
-- Teacher login accepts `local-demo-password`.
+- Teacher login accepts the hard-coded local demo password.
 - Successful teacher login sets an HTTP-only cookie.
 - Teacher logout clears the teacher cookie.
 - Teacher-only endpoints check that cookie.

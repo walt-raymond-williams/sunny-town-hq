@@ -33,7 +33,7 @@ In the Keycloak admin console:
 
 ## Run HQ
 
-Use the same laptop IP/hostname for HQ and Keycloak when logging in from multiple devices. For example, if the laptop IP is `<YOUR_LAN_IP>`:
+Use the same laptop IP/hostname for HQ and Keycloak when logging in from multiple devices. Replace the example address with the address shown by your machine:
 
 ```powershell
 $env:DATABASE_URL="postgres://hq:hq@localhost:55432/hq?sslmode=disable"

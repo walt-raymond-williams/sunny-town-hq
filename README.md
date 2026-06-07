@@ -74,7 +74,7 @@ Create users in the `hq` realm and assign the `student` and/or `teacher` realm r
 
 ## Local Network Use
 
-For phone or tablet testing on the same Wi-Fi, set the public host to the laptop's LAN IP before starting Docker Compose:
+For phone or tablet testing on the same Wi-Fi, set the public host to the laptop's LAN IP before starting Docker Compose. Replace the example address with the address shown by your machine:
 
 ```powershell
 "HQ_PUBLIC_HOST=<YOUR_LAN_IP>" | Set-Content deploy/.env
