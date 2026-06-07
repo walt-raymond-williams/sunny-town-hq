@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	hqassignments "hq/internal/hq/assignments"
 	hqpet "hq/internal/hq/pet"
 )
 
@@ -30,11 +31,17 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/student/shop/purchase", app.handleStudentShopPurchase)
 	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
-	apiMux.HandleFunc("/api/student/assignments/next", app.handleNextStudentAssignment)
-	apiMux.HandleFunc("/api/student/assignments/graded", app.handleStudentGradedAssignments)
-	apiMux.HandleFunc("/api/assignments/answered", app.handleAnsweredAssignments)
-	apiMux.HandleFunc("/api/assignments", app.handleAssignments)
-	apiMux.HandleFunc("/api/assignments/", app.handleAssignmentByID)
+	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{
+		Store:                      app.db,
+		RequireRole:                assignmentRequireRole,
+		GradeAttempt:               app.gradeAssignmentAttempt,
+		TriggerAIGradingForAttempt: app.triggerAIGradingForAttempt,
+	})
+	apiMux.HandleFunc("/api/student/assignments/next", assignmentHandlers.HandleNextStudentAssignment)
+	apiMux.HandleFunc("/api/student/assignments/graded", assignmentHandlers.HandleStudentGradedAssignments)
+	apiMux.HandleFunc("/api/assignments/answered", assignmentHandlers.HandleAnsweredAssignments)
+	apiMux.HandleFunc("/api/assignments", assignmentHandlers.HandleAssignments)
+	apiMux.HandleFunc("/api/assignments/", assignmentHandlers.HandleAssignmentByID)
 	mux.HandleFunc("/api/internal/sunny-town/reward-events", app.handleSunnyTownRewardEvent)
 	mux.HandleFunc("/api/internal/sunny-town/resource-events", app.handleSunnyTownResourceEvent)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", app.handleInternalSunnyTownStudentEquipment)

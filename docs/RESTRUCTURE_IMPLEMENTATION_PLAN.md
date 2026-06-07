@@ -188,11 +188,11 @@ Slice plan:
   - [x] Slice 4.6c: Move hotbar load/set/default-seed operations into `internal/hq/inventory`.
   - [x] Slice 4.6d: Move crafting recipes and craft operation into `internal/hq/inventory`.
   - [x] Slice 4.6e: Move wallet/shop purchase operations into `internal/hq/inventory` or a clearer economy subpackage if the split calls for it.
-- [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
+- [x] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
   - [x] Slice 4.7a: Move assignment request/response types plus load/filter helpers into `internal/hq/assignments`.
   - [x] Slice 4.7b: Move assignment grading command logic into `internal/hq/assignments` while preserving AI integration.
   - [x] Slice 4.7c: Move assignment create, submit, reset, delete, and load-by-id service operations behind the assignments boundary.
-  - [ ] Slice 4.7d: Move assignment HTTP handlers or route-ready handler factories behind the assignments boundary.
+  - [x] Slice 4.7d: Move assignment HTTP handlers or route-ready handler factories behind the assignments boundary.
 - [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
 - [ ] Slice 4.9: Move AI grading integration behind `internal/hq/ai`.
 - [ ] Slice 4.10: Prepare schema ownership boundaries for Phase 5 migrations without changing the migration story yet.
@@ -211,7 +211,7 @@ Original task coverage:
 - [ ] Move app construction into `internal/hq/app`.
 - [x] Split route registration out of HQ startup.
 - [ ] Move route registration and HTTP helpers into `internal/hq/httpapi`.
-- [ ] Move assignment handlers and assignment service logic.
+- [x] Move assignment handlers and assignment service logic.
 - [x] Move inventory, equipment, hotbar, and crafting logic.
 - [x] Move pet service logic into `internal/hq/pet`.
 - [ ] Move Sunny Town bridge endpoints.
@@ -378,3 +378,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.7c moved assignment create, submit, reset, delete, and load-by-id service operations into `internal/hq/assignments`, leaving HTTP auth/JSON flow in `cmd/hq` for the next handler-factory slice.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.7c.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.7c.
+- 2026-06-07: Phase 4 Slice 4.7d moved assignment HTTP handlers and route-ready handler factories into `internal/hq/assignments`, leaving `cmd/hq` with a narrow role-check adapter and route wiring.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.7d.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.7d.
