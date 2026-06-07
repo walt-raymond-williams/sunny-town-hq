@@ -2,374 +2,73 @@ package main
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"math"
-	"strings"
-	"time"
 
 	hqpet "hq/internal/hq/pet"
+
+	"github.com/jackc/pgx/v5"
 )
 
+func (app *app) petStore() *hqpet.Store {
+	return &hqpet.Store{
+		DB:                    app.db,
+		CookieInventoryKey:    cookieInventoryKey,
+		NoCookiesError:        errNoCookies,
+		ConsumeInventoryItem:  consumePetInventoryItem,
+		CommitStudentStarOnce: commitPetStarReward,
+	}
+}
+
+func consumePetInventoryItem(ctx context.Context, tx pgx.Tx, userID int64, itemKey string, quantity int) (bool, error) {
+	return consumeStudentInventoryItem(ctx, tx, userID, itemKey, quantity)
+}
+
+func commitPetStarReward(ctx context.Context, tx pgx.Tx, request hqpet.StarRewardRequest) (bool, int, error) {
+	return commitStudentStarReward(ctx, tx, starRewardRequest{
+		EventID:       request.EventID,
+		AppUserID:     request.AppUserID,
+		Source:        request.Source,
+		Delta:         request.Delta,
+		RoomID:        request.RoomID,
+		MapID:         request.MapID,
+		CollectibleID: request.CollectibleID,
+	})
+}
+
 func (app *app) startPetDecayTicker(ctx context.Context) {
-	ticker := time.NewTicker(hqpet.DecayTickInterval)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				_ = app.applyPetDecayForAll(context.Background())
-			}
-		}
-	}()
+	app.petStore().StartDecayTicker(ctx)
 }
 
 func (app *app) applyPetDecayForAll(ctx context.Context) error {
-	rows, err := app.db.Query(ctx, "select user_id from pet_state")
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var userID int64
-		if err := rows.Scan(&userID); err != nil {
-			return err
-		}
-		if err := app.applyPetDecay(ctx, userID); err != nil {
-			continue
-		}
-	}
-	return rows.Err()
+	return app.petStore().ApplyDecayForAll(ctx)
 }
 
 func (app *app) applyPetDecay(ctx context.Context, userID int64) error {
-	tx, err := app.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
+	return app.petStore().ApplyDecay(ctx, userID)
+}
 
-	var hunger int
-	var happiness int
-	var energy int
-	var sleeping bool
-	var lastDecayAt time.Time
-	var sleepStartedAt sql.NullTime
-	var sleepStartedEnergy sql.NullInt64
-	if err := tx.QueryRow(
-		ctx,
-		`
-			select hunger, happiness, energy, sleeping, last_decay_at, sleep_started_at, sleep_started_energy
-			from pet_state
-			where user_id = $1
-			for update
-		`,
-		userID,
-	).Scan(
-		&hunger,
-		&happiness,
-		&energy,
-		&sleeping,
-		&lastDecayAt,
-		&sleepStartedAt,
-		&sleepStartedEnergy,
-	); err != nil {
-		return err
-	}
-
-	now := time.Now().UTC()
-	changed := false
-	decayApplied := false
-
-	if now.After(lastDecayAt) {
-		elapsed := now.Sub(lastDecayAt)
-		dailyDecay := int(math.Floor(elapsed.Hours() * hqpet.DailyDecayPoints / 24.0))
-		if dailyDecay > 0 {
-			hunger = hqpet.ClampStat(hunger - dailyDecay)
-			happiness = hqpet.ClampStat(happiness - dailyDecay)
-			if !sleeping {
-				energy = hqpet.ClampStat(energy - dailyDecay)
-			}
-			changed = true
-			decayApplied = true
-		}
-	}
-
-	if sleeping {
-		startedAt := sleepStartedAt.Time
-		if !sleepStartedAt.Valid {
-			startedAt = now
-			sleepStartedAt = sql.NullTime{Time: startedAt, Valid: true}
-			changed = true
-		}
-
-		startEnergy := energy
-		if sleepStartedEnergy.Valid {
-			startEnergy = int(sleepStartedEnergy.Int64)
-		} else {
-			sleepStartedEnergy = sql.NullInt64{Int64: int64(startEnergy), Valid: true}
-			changed = true
-		}
-
-		if startEnergy >= 100 {
-			energy = 100
-			sleeping = false
-			happiness = hqpet.ClampStat(happiness + 10)
-			sleepStartedAt = sql.NullTime{}
-			sleepStartedEnergy = sql.NullInt64{}
-			changed = true
-		} else {
-			sleepElapsed := now.Sub(startedAt)
-			if sleepElapsed < 0 {
-				sleepElapsed = 0
-			}
-
-			if sleepElapsed >= hqpet.SleepRecoveryDuration {
-				energy = 100
-				sleeping = false
-				happiness = hqpet.ClampStat(happiness + 10)
-				sleepStartedAt = sql.NullTime{}
-				sleepStartedEnergy = sql.NullInt64{}
-				changed = true
-			} else {
-				progress := sleepElapsed.Seconds() / hqpet.SleepRecoveryDuration.Seconds()
-				recovered := startEnergy + int(math.Ceil(float64(100-startEnergy)*progress))
-				recovered = hqpet.ClampStat(recovered)
-				if recovered > energy {
-					energy = recovered
-					changed = true
-				}
-			}
-		}
-	}
-
-	if !sleeping && energy == 0 {
-		sleeping = true
-		sleepStartedAt = sql.NullTime{Time: now, Valid: true}
-		sleepStartedEnergy = sql.NullInt64{Int64: 0, Valid: true}
-		changed = true
-	}
-
-	if !changed {
-		return tx.Commit(ctx)
-	}
-
-	var sleepStartedAtValue any
-	if sleepStartedAt.Valid {
-		sleepStartedAtValue = sleepStartedAt.Time
-	}
-
-	var sleepStartedEnergyValue any
-	if sleepStartedEnergy.Valid {
-		sleepStartedEnergyValue = int(sleepStartedEnergy.Int64)
-	}
-
-	_, err = tx.Exec(
-		ctx,
-		`
-			update pet_state
-			set hunger = $1,
-				happiness = $2,
-				energy = $3,
-				sleeping = $4,
-				updated_at = now(),
-				sleep_started_at = $5,
-				sleep_started_energy = $6,
-				last_decay_at = case when $7 then now() else last_decay_at end
-			where user_id = $8
-		`,
-		hunger,
-		happiness,
-		energy,
-		sleeping,
-		sleepStartedAtValue,
-		sleepStartedEnergyValue,
-		decayApplied,
-		userID,
-	)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
+func (app *app) feedStudentPet(ctx context.Context, userID int64) (studentProfileResponse, error) {
+	profile, err := app.petStore().Feed(ctx, userID)
+	return fromPetProfile(profile), err
 }
 
 func (app *app) playWithStudentPet(ctx context.Context, userID int64) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx, userID); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	_, err := app.db.Exec(
-		ctx,
-		`
-			update pet_state
-			set happiness = least(happiness + 10, 100),
-				energy = greatest(energy - 10, 0),
-				sleeping = case when energy <= 10 then true else false end,
-				sleep_started_at = case when energy <= 10 then now() else null end,
-				sleep_started_energy = case when energy <= 10 then 0 else null end,
-				updated_at = now()
-			where user_id = $1
-				and not sleeping
-				and energy >= 10
-		`,
-		userID,
-	)
-	if err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	return app.loadStudentProfile(ctx, userID)
+	profile, err := app.petStore().Play(ctx, userID)
+	return fromPetProfile(profile), err
 }
 
 func (app *app) applyGameResult(ctx context.Context, userID int64, score int, starsCollected int, roundID string) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx, userID); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	score, starsCollected = hqpet.NormalizeGameResult(score, starsCollected)
-	happinessDelta := hqpet.GameHappinessDelta(score)
-
-	tx, err := app.db.Begin(ctx)
-	if err != nil {
-		return studentProfileResponse{}, err
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	var sleeping bool
-	if err := tx.QueryRow(
-		ctx,
-		`
-			select sleeping
-			from pet_state
-			where user_id = $1
-			for update
-		`,
-		userID,
-	).Scan(&sleeping); err != nil {
-		return studentProfileResponse{}, err
-	}
-	if sleeping {
-		if err := tx.Commit(ctx); err != nil {
-			return studentProfileResponse{}, err
-		}
-		return app.loadStudentProfile(ctx, userID)
-	}
-
-	applyPetResult := true
-	if starsCollected > 0 {
-		roundID = strings.TrimSpace(roundID)
-		if roundID == "" {
-			roundID = fmt.Sprintf("legacy-%d", time.Now().UTC().UnixNano())
-		}
-		inserted, _, err := commitStudentStarReward(ctx, tx, starRewardRequest{
-			EventID:       fmt.Sprintf("pet-falling-stars:%d:%s", userID, roundID),
-			AppUserID:     userID,
-			Source:        "pet_falling_stars",
-			Delta:         starsCollected,
-			CollectibleID: roundID,
-		})
-		if err != nil {
-			return studentProfileResponse{}, err
-		}
-		applyPetResult = inserted
-	} else if _, err := tx.Exec(
-		ctx,
-		`
-			insert into student_wallet (app_user_id)
-			values ($1)
-			on conflict (app_user_id) do nothing
-		`,
-		userID,
-	); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	if applyPetResult {
-		_, err = tx.Exec(
-			ctx,
-			`
-				update pet_state
-				set happiness = least(happiness + $1, 100),
-					energy = greatest(energy - $2, 0),
-					sleeping = case when energy <= $2 then true else false end,
-					sleep_started_at = case when energy <= $2 then now() else null end,
-					sleep_started_energy = case when energy <= $2 then 0 else null end,
-					updated_at = now()
-				where user_id = $3
-					and not sleeping
-			`,
-			happinessDelta,
-			hqpet.GameEnergyCost,
-			userID,
-		)
-		if err != nil {
-			return studentProfileResponse{}, err
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	return app.loadStudentProfile(ctx, userID)
+	profile, err := app.petStore().ApplyGameResult(ctx, userID, score, starsCollected, roundID)
+	return fromPetProfile(profile), err
 }
 
 func (app *app) putStudentPetToSleep(ctx context.Context, userID int64) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx, userID); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	_, err := app.db.Exec(
-		ctx,
-		`
-			update pet_state
-			set sleeping = true,
-				sleep_started_at = now(),
-				sleep_started_energy = energy,
-				updated_at = now()
-			where user_id = $1
-		`,
-		userID,
-	)
-	if err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	return app.loadStudentProfile(ctx, userID)
+	profile, err := app.petStore().PutToSleep(ctx, userID)
+	return fromPetProfile(profile), err
 }
 
 func (app *app) wakeStudentPet(ctx context.Context, userID int64) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx, userID); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	_, err := app.db.Exec(
-		ctx,
-		`
-			update pet_state
-			set sleeping = false,
-				happiness = greatest(happiness - 30, 0),
-				sleep_started_at = null,
-				sleep_started_energy = null,
-				updated_at = now()
-			where user_id = $1
-				and sleeping
-		`,
-		userID,
-	)
-	if err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	return app.loadStudentProfile(ctx, userID)
+	profile, err := app.petStore().Wake(ctx, userID)
+	return fromPetProfile(profile), err
 }
 
 func requireStudentUser(ctx context.Context) (authUser, error) {

@@ -177,11 +177,11 @@ Slice plan:
 - [x] Slice 4.2: Split HQ route registration out of startup into `cmd/hq/routes.go` as a no-behavior-change waypoint.
 - [ ] Slice 4.3: Move app construction into `internal/hq/app` once the `app` type can move cleanly.
 - [ ] Slice 4.4: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`.
-- [ ] Slice 4.5: Move pet domain into `internal/hq/pet`.
+- [x] Slice 4.5: Move pet domain into `internal/hq/pet`.
   - [x] Slice 4.5a: Move deterministic pet rules, game result normalization, and proto mood mapping into `internal/hq/pet`.
   - [x] Slice 4.5b: Move the Connect RPC handler into `internal/hq/pet` behind a narrow backend interface.
-  - [ ] Slice 4.5c: Move pet persistence operations and decay logic behind a pet store/service boundary.
-  - [ ] Slice 4.5d: Move pet decay ticker orchestration behind the new pet boundary.
+  - [x] Slice 4.5c: Move pet persistence operations and decay logic behind a pet store/service boundary.
+  - [x] Slice 4.5d: Move pet decay ticker orchestration behind the new pet boundary.
 - [ ] Slice 4.6: Move inventory, equipment, hotbar, crafting, wallet, and shop logic into `internal/hq/inventory`.
 - [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
 - [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
@@ -192,8 +192,8 @@ Slice plan:
 Pet module direction:
 
 - [x] Keep pet in the HQ binary for Phase 4, but separate it as `internal/hq/pet`.
-- [ ] Keep pet schema in the shared HQ database for now.
-- [ ] Make pet depend on narrow interfaces for wallet/inventory/profile operations instead of broad app internals where practical.
+- [x] Keep pet schema in the shared HQ database for now.
+- [x] Make pet depend on narrow interfaces for wallet/inventory/profile operations instead of broad app internals where practical.
 - [ ] Do not merge pet into AI; leave room for AI to consume pet context or emit pet-affecting commands through explicit interfaces later.
 
 Original task coverage:
@@ -204,7 +204,7 @@ Original task coverage:
 - [ ] Move route registration and HTTP helpers into `internal/hq/httpapi`.
 - [ ] Move assignment handlers and assignment service logic.
 - [ ] Move inventory, equipment, hotbar, and crafting logic.
-- [ ] Move pet service logic into `internal/hq/pet`.
+- [x] Move pet service logic into `internal/hq/pet`.
 - [ ] Move Sunny Town bridge endpoints.
 - [ ] Move AI integration behind the chosen HQ package boundaries.
 - [ ] Keep `cmd/hq/main.go` as a thin binary entrypoint.
@@ -342,3 +342,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.5b moved the pet Connect RPC handler into `internal/hq/pet` and added a `cmd/hq` adapter for existing app persistence methods.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.5b.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.5b.
+- 2026-06-07: Phase 4 Slices 4.5c-4.5d moved pet profile loading, feed/play/sleep/wake/game-result persistence, decay, and ticker orchestration into `internal/hq/pet.Store`, with HQ inventory and star ledger integration supplied as callbacks.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slices 4.5c-4.5d.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slices 4.5c-4.5d.

@@ -65,3 +65,21 @@ func toPetProfile(profile studentProfileResponse) hqpet.Profile {
 		},
 	}
 }
+
+func fromPetProfile(profile hqpet.Profile) studentProfileResponse {
+	return studentProfileResponse{
+		ID:          profile.ID,
+		DisplayName: profile.DisplayName,
+		Cookies:     profile.Cookies,
+		StarBalance: profile.StarBalance,
+		PetState: petStateResponse{
+			Hunger:      profile.PetState.Hunger,
+			Happiness:   profile.PetState.Happiness,
+			Energy:      profile.PetState.Energy,
+			Sleeping:    profile.PetState.Sleeping,
+			Mood:        profile.PetState.Mood,
+			UpdatedAt:   profile.PetState.UpdatedAt,
+			LastDecayAt: profile.PetState.LastDecayAt,
+		},
+	}
+}

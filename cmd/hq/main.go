@@ -1622,11 +1622,8 @@ func (app *app) loadAssignmentByID(ctx context.Context, id int64) (assignmentRes
 }
 
 func (app *app) loadStudentProfile(ctx context.Context, userID int64) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx, userID); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	return app.loadStudentProfileWithoutDecay(ctx, userID)
+	profile, err := app.petStore().LoadProfile(ctx, userID)
+	return fromPetProfile(profile), err
 }
 
 func (app *app) ensureStudentWallet(ctx context.Context, userID int64) (int, error) {
@@ -2030,99 +2027,6 @@ func commitStudentInventoryLedgerDelta(ctx context.Context, querier starRewardQu
 		request.NodeID,
 	).Scan(&inserted, &quantity)
 	return inserted, quantity, err
-}
-
-func (app *app) loadStudentProfileWithoutDecay(ctx context.Context, userID int64) (studentProfileResponse, error) {
-	var profile studentProfileResponse
-	err := app.db.QueryRow(
-		ctx,
-		`
-			select u.id,
-				u.display_name,
-				coalesce(cookie_inventory.quantity, 0),
-				coalesce(sw.star_balance, 0),
-				ps.hunger,
-				ps.happiness,
-				ps.energy,
-				ps.sleeping,
-				ps.updated_at,
-				ps.last_decay_at,
-				case
-					when ps.sleeping then 'sleeping'
-					when ps.hunger = 0 then 'hungry'
-					when ps.happiness = 0 then 'sad'
-					else 'idle'
-				end as mood
-			from app_user u
-			join pet_state ps on ps.user_id = u.id
-			left join student_wallet sw on sw.app_user_id = u.id
-			left join inventory_item_type cookie_type on cookie_type.key = 'cookie'
-			left join student_inventory_item cookie_inventory on cookie_inventory.app_user_id = u.id
-				and cookie_inventory.item_type_id = cookie_type.id
-			where u.id = $1
-		`,
-		userID,
-	).Scan(
-		&profile.ID,
-		&profile.DisplayName,
-		&profile.Cookies,
-		&profile.StarBalance,
-		&profile.PetState.Hunger,
-		&profile.PetState.Happiness,
-		&profile.PetState.Energy,
-		&profile.PetState.Sleeping,
-		&profile.PetState.UpdatedAt,
-		&profile.PetState.LastDecayAt,
-		&profile.PetState.Mood,
-	)
-	return profile, err
-}
-
-func (app *app) feedStudentPet(ctx context.Context, userID int64) (studentProfileResponse, error) {
-	if err := app.applyPetDecay(ctx, userID); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	tx, err := app.db.Begin(ctx)
-	if err != nil {
-		return studentProfileResponse{}, err
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	consumed, err := consumeStudentInventoryItem(
-		ctx,
-		tx,
-		userID,
-		cookieInventoryKey,
-		1,
-	)
-	if err != nil {
-		return studentProfileResponse{}, err
-	}
-	if !consumed {
-		return studentProfileResponse{}, errNoCookies
-	}
-
-	if _, err := tx.Exec(
-		ctx,
-		`
-			update pet_state
-			set hunger = least(hunger + 10, 100),
-				updated_at = now()
-			where user_id = $1
-		`,
-		userID,
-	); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return studentProfileResponse{}, err
-	}
-
-	return app.loadStudentProfile(ctx, userID)
 }
 
 func (app *app) loadAssignments(ctx context.Context, suffix string, args ...any) ([]assignmentResponse, error) {
