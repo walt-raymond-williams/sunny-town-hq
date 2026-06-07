@@ -248,15 +248,15 @@ deploy/postgres/migrations/
 Tasks:
 
 - [x] Convert current schema state into ordered migration files.
-- [ ] Choose migration runner: lightweight Go runner or an external migration tool. Current fresh-db runner is the Docker Postgres init script; existing DB runtime migration is still pending.
+- [x] Choose migration runner: lightweight Go runner for HQ startup plus the Docker Postgres init script for fresh databases.
 - [x] Update Docker fresh database startup to apply migrations.
-- [ ] Reduce `ensureSchema` to migration execution or remove it.
+- [x] Reduce `ensureSchema` to migration execution or remove it.
 - [ ] Document reset and migration workflows.
 
 Verification:
 
 - [x] Fresh Docker Compose startup creates a working database.
-- [ ] Existing local database can migrate without data loss.
+- [x] Existing local database can migrate without data loss.
 - [x] `go test ./...`
 
 ## Phase 6: CI And Guardrails
@@ -407,3 +407,8 @@ Verification:
 - 2026-06-07: Disposable Postgres migration smoke test passed with all 15 expected public tables, all 7 inventory item types, and all 6 AI grading columns on `assignment_attempt`.
 - 2026-06-07: `go test ./...` passed after Phase 5 migration file creation.
 - 2026-06-07: `docker compose -f deploy\docker-compose.yml config` passed after Phase 5 migration mount update.
+- 2026-06-07: Phase 5 added `internal/hq/schema` as a lightweight startup migration runner, removed the old runtime `ensureSchema` patch list, and copied migration SQL into the HQ Docker image.
+- 2026-06-07: `HQ_SCHEMA_TEST_DATABASE_URL=postgres://hq:hq@127.0.0.1:55543/hq?sslmode=disable go test ./internal/hq/schema -run TestRunMigrationsIntegration -count=1` passed against disposable Postgres, including a second idempotent migration run.
+- 2026-06-07: Existing local Docker database migrated through HQ startup; `schema_migration` recorded `0001_initial` through `0005_ai_grading`, and HQ health returned `ok`.
+- 2026-06-07: `go test ./...` passed after replacing runtime schema patching with the migration runner.
+- 2026-06-07: `docker compose -f deploy\docker-compose.yml config` passed after replacing runtime schema patching with the migration runner.

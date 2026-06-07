@@ -9,6 +9,7 @@ import (
 	"time"
 
 	hqapp "hq/internal/hq/app"
+	hqschema "hq/internal/hq/schema"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -62,8 +63,8 @@ func main() {
 		aiAutoApplyGrades:      cfg.AIAutoApplyGrades,
 		aiPromptVersionGrader:  cfg.AIPromptVersionGrader,
 	}
-	if err := app.ensureSchema(ctx); err != nil {
-		log.Fatalf("ensure schema: %v", err)
+	if err := hqschema.RunMigrations(ctx, db, cfg.MigrationsDir); err != nil {
+		log.Fatalf("run schema migrations: %v", err)
 	}
 	app.startPetDecayTicker(ctx)
 

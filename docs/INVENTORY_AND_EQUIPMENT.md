@@ -86,7 +86,7 @@ Inventory should not contain a `star` item type.
 
 ## Seeding and Existing Accounts
 
-`deploy/postgres/init/001_create_assignment.sql` creates the base schema for a fresh app database. `ensureSchema` in `cmd/hq/schema.go` is the runtime source of truth for additive schema updates and catalog backfills.
+Ordered migrations in `deploy/postgres/migrations/` create the base schema and inventory catalog for fresh and existing app databases. HQ records applied versions in the `schema_migration` table at startup.
 
 Existing student accounts receive:
 

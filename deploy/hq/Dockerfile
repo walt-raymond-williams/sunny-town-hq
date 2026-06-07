@@ -26,6 +26,7 @@ RUN apk add --no-cache ca-certificates
 
 COPY --from=backend-build /out/hq /app/hq-server
 COPY --from=frontend-build /src/web /app/web
+COPY deploy/postgres/migrations /app/deploy/postgres/migrations
 
 ENV HQ_HOST=0.0.0.0
 ENV HQ_PORT=18080

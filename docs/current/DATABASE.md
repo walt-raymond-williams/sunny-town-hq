@@ -9,13 +9,13 @@ deploy/postgres/001_run_migrations.sh
 deploy/postgres/migrations/
 ```
 
-The HQ service also runs schema-safety upgrades at startup in:
+The HQ service also applies these same migrations at startup through:
 
 ```text
-cmd/hq/schema.go
+internal/hq/schema
 ```
 
-Runtime schema safety checks are still retained for existing local databases while the migration path is being stabilized.
+Applied versions are recorded in the `schema_migration` table.
 
 Schema ownership for the migration conversion is tracked in:
 
@@ -54,4 +54,4 @@ deploy/postgres/migrations/
   0005_ai_grading.sql
 ```
 
-Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. The next step is replacing runtime schema patching in `cmd/hq/schema.go` with a migration runner that records applied versions and can upgrade existing databases without relying on Docker init.
+Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.

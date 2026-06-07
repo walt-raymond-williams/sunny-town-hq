@@ -9,6 +9,7 @@ type Config struct {
 	Host                   string
 	Port                   string
 	DatabaseURL            string
+	MigrationsDir          string
 	KeycloakIssuer         string
 	KeycloakAudience       string
 	KeycloakJWKSURL        string
@@ -28,6 +29,7 @@ func LoadConfig() Config {
 		Host:                   envOrDefault("HQ_HOST", "0.0.0.0"),
 		Port:                   envOrDefault("HQ_PORT", "8080"),
 		DatabaseURL:            strings.TrimSpace(os.Getenv("DATABASE_URL")),
+		MigrationsDir:          envOrDefault("HQ_MIGRATIONS_DIR", "deploy/postgres/migrations"),
 		KeycloakIssuer:         envOrDefault("KEYCLOAK_ISSUER", "http://localhost:18081/realms/hq"),
 		KeycloakAudience:       envOrDefault("KEYCLOAK_AUDIENCE", "hq-web"),
 		KeycloakJWKSURL:        strings.TrimSpace(os.Getenv("KEYCLOAK_JWKS_URL")),

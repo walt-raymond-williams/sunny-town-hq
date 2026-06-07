@@ -74,7 +74,6 @@ web/                    Ignored generated frontend build output
 
 ## Known Restructure Targets
 
-- `cmd/hq/main.go` currently contains too much app logic and should eventually become a thin entrypoint.
-- `cmd/sunny-town/main.go` currently contains config, protocol, map loading, world simulation, WebSocket handling, and HQ client code.
-- `frontend/src/pages/SunnyTownPage.vue` currently contains too much Sunny Town frontend behavior.
-- Database evolution is split between Docker init SQL and app-side schema upgrades; migrate to explicit ordered migrations after AI schema work settles.
+- Move remaining HQ app construction and route helper boundaries out of `cmd/hq` once the command-package adapters are retired.
+- Convert the migration SQL files into smaller future migrations as schema changes continue.
+- Add CI guardrails for Go tests, frontend builds, and Docker Compose configuration.
