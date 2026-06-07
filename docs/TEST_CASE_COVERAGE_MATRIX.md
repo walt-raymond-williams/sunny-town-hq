@@ -112,7 +112,7 @@ Worth it: yes if schema churn continues. Starter equipment and app-user role syn
 
 Proposed cases:
 
-- `ensureSchema` seeds catalog item types.
+- Database migrations seed catalog item types.
 - Existing students receive starter equipment without duplicating quantities.
 - `syncAuthenticatedUser` creates app user, roles, wallet/pet defaults, starter equipment, and default hotbar.
 - Removing an owned equipped item causes equipment load to hide it.

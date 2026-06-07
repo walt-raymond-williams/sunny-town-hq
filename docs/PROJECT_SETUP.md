@@ -45,7 +45,7 @@ The helper intentionally avoids `keycloak-js` because browsers block some Web Cr
 - Image: `postgres:16-alpine`
 - Host port: `55432`
 - Database/user/password: `hq` / `hq` / `hq`
-- Init SQL: `deploy/postgres/init/001_create_assignment.sql`
+- Init migrations: `deploy/postgres/001_run_migrations.sh` applies `deploy/postgres/migrations/`
 - Persistent volume: `hq-postgres-data`
 
 Main tables:
@@ -259,7 +259,7 @@ Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 18080,18081
 - `deploy/docker-compose.yml`: PostgreSQL and Keycloak services
 - `deploy/sunny-town/Dockerfile`: Sunny Town container build
 - `deploy/keycloak/hq-realm.json`: initial Keycloak realm/client/roles
-- `deploy/postgres/init/001_create_assignment.sql`: fresh app database schema
+- `deploy/postgres/migrations/`: ordered app database migrations
 - `sunny-town/maps/`: checked-in Sunny Town map JSON files
 - `frontend/src/auth.ts`: local-network OIDC login helper
 - `frontend/src/App.vue`: app shell, route outlet, game overlay, and floating pet

@@ -1,6 +1,6 @@
 # HQ Schema Ownership
 
-This map captures the current runtime schema state before Phase 5 converts startup DDL into ordered migrations.
+This map captures the current HQ schema ownership boundaries for ordered migrations.
 
 ## Ownership Rules
 
@@ -117,4 +117,4 @@ Migration target: `0004_sunny_town_state.sql`
 - Keep data backfills near the schema change they support, for example cookie migration into inventory and default Sunny Town starter items.
 - Convert idempotent `alter table ... add column if not exists` startup patches into one-time migration statements where possible.
 - Keep compatibility constraints explicit; do not rely on application validation alone.
-- After migrations exist, reduce `cmd/hq/schema.go` to migration execution or remove runtime schema patching entirely.
+- Runtime schema patching has been replaced by the HQ startup migration runner in `internal/hq/schema`.

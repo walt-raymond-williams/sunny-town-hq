@@ -251,7 +251,7 @@ Tasks:
 - [x] Choose migration runner: lightweight Go runner for HQ startup plus the Docker Postgres init script for fresh databases.
 - [x] Update Docker fresh database startup to apply migrations.
 - [x] Reduce `ensureSchema` to migration execution or remove it.
-- [ ] Document reset and migration workflows.
+- [x] Document reset and migration workflows.
 
 Verification:
 
@@ -403,7 +403,7 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.11 split remaining HQ HTTP handlers into `cmd/hq/handlers.go` and shared HTTP/server helpers into `cmd/hq/http_helpers.go`, reducing `cmd/hq/main.go` to a thin 73-line binary entrypoint.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.11.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.11.
-- 2026-06-07: Phase 5 started by replacing the single fresh-database init SQL file with ordered SQL migrations under `deploy/postgres/migrations/` and a Postgres init script that applies them for fresh Docker databases. Runtime `ensureSchema` remains in place for existing local database compatibility.
+- 2026-06-07: Phase 5 started by replacing the single fresh-database init SQL file with ordered SQL migrations under `deploy/postgres/migrations/` and a Postgres init script that applies them for fresh Docker databases.
 - 2026-06-07: Disposable Postgres migration smoke test passed with all 15 expected public tables, all 7 inventory item types, and all 6 AI grading columns on `assignment_attempt`.
 - 2026-06-07: `go test ./...` passed after Phase 5 migration file creation.
 - 2026-06-07: `docker compose -f deploy\docker-compose.yml config` passed after Phase 5 migration mount update.
@@ -412,3 +412,4 @@ Verification:
 - 2026-06-07: Existing local Docker database migrated through HQ startup; `schema_migration` recorded `0001_initial` through `0005_ai_grading`, and HQ health returned `ok`.
 - 2026-06-07: `go test ./...` passed after replacing runtime schema patching with the migration runner.
 - 2026-06-07: `docker compose -f deploy\docker-compose.yml config` passed after replacing runtime schema patching with the migration runner.
+- 2026-06-07: Phase 5 documented migration creation, applied-version inspection, disposable migration smoke tests, and Docker volume reset workflows in `docs/current/DATABASE.md`.
