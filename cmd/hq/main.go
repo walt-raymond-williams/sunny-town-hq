@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	hqapp "hq/internal/hq/app"
 	"hq/internal/sunnytownauth"
 	petv1connect "hq/proto/hq/pet/v1/petv1connect"
 
@@ -216,15 +217,13 @@ type assignmentResponse struct {
 
 func main() {
 	ctx := context.Background()
-	host := envOrDefault("HQ_HOST", "0.0.0.0")
-	port := envOrDefault("HQ_PORT", "8080")
-	addr := host + ":" + port
-	databaseURL := strings.TrimSpace(os.Getenv("DATABASE_URL"))
-	if databaseURL == "" {
+	cfg := hqapp.LoadConfig()
+	addr := cfg.Address()
+	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required, for example: postgres://hq:hq@localhost:55432/hq?sslmode=disable")
 	}
 
-	db, err := pgxpool.New(ctx, databaseURL)
+	db, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("connect to postgres: %v", err)
 	}
@@ -234,21 +233,18 @@ func main() {
 		log.Fatalf("ping postgres: %v", err)
 	}
 
-	keycloakIssuer := envOrDefault("KEYCLOAK_ISSUER", "http://localhost:18081/realms/hq")
-	keycloakAudience := envOrDefault("KEYCLOAK_AUDIENCE", "hq-web")
-	keycloakJWKSURL := os.Getenv("KEYCLOAK_JWKS_URL")
 	app := &app{
 		db:                     db,
-		auth:                   newAuthVerifier(keycloakIssuer, keycloakAudience, keycloakJWKSURL),
-		sunnyTownJoinSecret:    envOrDefault("SUNNY_TOWN_JOIN_SECRET", "local-dev-secret"),
-		sunnyTownServiceSecret: envOrDefault("SUNNY_TOWN_SERVICE_SECRET", "local-dev-service-secret"),
-		sunnyTownWebSocketURL:  envOrDefault("SUNNY_TOWN_WS_URL", "ws://127.0.0.1:18082/sunny-town/ws"),
-		aiServiceURL:           strings.TrimRight(strings.TrimSpace(os.Getenv("AI_SERVICE_URL")), "/"),
-		hqToAIServiceSecret:    strings.TrimSpace(os.Getenv("HQ_TO_AI_SERVICE_SECRET")),
-		aiToHQServiceSecret:    envOrDefault("AI_TO_HQ_SERVICE_SECRET", "local-dev-ai-service-secret"),
-		aiGradingEnabled:       envBool("AI_GRADING_ENABLED", false),
-		aiAutoApplyGrades:      envBool("AI_AUTO_APPLY_GRADES", false),
-		aiPromptVersionGrader:  envOrDefault("AI_PROMPT_VERSION_GRADER", "assignment-grader-v1"),
+		auth:                   newAuthVerifier(cfg.KeycloakIssuer, cfg.KeycloakAudience, cfg.KeycloakJWKSURL),
+		sunnyTownJoinSecret:    cfg.SunnyTownJoinSecret,
+		sunnyTownServiceSecret: cfg.SunnyTownServiceSecret,
+		sunnyTownWebSocketURL:  cfg.SunnyTownWebSocketURL,
+		aiServiceURL:           cfg.AIServiceURL,
+		hqToAIServiceSecret:    cfg.HQToAIServiceSecret,
+		aiToHQServiceSecret:    cfg.AIToHQServiceSecret,
+		aiGradingEnabled:       cfg.AIGradingEnabled,
+		aiAutoApplyGrades:      cfg.AIAutoApplyGrades,
+		aiPromptVersionGrader:  cfg.AIPromptVersionGrader,
 	}
 	if err := app.ensureSchema(ctx); err != nil {
 		log.Fatalf("ensure schema: %v", err)
@@ -308,7 +304,7 @@ func main() {
 
 	log.Printf("HQ server listening on http://%s", addr)
 	for _, ip := range localIPv4Addresses() {
-		log.Printf("Try from another device on Wi-Fi: http://%s:%s", ip, port)
+		log.Printf("Try from another device on Wi-Fi: http://%s:%s", ip, cfg.Port)
 	}
 
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
@@ -2434,22 +2430,6 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		log.Printf("write json response: %v", err)
 	}
-}
-
-func envOrDefault(name string, fallback string) string {
-	value := strings.TrimSpace(os.Getenv(name))
-	if value == "" {
-		return fallback
-	}
-	return value
-}
-
-func envBool(name string, fallback bool) bool {
-	value := strings.ToLower(strings.TrimSpace(os.Getenv(name)))
-	if value == "" {
-		return fallback
-	}
-	return value == "1" || value == "true" || value == "yes" || value == "on"
 }
 
 func logRequests(next http.Handler) http.Handler {

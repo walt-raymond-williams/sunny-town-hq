@@ -152,7 +152,7 @@ Verification:
 
 ## Phase 4: HQ Backend Split
 
-Goal: reduce `cmd/hq/main.go` after the Sunny Town backend and frontend splits are complete.
+Goal: reduce `cmd/hq/main.go` after the Sunny Town backend and frontend splits are complete, while making pet a clearly separated HQ domain module that can later become its own service if the product needs it.
 
 Target structure:
 
@@ -171,11 +171,34 @@ internal/hq/db/
 
 Tasks:
 
-- [ ] Move app config and construction into `internal/hq/app`.
+Slice plan:
+
+- [x] Slice 4.1: Move HQ config loading into `internal/hq/app` while keeping behavior unchanged.
+- [ ] Slice 4.2: Move app construction into `internal/hq/app` once the `app` type can move cleanly.
+- [ ] Slice 4.3: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`.
+- [ ] Slice 4.4: Move pet state rules, decay ticker, game-result logic, and Connect RPC handler into `internal/hq/pet`.
+- [ ] Slice 4.5: Move inventory, equipment, hotbar, crafting, wallet, and shop logic into `internal/hq/inventory`.
+- [ ] Slice 4.6: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
+- [ ] Slice 4.7: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
+- [ ] Slice 4.8: Move AI grading integration behind `internal/hq/ai`.
+- [ ] Slice 4.9: Prepare schema ownership boundaries for Phase 5 migrations without changing the migration story yet.
+- [ ] Slice 4.10: Final HQ cleanup: keep `cmd/hq/main.go` as a thin binary entrypoint, remove dead code, update docs, and run full verification.
+
+Pet module direction:
+
+- [ ] Keep pet in the HQ binary for Phase 4, but separate it as `internal/hq/pet`.
+- [ ] Keep pet schema in the shared HQ database for now.
+- [ ] Make pet depend on narrow interfaces for wallet/inventory/profile operations instead of broad app internals where practical.
+- [ ] Do not merge pet into AI; leave room for AI to consume pet context or emit pet-affecting commands through explicit interfaces later.
+
+Original task coverage:
+
+- [x] Move app config into `internal/hq/app`.
+- [ ] Move app construction into `internal/hq/app`.
 - [ ] Move route registration and HTTP helpers into `internal/hq/httpapi`.
 - [ ] Move assignment handlers and assignment service logic.
 - [ ] Move inventory, equipment, hotbar, and crafting logic.
-- [ ] Move pet service logic.
+- [ ] Move pet service logic into `internal/hq/pet`.
 - [ ] Move Sunny Town bridge endpoints.
 - [ ] Move AI integration behind the chosen HQ package boundaries.
 - [ ] Keep `cmd/hq/main.go` as a thin binary entrypoint.
@@ -301,3 +324,6 @@ Verification:
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 completion. Vite still reported the large chunk warning.
 - 2026-06-06: `go test ./...` passed after Phase 3 completion.
 - 2026-06-06: Vite preview smoke test returned HTTP 200 for `/` and `/student/pet/sunny-town`; in-app browser tooling was unavailable in this session.
+- 2026-06-07: Phase 4 Slice 4.1 moved HQ runtime config loading into `internal/hq/app`.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.1.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.1.
