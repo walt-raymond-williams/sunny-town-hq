@@ -190,7 +190,7 @@ Slice plan:
   - [x] Slice 4.6e: Move wallet/shop purchase operations into `internal/hq/inventory` or a clearer economy subpackage if the split calls for it.
 - [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
   - [x] Slice 4.7a: Move assignment request/response types plus load/filter helpers into `internal/hq/assignments`.
-  - [ ] Slice 4.7b: Move assignment grading command logic into `internal/hq/assignments` while preserving AI integration.
+  - [x] Slice 4.7b: Move assignment grading command logic into `internal/hq/assignments` while preserving AI integration.
   - [ ] Slice 4.7c: Move assignment HTTP handlers or route-ready handler factories behind the assignments boundary.
 - [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
 - [ ] Slice 4.9: Move AI grading integration behind `internal/hq/ai`.
@@ -371,3 +371,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.7a moved assignment request/response types plus assignment load/filter helpers into `internal/hq/assignments`.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.7a.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.7a.
+- 2026-06-07: Phase 4 Slice 4.7b moved assignment grading command logic into `internal/hq/assignments` while preserving manual and AI grading call sites.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.7b.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.7b.
