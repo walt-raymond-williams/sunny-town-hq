@@ -8,9 +8,10 @@ Last updated: 2026-06-07.
 
 Current state:
 
-- Last completed restructure slice: Phase 8 Slice 8.4, moving shared HQ HTTP helpers into `internal/hq/httpapi`.
-- Phase 8 Slice 8.4 is implemented and verified.
-- Next work is Phase 8 Slice 8.5: reassess route registration after auth/user/helper cleanup.
+- Last completed restructure slice: Phase 8 Slice 8.5, route-registration reassessment.
+- Phase 8 Slice 8.4 is implemented and verified; Phase 8 Slice 8.5 is a documented no-move decision.
+- Phase 8 Slice 8.5 reassessment is complete: keep route registration in `cmd/hq` for now because moving it would require a broad config object that mirrors command app state.
+- Next work is Phase 8 Slice 8.6: reassess app construction in `internal/hq/app`; move app construction and routes together only if that reduces coupling.
 - Phase 7 adapter retirement is complete: inventory, pet, Sunny Town bridge, AI grading, and assignment adapters have been retired.
 - Current `cmd/hq` shape after Phase 8 Slice 8.4:
   - `main.go`: 92 lines
@@ -24,22 +25,22 @@ Current state:
   - `internal/hq/httpapi/httpapi_test.go`: 104 lines
   - `internal/hq/users/users.go`: 152 lines
   - `internal/hq/users/users_test.go`: 44 lines
-- After committing Phase 8 Slice 8.4, `git status --short` should show only known untracked local logs:
+- After committing Phase 8 Slice 8.5, `git status --short` should show only known untracked local logs:
   - `hq-local.err.log`
   - `hq-local.out.log`
 - Phases 1 through 6 are complete except for deferred future guardrails noted below.
-- Remaining structural work should focus on command HTTP helpers before reassessing route and app construction moves.
+- Remaining structural work should focus on whether app construction can move cleanly; route registration should move only together with a real app boundary, not as a standalone mechanical relocation.
 
 Recommended next work:
 
-1. Reassess moving route construction into `internal/hq/httpapi`.
-2. Reassess moving app construction into `internal/hq/app`.
+1. Reassess moving app construction into `internal/hq/app`.
+2. If app construction moves cleanly, move route construction with it or behind a narrow `internal/hq/httpapi` router boundary.
 
-Slice 8.5 scope:
+Slice 8.6 scope:
 
-- Good target: review whether `cmd/hq/routes.go` can move into `internal/hq/httpapi` without introducing a large configuration object.
-- Keep in `cmd/hq` for now if moving routes would make the package boundary noisier than the current route wiring.
-- Do not move app construction in Slice 8.5. Reassess app construction separately in Slice 8.6 after route construction is reviewed.
+- Good target: review whether the `app` type, app construction, authenticated middleware, pet-store construction, remaining top-level handlers, and route registration can move as one coherent internal HQ application boundary.
+- Keep in `cmd/hq` if the move would simply duplicate `app` as a large exported config struct.
+- Preserve `cmd/hq/main.go` as a readable binary entrypoint: config load, DB connection, migrations, ticker startup, server startup, and fatal logging can stay command-local unless app construction movement clearly improves ownership.
 
 ```powershell
 go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
@@ -341,7 +342,7 @@ Recommended slice order:
 - [x] Slice 8.2: Move authenticated-user sync, role persistence, default student provisioning, student listing, and `requireUser` from `cmd/hq/schema.go` into the auth/user package or a focused `internal/hq/users` package.
 - [x] Slice 8.3: Replace command-local role adapters (`inventory_auth.go`, `pet_auth.go`, inline assignment role bridge, `requireStudentID`) with shared auth package adapters or narrow exported helpers.
 - [x] Slice 8.4: Move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API is small and boring.
-- [ ] Slice 8.5: Reassess route registration after auth/user cleanup; move route construction only if it reduces `cmd/hq` coupling without creating a large configuration object.
+- [x] Slice 8.5: Reassess route registration after auth/user cleanup; move route construction only if it reduces `cmd/hq` coupling without creating a large configuration object.
 - [ ] Slice 8.6: Reassess app construction in `internal/hq/app`; move only if `cmd/hq/main.go` can remain a readable binary entrypoint and tests stay straightforward.
 
 Non-goals:
@@ -527,3 +528,4 @@ Verification:
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 8 Slice 8.4.
 - 2026-06-07: `go test ./...` passed after Phase 8 Slice 8.4.
 - 2026-06-07: `git diff --check` passed after Phase 8 Slice 8.4.
+- 2026-06-07: Phase 8 Slice 8.5 reassessed route registration. Decision: keep `cmd/hq/routes.go` in the command package for now because moving it alone would require a broad exported router config carrying DB, auth middleware, pet store construction, command handlers, service secrets, AI config, and callbacks. Reassess app construction next; route registration should move only with a cleaner app boundary.
