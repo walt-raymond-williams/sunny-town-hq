@@ -42,11 +42,19 @@ import SunnyTownInventoryPanel from './SunnyTownInventoryPanel.vue'
 import SunnyTownSchoolworkPanel from './SunnyTownSchoolworkPanel.vue'
 import SunnyTownShop from './SunnyTownShop.vue'
 import {
+  drawCollectible,
+  drawNpc,
+  drawPlayer,
+} from './rendering/characterDrawing'
+import { drawMap } from './rendering/mapDrawing'
+import {
+  drawPlacementPreview,
+  drawWorldObjects,
+} from './rendering/objectDrawing'
+import {
   legacyWorldObjects,
   placedObjectToWorldObject,
   sameWorldObject,
-  worldObjectToPlacedObject,
-  worldObjectToResourceNode,
 } from './worldObjects'
 
 const npcInteractionRadius = 54
@@ -691,18 +699,29 @@ function drawScene(context: CanvasRenderingContext2D, width: number, height: num
   const cameraY = camera.y
 
   drawMap(context, map, cameraX, cameraY, width, height)
-  drawWorldObjects(context, cameraX, cameraY)
-  drawPlacementPreview(context, map, cameraX, cameraY)
+  drawWorldObjects(context, worldObjects.value, cameraX, cameraY)
+  drawPlacementPreview(
+    context,
+    map,
+    cameraX,
+    cameraY,
+    placingStoneBlock.value ? placementHoverGrid.value : null,
+    placementHoverGrid.value ? canPlaceStoneBlock(map, placementHoverGrid.value.gridX, placementHoverGrid.value.gridY) : false,
+  )
   for (const collectible of collectibles.value) {
     if (collectible.active) {
       drawCollectible(context, collectible, cameraX, cameraY)
     }
   }
   for (const npc of map.npcs) {
-    drawNpc(context, npc, cameraX, cameraY)
+    drawNpc(context, npc, cameraX, cameraY, nearbyNpc.value?.id || '')
   }
   for (const player of renderedPlayers) {
-    drawPlayer(context, player, cameraX, cameraY)
+    drawPlayer(context, player, cameraX, cameraY, {
+      selfId: selfId.value,
+      selectedToolKey: selectedHotbarItemKey.value,
+      toolUseProgress: currentToolUseProgress,
+    })
   }
 }
 
@@ -758,391 +777,8 @@ function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): bo
   return placement.canPlaceStoneBlock(map, gridX, gridY, stoneBlockQuantity.value, worldObjects.value, self)
 }
 
-function drawMap(
-  context: CanvasRenderingContext2D,
-  map: SunnyTownMap,
-  cameraX: number,
-  cameraY: number,
-  width: number,
-  height: number,
-) {
-  context.fillStyle = map.id === 'sunny-town-v1'
-    ? '#8fcf85'
-    : map.id === 'sunny-town-classroom' ? '#b7c6da' : map.id === 'forest-crossing-v1' ? '#6fb27a' : '#cda66f'
-  context.fillRect(0, 0, width, height)
-
-  if (map.id === 'sunny-town-v1') {
-    context.fillStyle = '#d6bd79'
-    context.fillRect(0 - cameraX, 420 - cameraY, map.width * map.tileSize, 124)
-    context.fillRect(570 - cameraX, 0 - cameraY, 140, map.height * map.tileSize)
-  } else if (map.id === 'sunny-town-classroom') {
-    context.fillStyle = '#e4d4b5'
-    context.fillRect(64 - cameraX, 64 - cameraY, map.width * map.tileSize - 128, map.height * map.tileSize - 128)
-    context.fillStyle = '#3f596f'
-    context.fillRect(224 - cameraX, 82 - cameraY, 192, 44)
-  } else if (map.id === 'forest-crossing-v1') {
-    context.fillStyle = '#7ac27d'
-    context.fillRect(0, 0, width, height)
-    context.fillStyle = '#d1b06a'
-    context.fillRect(0 - cameraX, 420 - cameraY, map.width * map.tileSize, 124)
-    context.fillStyle = '#3b88a3'
-    context.fillRect(560 - cameraX, 0 - cameraY, 96, 384)
-    context.fillRect(560 - cameraX, 576 - cameraY, 96, 384)
-    context.fillStyle = '#a87c42'
-    context.fillRect(548 - cameraX, 384 - cameraY, 120, 192)
-    context.strokeStyle = '#765631'
-    context.lineWidth = 4
-    context.strokeRect(548 - cameraX, 384 - cameraY, 120, 192)
-  } else {
-    context.fillStyle = '#d9bd8d'
-    context.fillRect(64 - cameraX, 64 - cameraY, map.width * map.tileSize - 128, map.height * map.tileSize - 128)
-  }
-
-  context.strokeStyle = 'rgba(255, 255, 255, 0.18)'
-  context.lineWidth = 1
-  for (let x = -cameraX % map.tileSize; x < width; x += map.tileSize) {
-    context.beginPath()
-    context.moveTo(x, 0)
-    context.lineTo(x, height)
-    context.stroke()
-  }
-  for (let y = -cameraY % map.tileSize; y < height; y += map.tileSize) {
-    context.beginPath()
-    context.moveTo(0, y)
-    context.lineTo(width, y)
-    context.stroke()
-  }
-
-  for (const blocked of map.blockedRects) {
-    context.fillStyle = map.id === 'sunny-town-v1'
-      ? blocked.width > 400 || blocked.height > 400 ? '#4f8a5b' : '#7e6b52'
-      : map.id === 'sunny-town-classroom'
-        ? blocked.width > 260 || blocked.height > 260 ? '#516070' : '#8a6f4d'
-        : map.id === 'forest-crossing-v1'
-          ? blocked.width > 90 || blocked.height > 90 ? '#3e7a45' : '#6b6f57'
-          : blocked.width > 260 || blocked.height > 260 ? '#6d4f38' : '#8b6748'
-    context.fillRect(blocked.x - cameraX, blocked.y - cameraY, blocked.width, blocked.height)
-    if (map.id === 'forest-crossing-v1' && blocked.width <= 160 && blocked.height <= 160) {
-      context.fillStyle = '#2f6b3b'
-      context.beginPath()
-      context.arc(blocked.x + blocked.width / 2 - cameraX, blocked.y + blocked.height / 2 - cameraY, Math.min(blocked.width, blocked.height) / 2, 0, Math.PI * 2)
-      context.fill()
-    }
-  }
-
-  for (const portal of map.portals) {
-    context.fillStyle = '#3d2c22'
-    context.fillRect(portal.x - cameraX, portal.y - cameraY, portal.width, portal.height)
-    context.strokeStyle = '#f1d28f'
-    context.lineWidth = 2
-    context.strokeRect(portal.x - cameraX + 2, portal.y - cameraY + 2, portal.width - 4, portal.height - 4)
-  }
-}
-
-function drawPlacedObject(
-  context: CanvasRenderingContext2D,
-  object: SunnyTownPlacedObject,
-  cameraX: number,
-  cameraY: number,
-) {
-  const x = object.x - cameraX
-  const y = object.y - cameraY
-  context.save()
-  context.fillStyle = '#69727c'
-  context.fillRect(x + 3, y + 3, object.width - 6, object.height - 6)
-  context.strokeStyle = '#353b42'
-  context.lineWidth = 2
-  context.strokeRect(x + 3, y + 3, object.width - 6, object.height - 6)
-  context.fillStyle = '#8d98a3'
-  context.fillRect(x + 7, y + 7, object.width - 14, 5)
-  context.fillStyle = '#4d555e'
-  context.fillRect(x + 7, y + object.height - 12, object.width - 14, 4)
-  context.restore()
-}
-
-function drawWorldObjects(context: CanvasRenderingContext2D, cameraX: number, cameraY: number) {
-  for (const object of worldObjects.value) {
-    if (!object.active) {
-      continue
-    }
-    if (object.kind === 'stone_block' && object.itemKey === 'stone_block') {
-      drawPlacedObject(context, worldObjectToPlacedObject(object), cameraX, cameraY)
-      continue
-    }
-    if (object.kind === 'rock_node' && object.resourceKind === 'rock') {
-      drawResourceNode(context, worldObjectToResourceNode(object), cameraX, cameraY)
-    }
-  }
-}
-
-function drawPlacementPreview(
-  context: CanvasRenderingContext2D,
-  map: SunnyTownMap,
-  cameraX: number,
-  cameraY: number,
-) {
-  if (!placingStoneBlock.value || !placementHoverGrid.value) {
-    return
-  }
-  const { gridX, gridY } = placementHoverGrid.value
-  const valid = canPlaceStoneBlock(map, gridX, gridY)
-  const x = gridX * map.tileSize - cameraX
-  const y = gridY * map.tileSize - cameraY
-  context.save()
-  context.globalAlpha = 0.72
-  context.fillStyle = valid ? '#8d98a3' : '#b94a48'
-  context.fillRect(x + 3, y + 3, map.tileSize - 6, map.tileSize - 6)
-  context.globalAlpha = 1
-  context.strokeStyle = valid ? '#f7e08a' : '#ffcbc7'
-  context.lineWidth = 2
-  context.strokeRect(x + 2, y + 2, map.tileSize - 4, map.tileSize - 4)
-  context.restore()
-}
-
-function drawResourceNode(
-  context: CanvasRenderingContext2D,
-  node: SunnyTownResourceNode,
-  cameraX: number,
-  cameraY: number,
-) {
-  if (!node.active) {
-    return
-  }
-  const x = node.x - cameraX
-  const y = node.y - cameraY
-  context.save()
-  context.translate(x, y)
-  context.fillStyle = '#6b737b'
-  context.strokeStyle = '#343a40'
-  context.lineWidth = 3
-  context.beginPath()
-  context.moveTo(-node.radius, 4)
-  context.lineTo(-node.radius * 0.55, -node.radius * 0.7)
-  context.lineTo(node.radius * 0.25, -node.radius)
-  context.lineTo(node.radius, -node.radius * 0.1)
-  context.lineTo(node.radius * 0.7, node.radius * 0.75)
-  context.lineTo(-node.radius * 0.45, node.radius)
-  context.closePath()
-  context.fill()
-  context.stroke()
-  context.fillStyle = '#bcd5e8'
-  context.beginPath()
-  context.arc(node.radius * 0.25, -node.radius * 0.35, 4, 0, Math.PI * 2)
-  context.fill()
-  const hits = Math.max(0, node.hits || 0)
-  if (hits > 0) {
-    context.strokeStyle = '#23282e'
-    context.lineWidth = 2
-    context.beginPath()
-    context.moveTo(-node.radius * 0.15, -node.radius * 0.75)
-    context.lineTo(node.radius * 0.05, -node.radius * 0.25)
-    context.lineTo(-node.radius * 0.2, node.radius * 0.15)
-    context.stroke()
-  }
-  if (hits > 1) {
-    context.beginPath()
-    context.moveTo(node.radius * 0.2, -node.radius * 0.45)
-    context.lineTo(node.radius * 0.45, -node.radius * 0.05)
-    context.lineTo(node.radius * 0.25, node.radius * 0.45)
-    context.stroke()
-  }
-  context.restore()
-}
-
-function drawPlayer(context: CanvasRenderingContext2D, player: SunnyTownPlayer, cameraX: number, cameraY: number) {
-  const x = player.x - cameraX
-  const y = player.y - cameraY
-  const isSelf = player.id === selfId.value
-
-  context.fillStyle = 'rgba(0, 0, 0, 0.18)'
-  context.beginPath()
-  context.ellipse(x, y + 16, 18, 7, 0, 0, Math.PI * 2)
-  context.fill()
-
-  const gearKey = player.equipment?.gear || ''
-  const accessoryKey = player.equipment?.accessory || ''
-  const toolKey = isSelf ? selectedHotbarItemKey.value : player.equipment?.tool || ''
-  const toolProgress = isSelf ? currentToolUseProgress(toolKey) : null
-
-  context.fillStyle = gearKey === 'sunny_hoodie' ? '#f06f38' : (isSelf ? '#27746f' : '#5c6bc0')
-  context.beginPath()
-  context.arc(x, y, 16, 0, Math.PI * 2)
-  context.fill()
-
-  if (toolKey === 'pickaxe') {
-    drawPickaxe(context, x, y, player.facing, toolProgress)
-  }
-
-  if (gearKey === 'sunny_hoodie') {
-    context.fillStyle = '#2f7d72'
-    context.fillRect(x - 10, y + 2, 20, 8)
-    context.strokeStyle = '#f4d48e'
-    context.lineWidth = 2
-    context.beginPath()
-    context.moveTo(x, y + 2)
-    context.lineTo(x, y + 10)
-    context.stroke()
-  }
-
-  if (accessoryKey === 'star_cap') {
-    context.fillStyle = '#f2c84b'
-    context.beginPath()
-    context.ellipse(x, y - 14, 14, 6, 0, 0, Math.PI * 2)
-    context.fill()
-    context.fillStyle = '#365d9f'
-    context.fillRect(x - 9, y - 20, 18, 8)
-    context.fillStyle = '#ffffff'
-    context.beginPath()
-    context.moveTo(x, y - 21)
-    context.lineTo(x + 3, y - 16)
-    context.lineTo(x + 8, y - 16)
-    context.lineTo(x + 4, y - 13)
-    context.lineTo(x + 6, y - 8)
-    context.lineTo(x, y - 11)
-    context.lineTo(x - 6, y - 8)
-    context.lineTo(x - 4, y - 13)
-    context.lineTo(x - 8, y - 16)
-    context.lineTo(x - 3, y - 16)
-    context.closePath()
-    context.fill()
-  }
-
-  context.fillStyle = '#ffffff'
-  context.beginPath()
-  context.arc(x - 5, y - 4, 3, 0, Math.PI * 2)
-  context.arc(x + 5, y - 4, 3, 0, Math.PI * 2)
-  context.fill()
-
-  context.fillStyle = '#17212b'
-  context.font = '700 12px Inter, sans-serif'
-  context.textAlign = 'center'
-  context.fillText(player.displayName, x, y - 24)
-}
-
 function currentToolUseProgress(toolKey: string): number | null {
   return toolUseAnimation.progress(toolKey, performance.now())
-}
-
-function drawPickaxe(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  facing: SunnyTownPlayer['facing'],
-  swingProgress: number | null,
-) {
-  const swinging = swingProgress !== null
-  const direction = directionVector(facing)
-  const side = facing === 'left' || facing === 'right' ? -1 : 1
-  const baseX = x + direction.x * 17 + (facing === 'up' || facing === 'down' ? 13 : 0)
-  const baseY = y + direction.y * 14 + (facing === 'left' || facing === 'right' ? 2 : 6)
-  const swingAngle = swinging ? (Math.sin(swingProgress * Math.PI) * 1.2 - 0.6) * side : 0
-  const restingAngle = facing === 'left'
-    ? -0.8
-    : facing === 'right'
-      ? 0.8
-      : facing === 'up'
-        ? -0.35
-        : 0.35
-
-  context.save()
-  context.translate(baseX, baseY)
-  context.rotate(restingAngle + swingAngle)
-  context.lineCap = 'round'
-  context.strokeStyle = swinging ? '#f6d56f' : '#7b4b24'
-  context.lineWidth = swinging ? 5 : 4
-  context.beginPath()
-  context.moveTo(0, 12)
-  context.lineTo(0, -13)
-  context.stroke()
-  context.strokeStyle = '#5f6b75'
-  context.lineWidth = swinging ? 6 : 5
-  context.beginPath()
-  context.moveTo(-10, -14)
-  context.quadraticCurveTo(0, -21, 12, -14)
-  context.stroke()
-  context.restore()
-}
-
-function directionVector(facing: SunnyTownPlayer['facing']) {
-  switch (facing) {
-    case 'up':
-      return { x: 0, y: -1 }
-    case 'down':
-      return { x: 0, y: 1 }
-    case 'left':
-      return { x: -1, y: 0 }
-    case 'right':
-      return { x: 1, y: 0 }
-  }
-}
-
-function drawNpc(context: CanvasRenderingContext2D, npc: SunnyTownNpc, cameraX: number, cameraY: number) {
-  const x = npc.x - cameraX
-  const y = npc.y - cameraY
-  const isNearby = nearbyNpc.value?.id === npc.id
-
-  context.fillStyle = 'rgba(0, 0, 0, 0.18)'
-  context.beginPath()
-  context.ellipse(x, y + 16, 18, 7, 0, 0, Math.PI * 2)
-  context.fill()
-
-  context.fillStyle = npc.spriteKey === 'keeper' ? '#8b4f9f' : npc.spriteKey === 'teacher' ? '#2f6b8f' : '#b96b4f'
-  context.beginPath()
-  context.arc(x, y, 16, 0, Math.PI * 2)
-  context.fill()
-
-  context.fillStyle = '#f7d7b5'
-  context.beginPath()
-  context.arc(x, y - 4, 9, 0, Math.PI * 2)
-  context.fill()
-
-  context.fillStyle = '#17212b'
-  context.beginPath()
-  context.arc(x - 3, y - 6, 1.5, 0, Math.PI * 2)
-  context.arc(x + 3, y - 6, 1.5, 0, Math.PI * 2)
-  context.fill()
-
-  context.strokeStyle = isNearby ? '#f1d28f' : 'rgba(255, 255, 255, 0.38)'
-  context.lineWidth = isNearby ? 3 : 2
-  context.beginPath()
-  context.arc(x, y, 19, 0, Math.PI * 2)
-  context.stroke()
-
-  context.fillStyle = '#17212b'
-  context.font = '700 12px Inter, sans-serif'
-  context.textAlign = 'center'
-  context.fillText(npc.name, x, y - 28)
-}
-
-function drawCollectible(
-  context: CanvasRenderingContext2D,
-  collectible: SunnyTownCollectible,
-  cameraX: number,
-  cameraY: number,
-) {
-  const x = collectible.x - cameraX
-  const y = collectible.y - cameraY
-  context.save()
-  context.translate(x, y)
-  context.fillStyle = '#f6c945'
-  context.strokeStyle = '#7a5a00'
-  context.lineWidth = 2
-  context.beginPath()
-  for (let index = 0; index < 10; index++) {
-    const radius = index % 2 === 0 ? 15 : 7
-    const angle = -Math.PI / 2 + (index * Math.PI) / 5
-    const px = Math.cos(angle) * radius
-    const py = Math.sin(angle) * radius
-    if (index === 0) {
-      context.moveTo(px, py)
-    } else {
-      context.lineTo(px, py)
-    }
-  }
-  context.closePath()
-  context.fill()
-  context.stroke()
-  context.restore()
 }
 
 function isEditableKeyboardTarget(target: EventTarget | null): boolean {

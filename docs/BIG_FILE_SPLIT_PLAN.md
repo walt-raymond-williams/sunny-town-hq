@@ -14,7 +14,7 @@ Current state:
   - `hq-local.err.log`
   - `hq-local.out.log`
 - Slice 1 is complete: `internal/hq/sunnytownbridge/bridge.go` was split into focused production files.
-- Slice 2 is in progress: `frontend/src/features/sunny-town/SunnyTownPage.vue` is down from 1,554 lines to about 1,145 lines.
+- Slice 2 is in progress: `frontend/src/features/sunny-town/SunnyTownPage.vue` is down from 1,554 lines to about 880 lines.
 - Slice 2 completed sub-slices:
   - `frontend/src/features/sunny-town/worldObjects.ts` plus tests for world-object conversion helpers.
   - `frontend/src/composables/useSunnyTownRemotePlayers.ts` plus tests for remote snapshot history/interpolation.
@@ -22,7 +22,8 @@ Current state:
   - `frontend/src/composables/useSunnyTownToolUseAnimation.ts` plus tests for tool-use animation progress.
   - `frontend/src/composables/useSunnyTownNpcInteractions.ts` plus tests for dialogue/shop/schoolwork overlay state and nearest-NPC selection.
   - `frontend/src/composables/useSunnyTownPlacement.ts` plus tests for placement hover state, pointer-to-grid conversion, and placement validation.
-- Next recommended Slice 2 sub-step: extract rendering helpers from `SunnyTownPage.vue` into `frontend/src/features/sunny-town/rendering/`, starting with pure draw helpers that do not need Vue refs.
+  - `frontend/src/features/sunny-town/rendering/` draw helpers plus tests for pure facing-vector logic.
+- Next recommended Slice 2 sub-step: extract the remaining WebSocket server-message/map-state application logic into a focused world-state composable or helper module.
 - AI grading file cleanup should wait if another agent is actively refactoring the AI service.
 
 Verification baseline:
@@ -79,7 +80,7 @@ Snapshot generated on 2026-06-07:
 
 | File | Lines | Priority | Notes |
 | --- | ---: | --- | --- |
-| `frontend/src/features/sunny-town/SunnyTownPage.vue` | 1,554 | High | Still holds orchestration, remote interpolation, local prediction, NPC interaction, shop/schoolwork commands, placement, and drawing helpers. |
+| `frontend/src/features/sunny-town/SunnyTownPage.vue` | 880 | High | Still holds orchestration, WebSocket message handling, inventory/hotbar actions, shop/schoolwork commands, and camera/input routing. |
 | `cmd/hq/reward_test.go` | 1,358 | Medium | Mixed regression tests for Sunny Town bridge, pet, inventory/shop/crafting/equipment, hotbar, and AI grading. Useful but broad. |
 | `internal/sunnytown/server/room_test.go` | 974 | Medium | Mixed room/world tests for movement, collisions, portals, mining, map validation, NPCs, and fixtures. |
 | `internal/hq/sunnytownbridge/bridge.go` | 848 | High | Store operations, ledgers, positions, map objects, service HTTP handlers, auth, parsing, and JSON helpers in one file. |
@@ -396,3 +397,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 - 2026-06-07: Continued Slice 2 by extracting Sunny Town tool-use animation state into `frontend/src/composables/useSunnyTownToolUseAnimation.ts` with focused unit tests. Verified with `npm test` and `npm run build` from `frontend/`.
 - 2026-06-07: Continued Slice 2 by extracting NPC dialogue/shop/schoolwork overlay state and nearest-NPC selection into `frontend/src/composables/useSunnyTownNpcInteractions.ts` with focused unit tests. Verified with `npm test` and `npm run build` from `frontend/`.
 - 2026-06-07: Continued Slice 2 by extracting Sunny Town placement hover state, pointer-to-grid conversion, and placement validation into `frontend/src/composables/useSunnyTownPlacement.ts` with focused unit tests. Verified with `npm test` and `npm run build` from `frontend/`.
+- 2026-06-07: Continued Slice 2 by extracting Sunny Town canvas rendering helpers into `frontend/src/features/sunny-town/rendering/` with a focused unit test for facing-vector logic. Verified with `npm test` and `npm run build` from `frontend/`.
