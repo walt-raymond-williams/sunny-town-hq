@@ -6,6 +6,7 @@ import (
 	"time"
 
 	hqauth "hq/internal/hq/auth"
+	hqhttpapi "hq/internal/hq/httpapi"
 	hqinventory "hq/internal/hq/inventory"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
 	"hq/internal/sunnytownauth"
@@ -36,7 +37,7 @@ func (app *app) handleTeacherLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
+	hqhttpapi.WriteJSON(w, http.StatusOK, map[string]string{
 		"role": "teacher",
 	})
 }
@@ -47,7 +48,7 @@ func (app *app) handleTeacherLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
+	hqhttpapi.WriteJSON(w, http.StatusOK, map[string]string{
 		"status": "logged out",
 	})
 }
@@ -60,13 +61,13 @@ func (app *app) handleMe(w http.ResponseWriter, r *http.Request) {
 
 	user, ok := hqauth.UserFromContext(r.Context())
 	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusUnauthorized, map[string]string{
 			"error": "login required",
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, user)
+	hqhttpapi.WriteJSON(w, http.StatusOK, user)
 }
 
 func (app *app) handleStudents(w http.ResponseWriter, r *http.Request) {
@@ -81,13 +82,13 @@ func (app *app) handleStudents(w http.ResponseWriter, r *http.Request) {
 	students, err := app.userStore.LoadStudents(r.Context())
 	if err != nil {
 		log.Printf("load students: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "students could not be loaded",
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, students)
+	hqhttpapi.WriteJSON(w, http.StatusOK, students)
 }
 
 func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
@@ -102,7 +103,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 
 	user, ok := hqauth.UserFromContext(r.Context())
 	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusUnauthorized, map[string]string{
 			"error": "login required",
 		})
 		return
@@ -111,7 +112,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	profile, err := app.petStore().LoadProfile(r.Context(), roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town student profile: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "sunny town session could not be created",
 		})
 		return
@@ -120,7 +121,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	position, err := hqsunnytownbridge.Store{DB: app.db}.LoadPosition(r.Context(), roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town position: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "sunny town session could not be created",
 		})
 		return
@@ -146,7 +147,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	}, app.sunnyTownJoinSecret)
 	if err != nil {
 		log.Printf("sign sunny town token: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "sunny town session could not be created",
 		})
 		return
@@ -154,7 +155,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	starBalance, err := hqinventory.EnsureStudentWallet(r.Context(), app.db, roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town wallet: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "sunny town session could not be created",
 		})
 		return
@@ -162,7 +163,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	inventory, err := hqinventory.LoadStudent(r.Context(), app.db, roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town inventory: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "sunny town session could not be created",
 		})
 		return
@@ -170,13 +171,13 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	hotbar, err := hqinventory.LoadStudentHotbar(r.Context(), app.db, roleUser.ID)
 	if err != nil {
 		log.Printf("load sunny town hotbar: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "sunny town session could not be created",
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, sunnyTownSessionResponse{
+	hqhttpapi.WriteJSON(w, http.StatusOK, sunnyTownSessionResponse{
 		RoomID:       roomID,
 		MapID:        mapID,
 		AvatarID:     avatarID,

@@ -7,6 +7,7 @@ import (
 	hqai "hq/internal/hq/ai"
 	hqassignments "hq/internal/hq/assignments"
 	hqauth "hq/internal/hq/auth"
+	hqhttpapi "hq/internal/hq/httpapi"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
@@ -89,6 +90,6 @@ func (app *app) routes(webRoot string) http.Handler {
 	petServicePath, petServiceHandler := hqpet.NewServiceHandler(petStore, hqauth.RequireStudentID, errNoCookies)
 	mux.Handle(petServicePath, app.authenticated(petServiceHandler))
 
-	mux.HandleFunc("/", staticHandler(webRoot))
-	return logRequests(mux)
+	mux.HandleFunc("/", hqhttpapi.StaticHandler(webRoot))
+	return hqhttpapi.LogRequests(mux)
 }

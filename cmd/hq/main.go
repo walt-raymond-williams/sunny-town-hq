@@ -10,6 +10,7 @@ import (
 
 	hqapp "hq/internal/hq/app"
 	hqauth "hq/internal/hq/auth"
+	hqhttpapi "hq/internal/hq/httpapi"
 	hqschema "hq/internal/hq/schema"
 	hqusers "hq/internal/hq/users"
 
@@ -81,7 +82,7 @@ func main() {
 	}
 
 	log.Printf("HQ server listening on http://%s", addr)
-	for _, ip := range localIPv4Addresses() {
+	for _, ip := range hqhttpapi.LocalIPv4Addresses() {
 		log.Printf("Try from another device on Wi-Fi: http://%s:%s", ip, cfg.Port)
 	}
 
