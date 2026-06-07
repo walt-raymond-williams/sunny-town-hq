@@ -16,7 +16,7 @@ Current state:
 - Slice 1 is complete: `internal/hq/sunnytownbridge/bridge.go` was split into focused production files.
 - Slice 2 is complete: `frontend/src/features/sunny-town/SunnyTownPage.vue` is down from 1,554 lines to about 699 lines and now mainly orchestrates input, socket ordering, camera, and rendering composition.
 - Slice 3 is complete: `cmd/hq/reward_test.go` was removed after moving its regression tests into owning packages.
-- Slice 4 is in progress: `internal/sunnytown/server/room_test.go` is down from 974 lines to 530 lines after moving map-loader and room movement tests into focused files.
+- Slice 4 is in progress: `internal/sunnytown/server/room_test.go` is down from 974 lines to 384 lines after moving map-loader, room movement, and mining/resource tests into focused files.
 - Slice 2 completed sub-slices:
   - `frontend/src/features/sunny-town/worldObjects.ts` plus tests for world-object conversion helpers.
   - `frontend/src/composables/useSunnyTownRemotePlayers.ts` plus tests for remote snapshot history/interpolation.
@@ -37,6 +37,7 @@ Current state:
 - Slice 4 completed sub-slices:
   - Moved map loader validation and checked-in map tests into `internal/sunnytown/maps/maps_test.go`.
   - Moved room join, movement, collision, placement, bounds, and movement-sequence tests into `internal/sunnytown/server/room_movement_test.go`.
+  - Moved resource node snapshot, breakable target, pickaxe ownership, mining swing, harvest, and respawn tests into `internal/sunnytown/server/room_mining_test.go`.
 - Next recommended step: continue Slice 4 by reviewing `internal/sunnytown/server/room_test.go` for behavior groups that can be split into package-local test files without duplicating fixtures.
 - AI grading file cleanup should wait if another agent is actively refactoring the AI service.
 
@@ -95,7 +96,7 @@ Snapshot generated on 2026-06-07:
 | File | Lines | Priority | Notes |
 | --- | ---: | --- | --- |
 | `frontend/src/features/sunny-town/SunnyTownPage.vue` | 699 | Complete | Now mainly holds orchestration, socket ordering, movement send, camera/input routing, and rendering composition. |
-| `internal/sunnytown/server/room_test.go` | 530 | Medium | Mixed room/world tests for collectibles, portals, mining, NPCs, and fixtures. |
+| `internal/sunnytown/server/room_test.go` | 384 | Medium | Mixed room/world tests for collectibles, portals, NPCs, and fixtures. |
 | `internal/hq/sunnytownbridge/bridge.go` | 848 | High | Store operations, ledgers, positions, map objects, service HTTP handlers, auth, parsing, and JSON helpers in one file. |
 | `internal/hq/assignments/http.go` | 517 | Medium | Teacher and student handlers plus helper parsing/JSON in one file. |
 | `internal/hq/pet/store.go` | 488 | Medium | Profile actions, game rewards, sleep/wake, decay ticker, decay math, and profile loading in one file. |
@@ -422,3 +423,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 - 2026-06-07: Completed Slice 3 by moving AI grading integration tests from `cmd/hq/reward_test.go` into `internal/hq/ai/grading_integration_test.go` with a package-owned DB fixture, then removing the empty command-level regression file. Verified with `go test ./internal/hq/ai` and `go test ./cmd/hq`.
 - 2026-06-07: Started Slice 4 by moving Sunny Town map-loader validation tests from `internal/sunnytown/server/room_test.go` into `internal/sunnytown/maps/maps_test.go`. Verified with `go test ./internal/sunnytown/maps` and `go test ./internal/sunnytown/server`.
 - 2026-06-07: Continued Slice 4 by moving Sunny Town room join, movement, collision, placement, bounds, and movement-sequence tests into `internal/sunnytown/server/room_movement_test.go`. Verified with `go test ./internal/sunnytown/server` and `go test ./...`.
+- 2026-06-07: Continued Slice 4 by moving Sunny Town mining/resource node tests into `internal/sunnytown/server/room_mining_test.go`. Verified with `go test ./internal/sunnytown/server` and `go test ./...`.
