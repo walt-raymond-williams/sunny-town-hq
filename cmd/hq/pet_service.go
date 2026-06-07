@@ -22,18 +22,6 @@ func consumePetInventoryItem(ctx context.Context, tx pgx.Tx, userID int64, itemK
 	return consumeStudentInventoryItem(ctx, tx, userID, itemKey, quantity)
 }
 
-func commitPetStarReward(ctx context.Context, tx pgx.Tx, request hqpet.StarRewardRequest) (bool, int, error) {
-	return commitStudentStarReward(ctx, tx, starRewardRequest{
-		EventID:       request.EventID,
-		AppUserID:     request.AppUserID,
-		Source:        request.Source,
-		Delta:         request.Delta,
-		RoomID:        request.RoomID,
-		MapID:         request.MapID,
-		CollectibleID: request.CollectibleID,
-	})
-}
-
 func (app *app) startPetDecayTicker(ctx context.Context) {
 	app.petStore().StartDecayTicker(ctx)
 }

@@ -194,7 +194,7 @@ Slice plan:
   - [x] Slice 4.7c: Move assignment create, submit, reset, delete, and load-by-id service operations behind the assignments boundary.
   - [x] Slice 4.7d: Move assignment HTTP handlers or route-ready handler factories behind the assignments boundary.
   - [x] Slice 4.7e: Harden the assignments boundary with typed query operations, direct package tests, and removal of stale adapter scaffolding.
-- [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
+- [x] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
 - [ ] Slice 4.9: Move AI grading integration behind `internal/hq/ai`.
 - [ ] Slice 4.10: Prepare schema ownership boundaries for Phase 5 migrations without changing the migration story yet.
 - [ ] Slice 4.11: Final HQ cleanup: keep `cmd/hq/main.go` as a thin binary entrypoint, remove dead code, update docs, and run full verification.
@@ -218,7 +218,7 @@ Original task coverage:
 - [ ] Remove temporary adapter aliases/wrappers once routes and handlers no longer need them.
 - [x] Move inventory, equipment, hotbar, and crafting logic.
 - [x] Move pet service logic into `internal/hq/pet`.
-- [ ] Move Sunny Town bridge endpoints.
+- [x] Move Sunny Town bridge endpoints.
 - [ ] Move AI integration behind the chosen HQ package boundaries.
 - [ ] Keep `cmd/hq/main.go` as a thin binary entrypoint.
 
@@ -389,3 +389,7 @@ Verification:
 - 2026-06-07: `go test ./internal/hq/assignments ./internal/hq/inventory` passed after Phase 4 Slice 4.7e.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.7e.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.7e.
+- 2026-06-07: Phase 4 Slice 4.8 moved Sunny Town internal bridge handlers, reward/resource commits, position persistence, map-object operations, and bridge ledger helpers into `internal/hq/sunnytownbridge`, leaving `cmd/hq` with compatibility adapters and route wiring.
+- 2026-06-07: `go test ./internal/hq/sunnytownbridge` passed after Phase 4 Slice 4.8.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.8.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.8.
