@@ -8,13 +8,13 @@ import {
   useSunnyTownNpcInteractions,
 } from '../../composables/useSunnyTownNpcInteractions'
 import {
-  canPlaceStoneBlock as canPlaceStoneBlockOnMap,
   movementDirectionForEvent,
   movementInputEventOptions,
   moveSendIntervalMs,
   useSunnyTownMovement,
 } from '../../composables/useSunnyTownMovement'
 import { useSunnyTownLocalPlayer } from '../../composables/useSunnyTownLocalPlayer'
+import { useSunnyTownPlacement } from '../../composables/useSunnyTownPlacement'
 import { useSunnyTownRemotePlayers } from '../../composables/useSunnyTownRemotePlayers'
 import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
@@ -56,6 +56,7 @@ const router = useRouter()
 const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
 const localPlayerState = useSunnyTownLocalPlayer()
+const placement = useSunnyTownPlacement()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
 const {
@@ -96,7 +97,7 @@ const inventoryOpen = ref(false)
 const craftingPanelOpen = ref(false)
 const showAllCraftingRecipes = ref(false)
 const selectedHotbarIndex = ref(0)
-const placementHoverGrid = ref<{ gridX: number; gridY: number } | null>(null)
+const placementHoverGrid = placement.hoverGrid
 let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
@@ -364,12 +365,12 @@ function handleCanvasPointerMove(event: PointerEvent) {
   if (!placingStoneBlock.value || inventoryOpen.value) {
     return
   }
-  placementHoverGrid.value = gridFromPointer(event)
+  placement.setHoverFromPointer(event, activeMap.value, canvas.value, cameraForCanvas())
   draw()
 }
 
 function handleCanvasPointerLeave() {
-  placementHoverGrid.value = null
+  placement.clearHover()
   draw()
 }
 
@@ -397,7 +398,7 @@ async function craftInventoryRecipe(recipeKey: string) {
 
 function selectHotbarSlot(index: number) {
   selectedHotbarIndex.value = index
-  placementHoverGrid.value = null
+  placement.clearHover()
   draw()
 }
 
@@ -409,7 +410,7 @@ function hotbarIndexForEvent(event: KeyboardEvent): number | null {
 }
 
 function placeStoneBlockAtPointer(event: PointerEvent) {
-  const grid = gridFromPointer(event)
+  const grid = placement.gridFromPointer(event, activeMap.value, canvas.value, cameraForCanvas())
   if (!grid || stoneBlockQuantity.value < 1 || !isSunnyTownSocketOpen()) {
     return
   }
@@ -465,22 +466,13 @@ function applyLocalEquipmentVisuals() {
   draw()
 }
 
-function gridFromPointer(event: PointerEvent): { gridX: number; gridY: number } | null {
-  const map = activeMap.value
+function cameraForCanvas(): { x: number; y: number } {
   const target = canvas.value
-  if (!map || !target) {
-    return null
+  if (!target) {
+    return { x: 0, y: 0 }
   }
   const rect = target.getBoundingClientRect()
-  const camera = currentCamera(rect.width, rect.height)
-  const worldX = event.clientX - rect.left + camera.x
-  const worldY = event.clientY - rect.top + camera.y
-  const gridX = Math.floor(worldX / map.tileSize)
-  const gridY = Math.floor(worldY / map.tileSize)
-  if (gridX < 0 || gridY < 0 || gridX >= map.width || gridY >= map.height) {
-    return null
-  }
-  return { gridX, gridY }
+  return currentCamera(rect.width, rect.height)
 }
 
 function currentCamera(viewWidth: number, viewHeight: number): { x: number; y: number } {
@@ -519,7 +511,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   localPlayerState.clear()
   lastSentMoveJson = ''
   toolUseAnimation.clear()
-  placementHoverGrid.value = null
+  placement.clearHover()
   movement.clear()
   closeNpcOverlays()
   nearbyNpc.value = null
@@ -763,7 +755,7 @@ function syncLocalSelfFromSnapshot() {
 
 function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): boolean {
   const self = localPlayerState.current(players.value, selfId.value)
-  return canPlaceStoneBlockOnMap(map, gridX, gridY, stoneBlockQuantity.value, worldObjects.value, self)
+  return placement.canPlaceStoneBlock(map, gridX, gridY, stoneBlockQuantity.value, worldObjects.value, self)
 }
 
 function drawMap(
