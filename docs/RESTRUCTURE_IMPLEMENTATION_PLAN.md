@@ -15,13 +15,13 @@ Current state:
   - `hq-local.err.log`
   - `hq-local.out.log`
 - Phases 1 through 6 are complete except for deferred future guardrails noted below.
-- Remaining Phase 7 work is to reassess `cmd/hq/handlers.go` and retire the remaining assignment compatibility adapters.
+- Remaining Phase 7 adapter retirement is complete. Remaining work is to reassess whether app construction and shared HTTP helpers can move now that command-package adapters are gone.
 
 Recommended next work:
 
 1. Commit Phase 7 Slices 7.1 through 7.4 after full verification is recorded.
 2. Start Phase 7 Slice 7.5 by reviewing `cmd/hq/handlers.go` and remaining adapter clusters.
-3. Retire assignment compatibility adapters, then reassess whether app construction can move.
+3. Reassess whether app construction can move into `internal/hq/app` and whether shared HTTP helpers should move into `internal/hq/httpapi`.
 
 ```powershell
 go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
@@ -283,7 +283,7 @@ Current adapter clusters:
 - [x] Pet profile/service adapters in `cmd/hq/pet_adapter.go` and `cmd/hq/pet_service.go`.
 - [x] Sunny Town bridge compatibility adapters in `cmd/hq/sunnytown_bridge.go`.
 - [x] AI grading compatibility adapters in `cmd/hq/ai_grading.go`.
-- [ ] Assignment grading compatibility adapters in `cmd/hq/assignment_grading.go` and `cmd/hq/assignments.go`.
+- [x] Assignment grading compatibility adapters in `cmd/hq/assignment_grading.go` and `cmd/hq/assignments.go`.
 
 Recommended slice order:
 
@@ -296,7 +296,8 @@ Recommended slice order:
 - [x] Slice 7.7: Add focused `internal/hq/pet` HTTP handler tests for role checks, method checks, profile JSON, and no-cookie error mapping.
 - [x] Slice 7.8: Retire Sunny Town bridge adapters by wiring routes and tests directly to `internal/hq/sunnytownbridge` and deleting `cmd/hq/sunnytown_bridge.go`.
 - [x] Slice 7.9: Retire AI grading adapters by wiring internal AI routes, tests, and async grade triggering directly to `internal/hq/ai`, then deleting `cmd/hq/ai_grading.go`.
-- [ ] Slice 7.10: Retire remaining assignment compatibility adapters in `cmd/hq/assignment_grading.go` and `cmd/hq/assignments.go`.
+- [x] Slice 7.10: Retire remaining assignment compatibility adapters in `cmd/hq/assignment_grading.go` and `cmd/hq/assignments.go`.
+- [ ] Slice 7.11: Reassess `cmd/hq` after adapter retirement and decide whether Phase 4 deferred app construction or HTTP helper internalization is now worth doing.
 
 Deferred until enough adapters are retired:
 
@@ -460,3 +461,7 @@ Verification:
 - 2026-06-07: Phase 7 Slice 7.9 retired AI grading adapters by wiring `/api/internal/ai/assignment-attempts/` directly to `internal/hq/ai.NewHandler`, updating tests to call `internal/hq/ai.RecordGradeResult` directly, moving async grade triggering into `internal/hq/ai.TriggerGradeAsync`, and deleting `cmd/hq/ai_grading.go`.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slice 7.9.
 - 2026-06-07: `go test ./...` passed after Phase 7 Slice 7.9.
+- 2026-06-07: Phase 7 Slice 7.10 retired assignment compatibility adapters by moving transactional grading into `internal/hq/assignments.GradeAttemptInTx`, inlining the route role bridge, updating HQ tests to call assignment package APIs directly, and deleting `cmd/hq/assignment_grading.go` plus `cmd/hq/assignments.go`.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/assignments` passed after Phase 7 Slice 7.10.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slice 7.10.
+- 2026-06-07: `go test ./...` passed after Phase 7 Slice 7.10.

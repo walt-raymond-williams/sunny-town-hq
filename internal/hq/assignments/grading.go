@@ -45,6 +45,25 @@ type GradeQuerier interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }
 
+type GradeStore interface {
+	Begin(context.Context) (pgx.Tx, error)
+}
+
+func GradeAttemptInTx(ctx context.Context, store GradeStore, command GradeAttemptCommand) error {
+	tx, err := store.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if err := GradeAttempt(ctx, tx, command); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func GradeAttempt(ctx context.Context, querier GradeQuerier, command GradeAttemptCommand) error {
 	command.Feedback = strings.TrimSpace(command.Feedback)
 	command.GradedByType = strings.TrimSpace(command.GradedByType)

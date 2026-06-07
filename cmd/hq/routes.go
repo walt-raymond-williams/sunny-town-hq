@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 
 	hqai "hq/internal/hq/ai"
@@ -45,9 +46,17 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/student/pet/feed", petHandlers.HandleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{
-		Store:        app.db,
-		RequireRole:  assignmentRequireRole,
-		GradeAttempt: app.gradeAssignmentAttempt,
+		Store: app.db,
+		RequireRole: func(w http.ResponseWriter, r *http.Request, role string) (hqassignments.RoleUser, bool) {
+			user, ok := requireRole(w, r, role)
+			if !ok {
+				return hqassignments.RoleUser{}, false
+			}
+			return hqassignments.RoleUser{ID: user.ID}, true
+		},
+		GradeAttempt: func(ctx context.Context, command hqassignments.GradeAttemptCommand) error {
+			return hqassignments.GradeAttemptInTx(ctx, app.db, command)
+		},
 		TriggerAIGradingForAttempt: func(attemptID int64) {
 			hqai.TriggerGradeAsync(hqai.TriggerConfig{
 				Enabled:       app.aiGradingEnabled,

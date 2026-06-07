@@ -15,6 +15,7 @@ import (
 
 	"hq/internal/aiapi"
 	hqai "hq/internal/hq/ai"
+	hqassignments "hq/internal/hq/assignments"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
@@ -848,7 +849,7 @@ func TestRecordAIGradeResultAutoAppliesThroughSharedGradeCommand(t *testing.T) {
 	).Scan(&cookieQuantity); err != nil {
 		t.Fatalf("load cookie quantity: %v", err)
 	}
-	if gradedByType != graderTypeAI || gradeSource != gradeSourceAIAuto || reviewStatus != aiReviewStatusPending || !cookieAwarded || cookieQuantity != 1 {
+	if gradedByType != hqassignments.GraderTypeAI || gradeSource != hqassignments.GradeSourceAIAuto || reviewStatus != hqassignments.AIReviewStatusPending || !cookieAwarded || cookieQuantity != 1 {
 		t.Fatalf("metadata type=%q source=%q review=%q cookieAwarded=%v cookies=%d, want AI auto grade with one cookie", gradedByType, gradeSource, reviewStatus, cookieAwarded, cookieQuantity)
 	}
 }
@@ -876,14 +877,14 @@ func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
 	if _, err := app.db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
 		t.Fatalf("seed teacher: %v", err)
 	}
-	if err := app.gradeAssignmentAttempt(ctx, gradeAttemptCommand{
+	if err := hqassignments.GradeAttemptInTx(ctx, app.db, hqassignments.GradeAttemptCommand{
 		AssignmentID:     assignmentID,
 		AttemptID:        attemptID,
 		Passed:           false,
 		Feedback:         "Try again.",
-		GradedByType:     graderTypeTeacher,
+		GradedByType:     hqassignments.GraderTypeTeacher,
 		GradedByUserID:   &teacherID,
-		GradeSource:      gradeSourceManual,
+		GradeSource:      hqassignments.GradeSourceManual,
 		PreserveAIReview: false,
 	}); err != nil {
 		t.Fatalf("teacher override grade: %v", err)
@@ -904,7 +905,7 @@ func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
 	).Scan(&gradedByType, &gradeSource, &reviewStatus, &currentPassed); err != nil {
 		t.Fatalf("load override metadata: %v", err)
 	}
-	if gradedByType != graderTypeTeacher || gradeSource != gradeSourceTeacherOverride || reviewStatus != aiReviewStatusOverridden || currentPassed {
+	if gradedByType != hqassignments.GraderTypeTeacher || gradeSource != hqassignments.GradeSourceTeacherOverride || reviewStatus != hqassignments.AIReviewStatusOverridden || currentPassed {
 		t.Fatalf("override metadata type=%q source=%q review=%q passed=%v, want teacher override failure", gradedByType, gradeSource, reviewStatus, currentPassed)
 	}
 }
@@ -933,14 +934,14 @@ func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
 	if _, err := app.db.Exec(ctx, "insert into app_user (id, display_name) values ($1, 'Teacher')", teacherID); err != nil {
 		t.Fatalf("seed teacher: %v", err)
 	}
-	if err := app.gradeAssignmentAttempt(ctx, gradeAttemptCommand{
+	if err := hqassignments.GradeAttemptInTx(ctx, app.db, hqassignments.GradeAttemptCommand{
 		AssignmentID:     assignmentID,
 		AttemptID:        attemptID,
 		Passed:           false,
 		Feedback:         "Try again.",
-		GradedByType:     graderTypeTeacher,
+		GradedByType:     hqassignments.GraderTypeTeacher,
 		GradedByUserID:   &teacherID,
-		GradeSource:      gradeSourceManual,
+		GradeSource:      hqassignments.GradeSourceManual,
 		PreserveAIReview: false,
 	}); err != nil {
 		t.Fatalf("teacher override grade: %v", err)
@@ -969,7 +970,7 @@ func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
 	).Scan(&gradedByType, &gradeSource, &reviewStatus, &currentPassed); err != nil {
 		t.Fatalf("load retry metadata: %v", err)
 	}
-	if gradedByType != graderTypeTeacher || gradeSource != gradeSourceTeacherOverride || reviewStatus != aiReviewStatusOverridden || currentPassed {
+	if gradedByType != hqassignments.GraderTypeTeacher || gradeSource != hqassignments.GradeSourceTeacherOverride || reviewStatus != hqassignments.AIReviewStatusOverridden || currentPassed {
 		t.Fatalf("retry metadata type=%q source=%q review=%q passed=%v, want teacher override preserved", gradedByType, gradeSource, reviewStatus, currentPassed)
 	}
 }
@@ -993,7 +994,7 @@ func TestAIGradeRetryDoesNotOverwriteReviewedAttempt(t *testing.T) {
 	if _, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades); err != nil {
 		t.Fatalf("record initial ai grade result: %v", err)
 	}
-	if _, err := app.db.Exec(ctx, "update assignment_attempt set ai_review_status = $2 where id = $1", attemptID, aiReviewStatusReviewed); err != nil {
+	if _, err := app.db.Exec(ctx, "update assignment_attempt set ai_review_status = $2 where id = $1", attemptID, hqassignments.AIReviewStatusReviewed); err != nil {
 		t.Fatalf("mark ai grade reviewed: %v", err)
 	}
 
@@ -1013,7 +1014,7 @@ func TestAIGradeRetryDoesNotOverwriteReviewedAttempt(t *testing.T) {
 	if err := app.db.QueryRow(ctx, "select ai_review_status, passed from assignment_attempt where id = $1", attemptID).Scan(&reviewStatus, &currentPassed); err != nil {
 		t.Fatalf("load reviewed attempt: %v", err)
 	}
-	if reviewStatus != aiReviewStatusReviewed || !currentPassed {
+	if reviewStatus != hqassignments.AIReviewStatusReviewed || !currentPassed {
 		t.Fatalf("review=%q passed=%v, want reviewed AI pass preserved", reviewStatus, currentPassed)
 	}
 }
