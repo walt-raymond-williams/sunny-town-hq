@@ -11,6 +11,7 @@ import {
   simulatePlayer,
   useSunnyTownMovement,
 } from '../../composables/useSunnyTownMovement'
+import { useSunnyTownRemotePlayers } from '../../composables/useSunnyTownRemotePlayers'
 import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
@@ -51,14 +52,13 @@ interface ToolUseAnimation {
   facing: SunnyTownPlayer['facing']
 }
 
-const remoteInterpolationDelayMs = 150
-const maxRemoteHistoryFrames = 12
 const npcInteractionRadius = 54
 const toolUseDurationMs = 360
 
 const router = useRouter()
 const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
+const remotePlayerState = useSunnyTownRemotePlayers()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
@@ -91,7 +91,6 @@ const schoolworkNotice = ref('')
 const isLoadingSchoolwork = ref(false)
 const isSubmittingSchoolwork = ref(false)
 
-const remotePlayerHistories = new Map<string, Array<{ at: number; player: SunnyTownPlayer }>>()
 let localSelf: SunnyTownPlayer | null = null
 let renderedSelf: SunnyTownPlayer | null = null
 let moveSeq = 0
@@ -159,7 +158,7 @@ onBeforeUnmount(() => {
   stopSunnyTownSocket()
   localSelf = null
   renderedSelf = null
-  remotePlayerHistories.clear()
+  remotePlayerState.clear()
 })
 
 function handleServerMessage(message: SunnyTownServerMessage) {
@@ -177,7 +176,7 @@ function handleServerMessage(message: SunnyTownServerMessage) {
     resourceNodes.value = message.resourceNodes || []
     placedObjects.value = message.placedObjects || placedObjects.value
     worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
-    recordRemoteSnapshots(players.value, message.serverTimeMs || Date.now())
+    remotePlayerState.recordSnapshots(players.value, selfId.value, message.serverTimeMs || Date.now())
     syncLocalSelfFromSnapshot()
     return
   }
@@ -526,7 +525,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   resourceNodes.value = message.resourceNodes || []
   placedObjects.value = message.placedObjects || []
   worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
-  remotePlayerHistories.clear()
+  remotePlayerState.clear()
   localSelf = null
   renderedSelf = null
   lastSentMoveJson = ''
@@ -841,7 +840,7 @@ function nearestNpcToSelf(): SunnyTownNpc | null {
 function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
   const selfSnapshot = players.value.find((player) => player.id === selfId.value)
   const remotePlayers = players.value.filter((player) => player.id !== selfId.value)
-  const renderedRemotePlayers = smoothRemotePlayers(remotePlayers)
+  const renderedRemotePlayers = remotePlayerState.smoothPlayers(remotePlayers)
   if (!selfSnapshot) {
     return renderedRemotePlayers
   }
@@ -864,82 +863,6 @@ function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
   renderedSelf.lastProcessedSeq = target.lastProcessedSeq
 
   return [...renderedRemotePlayers, renderedSelf]
-}
-
-function recordRemoteSnapshots(snapshotPlayers: SunnyTownPlayer[], snapshotAt: number) {
-  const remoteIds = new Set<string>()
-  for (const player of snapshotPlayers) {
-    if (player.id === selfId.value) {
-      continue
-    }
-
-    remoteIds.add(player.id)
-    const history = remotePlayerHistories.get(player.id) || []
-    const latest = history[history.length - 1]
-    if (latest && latest.at === snapshotAt) {
-      latest.player = { ...player }
-      continue
-    }
-
-    history.push({ at: snapshotAt, player: { ...player } })
-    while (history.length > maxRemoteHistoryFrames) {
-      history.shift()
-    }
-    remotePlayerHistories.set(player.id, history)
-  }
-
-  for (const playerId of remotePlayerHistories.keys()) {
-    if (!remoteIds.has(playerId)) {
-      remotePlayerHistories.delete(playerId)
-    }
-  }
-}
-
-function smoothRemotePlayers(remotePlayers: SunnyTownPlayer[]): SunnyTownPlayer[] {
-  const renderAt = Date.now() - remoteInterpolationDelayMs
-  return remotePlayers.map((target) => interpolateRemotePlayer(target, renderAt))
-}
-
-function interpolateRemotePlayer(target: SunnyTownPlayer, renderAt: number): SunnyTownPlayer {
-  const history = remotePlayerHistories.get(target.id)
-  if (!history || history.length === 0) {
-    return { ...target }
-  }
-  const first = history[0]
-  const latest = history[history.length - 1]
-  if (!first || !latest) {
-    return { ...target }
-  }
-  if (history.length === 1 || renderAt <= first.at) {
-    return { ...first.player }
-  }
-
-  let before = first
-  let after = latest
-  for (let index = 1; index < history.length; index++) {
-    const candidate = history[index]
-    if (!candidate) {
-      continue
-    }
-    if (candidate.at >= renderAt) {
-      after = candidate
-      break
-    }
-    before = candidate
-  }
-
-  if (renderAt >= after.at || after.at <= before.at) {
-    return { ...after.player }
-  }
-
-  const progress = clamp((renderAt - before.at) / (after.at - before.at), 0, 1)
-  return {
-    ...after.player,
-    x: before.player.x + (after.player.x - before.player.x) * progress,
-    y: before.player.y + (after.player.y - before.player.y) * progress,
-    facing: progress < 0.5 ? before.player.facing : after.player.facing,
-    moving: before.player.moving || after.player.moving,
-  }
 }
 
 function predictSelf(deltaSeconds: number) {
