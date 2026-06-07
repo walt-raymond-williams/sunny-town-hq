@@ -18,6 +18,7 @@ Current state:
 - Slice 3 is complete: `cmd/hq/reward_test.go` was removed after moving its regression tests into owning packages.
 - Slice 4 is complete: `internal/sunnytown/server/room_test.go` is down from 974 lines to 166 lines after moving map-loader, room movement, mining/resource, and world/portal tests into focused files.
 - Slice 5 is complete: `internal/hq/assignments/http.go` is down from 517 lines to 58 lines after moving HTTP helpers, student handlers, and teacher handlers into focused files with unit tests.
+- Slice 6 is in progress: `internal/hq/pet/store.go` is down from 488 lines to 388 lines after moving profile loading into a focused file.
 - Slice 2 completed sub-slices:
   - `frontend/src/features/sunny-town/worldObjects.ts` plus tests for world-object conversion helpers.
   - `frontend/src/composables/useSunnyTownRemotePlayers.ts` plus tests for remote snapshot history/interpolation.
@@ -44,7 +45,9 @@ Current state:
   - Moved category validation, assignment ID parsing, and JSON writing helpers into `internal/hq/assignments/http_helpers.go`, with focused helper tests in `internal/hq/assignments/http_helpers_test.go`.
   - Moved student next-assignment, graded-assignment, and submit handlers into `internal/hq/assignments/http_student.go`, with focused validation tests in `internal/hq/assignments/http_student_test.go`.
   - Moved teacher list, create, answered, grade, reset, and delete handlers into `internal/hq/assignments/http_teacher.go`, with focused validation tests in `internal/hq/assignments/http_teacher_test.go`.
-- Next recommended step: start Slice 6 by splitting `internal/hq/pet/store.go` into profile, game reward, feed, sleep/decay, and row-mapping files.
+- Slice 6 completed sub-slices:
+  - Moved `LoadProfile` and `loadProfileWithoutDecay` into `internal/hq/pet/profile_store.go`.
+- Next recommended step: continue Slice 6 by moving pet feed/play/sleep/wake actions into `internal/hq/pet/actions.go`.
 - AI grading file cleanup should wait if another agent is actively refactoring the AI service.
 
 Verification baseline:
@@ -105,7 +108,7 @@ Snapshot generated on 2026-06-07:
 | `internal/sunnytown/server/room_test.go` | 166 | Complete | Now holds collectible pickup tests and shared Sunny Town server test fixtures. |
 | `internal/hq/sunnytownbridge/bridge.go` | 848 | High | Store operations, ledgers, positions, map objects, service HTTP handlers, auth, parsing, and JSON helpers in one file. |
 | `internal/hq/assignments/http.go` | 58 | Complete | Now holds the assignment HTTP handler type, constructor, and route dispatchers. |
-| `internal/hq/pet/store.go` | 488 | Medium | Profile actions, game rewards, sleep/wake, decay ticker, decay math, and profile loading in one file. |
+| `internal/hq/pet/store.go` | 388 | Medium | Pet actions, game rewards, sleep/wake, decay ticker, and decay math remain; profile loading has moved. |
 | `internal/hq/ai/grading.go` | 460 | Low for now | Handler, context loading, grade recording, auto-apply policy, outbound request, async trigger, and JSON helper. Defer if AI refactor is active. |
 | `internal/hq/auth/auth.go` | 370 | Low | JWT verification, context helpers, role checks. Large but cohesive enough for now. |
 | `internal/sunnytown/hqclient/client.go` | 346 | Low/Medium | Multiple internal HQ client endpoints in one client file. Split only if endpoint groups grow. |
@@ -434,3 +437,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 - 2026-06-07: Started Slice 5 by moving assignment HTTP category validation, assignment ID parsing, and JSON response helpers into `internal/hq/assignments/http_helpers.go`, then adding focused helper tests in `internal/hq/assignments/http_helpers_test.go`. Verified with `go test ./internal/hq/assignments` and `go test ./...`.
 - 2026-06-07: Continued Slice 5 by moving assignment student HTTP handlers into `internal/hq/assignments/http_student.go`, then adding focused student-handler validation tests in `internal/hq/assignments/http_student_test.go`. Verified with `go test ./internal/hq/assignments` and `go test ./...`.
 - 2026-06-07: Completed Slice 5 by moving assignment teacher HTTP handlers into `internal/hq/assignments/http_teacher.go`, then adding focused teacher-handler validation tests in `internal/hq/assignments/http_teacher_test.go`. Verified with `go test ./internal/hq/assignments` and `go test ./...`.
+- 2026-06-07: Started Slice 6 by moving pet profile loading into `internal/hq/pet/profile_store.go`. Verified with `go test ./internal/hq/pet` and `go test ./...`.
