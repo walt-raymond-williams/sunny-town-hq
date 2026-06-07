@@ -177,7 +177,10 @@ Slice plan:
 - [x] Slice 4.2: Split HQ route registration out of startup into `cmd/hq/routes.go` as a no-behavior-change waypoint.
 - [ ] Slice 4.3: Move app construction into `internal/hq/app` once the `app` type can move cleanly.
 - [ ] Slice 4.4: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`.
-- [ ] Slice 4.5: Move pet state rules, decay ticker, game-result logic, and Connect RPC handler into `internal/hq/pet`.
+- [ ] Slice 4.5: Move pet domain into `internal/hq/pet`.
+  - [x] Slice 4.5a: Move deterministic pet rules, game result normalization, and proto mood mapping into `internal/hq/pet`.
+  - [ ] Slice 4.5b: Move pet persistence operations and decay logic behind a pet store/service boundary.
+  - [ ] Slice 4.5c: Move pet decay ticker orchestration and Connect RPC handler behind the new pet boundary.
 - [ ] Slice 4.6: Move inventory, equipment, hotbar, crafting, wallet, and shop logic into `internal/hq/inventory`.
 - [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
 - [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
@@ -187,7 +190,7 @@ Slice plan:
 
 Pet module direction:
 
-- [ ] Keep pet in the HQ binary for Phase 4, but separate it as `internal/hq/pet`.
+- [x] Keep pet in the HQ binary for Phase 4, but separate it as `internal/hq/pet`.
 - [ ] Keep pet schema in the shared HQ database for now.
 - [ ] Make pet depend on narrow interfaces for wallet/inventory/profile operations instead of broad app internals where practical.
 - [ ] Do not merge pet into AI; leave room for AI to consume pet context or emit pet-affecting commands through explicit interfaces later.
@@ -332,3 +335,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.2 split HQ route registration into `cmd/hq/routes.go` without changing handlers or auth wiring.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.2.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.2.
+- 2026-06-07: Phase 4 Slice 4.5a created `internal/hq/pet` for deterministic pet rules, game result normalization, and proto mood mapping.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.5a.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.5a.

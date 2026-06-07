@@ -10,16 +10,8 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	hqpet "hq/internal/hq/pet"
 	petv1 "hq/proto/hq/pet/v1"
-)
-
-const (
-	petDailyDecayPoints      = 144.0
-	petSleepRecoveryDuration = 10 * time.Minute
-	petDecayTickInterval     = 5 * time.Minute
-	petGameTargetScore       = 10
-	petGameEnergyCost        = 5
-	petGameMaxStarReward     = 100
 )
 
 type petService struct {
@@ -147,7 +139,7 @@ func (service *petService) WatchPetState(ctx context.Context, _ *connect.Request
 }
 
 func (app *app) startPetDecayTicker(ctx context.Context) {
-	ticker := time.NewTicker(petDecayTickInterval)
+	ticker := time.NewTicker(hqpet.DecayTickInterval)
 	go func() {
 		for {
 			select {
@@ -223,12 +215,12 @@ func (app *app) applyPetDecay(ctx context.Context, userID int64) error {
 
 	if now.After(lastDecayAt) {
 		elapsed := now.Sub(lastDecayAt)
-		dailyDecay := int(math.Floor(elapsed.Hours() * petDailyDecayPoints / 24.0))
+		dailyDecay := int(math.Floor(elapsed.Hours() * hqpet.DailyDecayPoints / 24.0))
 		if dailyDecay > 0 {
-			hunger = clampPetStat(hunger - dailyDecay)
-			happiness = clampPetStat(happiness - dailyDecay)
+			hunger = hqpet.ClampStat(hunger - dailyDecay)
+			happiness = hqpet.ClampStat(happiness - dailyDecay)
 			if !sleeping {
-				energy = clampPetStat(energy - dailyDecay)
+				energy = hqpet.ClampStat(energy - dailyDecay)
 			}
 			changed = true
 			decayApplied = true
@@ -254,7 +246,7 @@ func (app *app) applyPetDecay(ctx context.Context, userID int64) error {
 		if startEnergy >= 100 {
 			energy = 100
 			sleeping = false
-			happiness = clampPetStat(happiness + 10)
+			happiness = hqpet.ClampStat(happiness + 10)
 			sleepStartedAt = sql.NullTime{}
 			sleepStartedEnergy = sql.NullInt64{}
 			changed = true
@@ -264,17 +256,17 @@ func (app *app) applyPetDecay(ctx context.Context, userID int64) error {
 				sleepElapsed = 0
 			}
 
-			if sleepElapsed >= petSleepRecoveryDuration {
+			if sleepElapsed >= hqpet.SleepRecoveryDuration {
 				energy = 100
 				sleeping = false
-				happiness = clampPetStat(happiness + 10)
+				happiness = hqpet.ClampStat(happiness + 10)
 				sleepStartedAt = sql.NullTime{}
 				sleepStartedEnergy = sql.NullInt64{}
 				changed = true
 			} else {
-				progress := sleepElapsed.Seconds() / petSleepRecoveryDuration.Seconds()
+				progress := sleepElapsed.Seconds() / hqpet.SleepRecoveryDuration.Seconds()
 				recovered := startEnergy + int(math.Ceil(float64(100-startEnergy)*progress))
-				recovered = clampPetStat(recovered)
+				recovered = hqpet.ClampStat(recovered)
 				if recovered > energy {
 					energy = recovered
 					changed = true
@@ -367,29 +359,8 @@ func (app *app) applyGameResult(ctx context.Context, userID int64, score int, st
 		return studentProfileResponse{}, err
 	}
 
-	if score < 0 {
-		score = 0
-	}
-	if starsCollected < 0 {
-		starsCollected = 0
-	}
-	if starsCollected > petGameMaxStarReward {
-		starsCollected = petGameMaxStarReward
-	}
-	if score > starsCollected {
-		score = starsCollected
-	}
-
-	won := score >= petGameTargetScore
-	happinessDelta := score
-	if won {
-		happinessDelta = score * 2
-		if happinessDelta > 20 {
-			happinessDelta = 20
-		}
-	} else if happinessDelta > 8 {
-		happinessDelta = 8
-	}
+	score, starsCollected = hqpet.NormalizeGameResult(score, starsCollected)
+	happinessDelta := hqpet.GameHappinessDelta(score)
 
 	tx, err := app.db.Begin(ctx)
 	if err != nil {
@@ -463,7 +434,7 @@ func (app *app) applyGameResult(ctx context.Context, userID int64, score int, st
 					and not sleeping
 			`,
 			happinessDelta,
-			petGameEnergyCost,
+			hqpet.GameEnergyCost,
 			userID,
 		)
 		if err != nil {
@@ -536,16 +507,6 @@ func requireStudentUser(ctx context.Context) (authUser, error) {
 	return user, nil
 }
 
-func clampPetStat(value int) int {
-	if value < 0 {
-		return 0
-	}
-	if value > 100 {
-		return 100
-	}
-	return value
-}
-
 func (profile studentProfileResponse) toProto() *petv1.PetStateResponse {
 	return &petv1.PetStateResponse{
 		UserId:      profile.ID,
@@ -557,24 +518,9 @@ func (profile studentProfileResponse) toProto() *petv1.PetStateResponse {
 			Happiness:   int32(profile.PetState.Happiness),
 			Energy:      int32(profile.PetState.Energy),
 			Sleeping:    profile.PetState.Sleeping,
-			Mood:        profile.PetState.protoMood(),
+			Mood:        hqpet.ProtoMood(profile.PetState.Mood),
 			UpdatedAt:   timestamppb.New(profile.PetState.UpdatedAt),
 			LastDecayAt: timestamppb.New(profile.PetState.LastDecayAt),
 		},
-	}
-}
-
-func (state petStateResponse) protoMood() petv1.PetMood {
-	switch state.Mood {
-	case "sleeping":
-		return petv1.PetMood_PET_MOOD_SLEEPING
-	case "hungry":
-		return petv1.PetMood_PET_MOOD_HUNGRY
-	case "sad":
-		return petv1.PetMood_PET_MOOD_SAD
-	case "happy":
-		return petv1.PetMood_PET_MOOD_HAPPY
-	default:
-		return petv1.PetMood_PET_MOOD_IDLE
 	}
 }
