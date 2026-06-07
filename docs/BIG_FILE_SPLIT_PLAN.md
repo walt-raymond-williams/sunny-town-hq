@@ -83,7 +83,7 @@ Snapshot generated on 2026-06-07:
 
 ## Recommended Slice Order
 
-- [ ] Slice 1: Split `internal/hq/sunnytownbridge/bridge.go`.
+- [x] Slice 1: Split `internal/hq/sunnytownbridge/bridge.go`.
 - [ ] Slice 2: Split `frontend/src/features/sunny-town/SunnyTownPage.vue`.
 - [ ] Slice 3: Split `cmd/hq/reward_test.go` by package ownership.
 - [ ] Slice 4: Split `internal/sunnytown/server/room_test.go` by behavior area.
@@ -131,11 +131,11 @@ go test ./...
 
 Completion checklist:
 
-- [ ] Production code split with no behavior changes.
-- [ ] Package tests still pass.
-- [ ] Full Go tests pass.
-- [ ] Tracking log updated.
-- [ ] Commit made with local logs left untracked.
+- [x] Production code split with no behavior changes.
+- [x] Package tests still pass.
+- [x] Full Go tests pass.
+- [x] Tracking log updated.
+- [x] Commit made with local logs left untracked.
 
 ## Slice 2: Sunny Town Page
 
@@ -377,3 +377,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 ## Current Verification Log
 
 - 2026-06-07: Created this plan after closing broad restructure. No code changed.
+- 2026-06-07: Completed Slice 1 by splitting `internal/hq/sunnytownbridge/bridge.go` into types, store, ledger, map-object, HTTP handler, and HTTP helper files. Verified with `go test ./internal/hq/sunnytownbridge`, `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`, and `go test ./...`.
