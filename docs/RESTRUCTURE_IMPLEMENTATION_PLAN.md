@@ -8,21 +8,22 @@ Last updated: 2026-06-06.
 
 Current state:
 
-- All changes through `a77d7a1 Update restructure plan resume snapshot` are committed.
-- Active work has started on promoting Sunny Town backend code into `internal/sunnytown/server`.
-- Before commit, `git status --short` should show only the current Sunny Town move, this plan update, and known untracked local logs:
+- All changes through `97e1471 Extract Sunny Town overlay panels` are committed.
+- Active work is at Phase 3 Slice 3.8 final verification and documentation.
+- Before commit, `git status --short` should show only this plan update and known untracked local logs:
   - `hq-local.err.log`
   - `hq-local.out.log`
-- Phase 2 preparatory file splits are complete.
+- Phase 2 is complete.
+- Phase 3 implementation slices 3.1 through 3.7 are complete and committed.
 - Current Sunny Town backend package shape:
   - `cmd/sunny-town/main.go`
   - `internal/sunnytown/server/`
 
 Recommended next work:
 
-1. Review the `internal/sunnytown/server` move and keep the public API narrow.
-2. Consider a later split from `internal/sunnytown/server` into `internal/sunnytown/world` only after explicit world/server interfaces are clear.
-3. Keep each promotion behavior-preserving and run:
+1. Commit Phase 3 Slice 3.8 after final verification is recorded.
+2. Move to Phase 4: HQ backend split.
+3. Keep each promotion behavior-preserving and run the relevant scoped checks plus final full checks.
 
 ```powershell
 go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth
@@ -130,7 +131,7 @@ Slice plan:
 - [x] Slice 3.5: Extract HUD/status and hotbar controls into `SunnyTownHud.vue`.
 - [x] Slice 3.6: Extract inventory and crafting panels into `SunnyTownInventoryPanel.vue`.
 - [x] Slice 3.7: Extract dialogue, shop, and schoolwork panels into `SunnyTownDialogue.vue`, `SunnyTownShop.vue`, and `SunnyTownSchoolworkPanel.vue`.
-- [ ] Slice 3.8: Final Phase 3 review pass: remove dead code, verify layout, update docs, and commit the final frontend split.
+- [x] Slice 3.8: Final Phase 3 review pass: remove dead code, verify layout, update docs, and commit the final frontend split.
 
 Original task coverage:
 
@@ -145,9 +146,9 @@ Original task coverage:
 
 Verification:
 
-- [ ] `cd frontend && npm run build`
-- [ ] Smoke-test Sunny Town in browser or container-served app when practical.
-- [ ] Run `go test ./...` after Phase 3 completion to catch cross-project regressions.
+- [x] `cd frontend && npm run build`
+- [x] Smoke-test Sunny Town in browser or container-served app when practical.
+- [x] Run `go test ./...` after Phase 3 completion to catch cross-project regressions.
 
 ## Phase 4: HQ Backend Split
 
@@ -296,3 +297,7 @@ Verification:
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.6. Vite still reported the large chunk warning.
 - 2026-06-06: Phase 3 Slice 3.7 extracted Sunny Town dialogue, shop, and schoolwork overlays into focused components.
 - 2026-06-06: `cd frontend && npm run build` passed after Phase 3 Slice 3.7. Vite still reported the large chunk warning.
+- 2026-06-06: Phase 3 Slice 3.8 completed final review. `SunnyTownPage.vue` is reduced from 2,142 lines to 1,554 lines, with socket, movement, renderer lifecycle, canvas, HUD, inventory/crafting, dialogue, shop, and schoolwork concerns split into focused files.
+- 2026-06-06: `cd frontend && npm run build` passed after Phase 3 completion. Vite still reported the large chunk warning.
+- 2026-06-06: `go test ./...` passed after Phase 3 completion.
+- 2026-06-06: Vite preview smoke test returned HTTP 200 for `/` and `/student/pet/sunny-town`; in-app browser tooling was unavailable in this session.
