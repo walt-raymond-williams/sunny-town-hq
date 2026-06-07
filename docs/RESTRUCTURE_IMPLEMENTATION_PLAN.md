@@ -8,6 +8,7 @@ Last updated: 2026-06-07.
 
 Current state:
 
+- Last committed restructure slice: `9502fae Retire HQ role adapters`.
 - Phase 8 Slice 8.3 is implemented and verified.
 - Next work is Phase 8 Slice 8.4: move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API stays small.
 - Phase 7 adapter retirement is complete: inventory, pet, Sunny Town bridge, AI grading, and assignment adapters have been retired.
@@ -32,6 +33,13 @@ Recommended next work:
 1. Move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API is small and boring.
 2. Reassess moving route construction into `internal/hq/httpapi`.
 3. Reassess moving app construction into `internal/hq/app`.
+
+Slice 8.4 scope:
+
+- Good target: extract reusable, behavior-preserving HTTP helpers from `cmd/hq/http_helpers.go`, especially JSON response writing, request logging, static SPA serving, and local IPv4 address discovery if the exported API stays simple.
+- Keep in `cmd/hq` for now: authenticated middleware if moving it would create a large app/store config object.
+- Do not move route registration in Slice 8.4. Reassess route construction separately in Slice 8.5 after helper extraction.
+- Do not move app construction in Slice 8.4. Reassess app construction separately in Slice 8.6 after route construction is reviewed.
 
 ```powershell
 go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
