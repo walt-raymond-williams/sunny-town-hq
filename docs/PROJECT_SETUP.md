@@ -63,7 +63,7 @@ Main tables:
 - `student_equipped_item`: current gear/accessory/tool equipment
 - `student_sunny_town_position`: last accepted Sunny Town map position
 
-The Go app also runs schema-safety upgrades at startup in `cmd/hq/schema.go`.
+The Go app also applies ordered startup migrations through `internal/hq/schema`.
 
 ### Keycloak
 
@@ -249,12 +249,13 @@ Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 18080,18081
 
 ## Important Files
 
-- `cmd/hq/main.go`: JSON API routing and assignment workflows
-- `cmd/hq/auth.go`: Keycloak JWT/JWKS validation
-- `cmd/hq/schema.go`: runtime schema upgrades and app-user sync
-- `cmd/hq/inventory.go`: inventory query and mutation helpers
-- `cmd/hq/equipment.go`: equipment slot validation and updates
-- `cmd/hq/pet_service.go`: Connect RPC pet service
+- `cmd/hq/main.go`: HQ binary startup and server construction
+- `cmd/hq/routes.go`: HQ route composition
+- `cmd/hq/schema.go`: app-user sync for authenticated requests
+- `internal/hq/auth/`: Keycloak JWT/JWKS validation and auth user context helpers
+- `internal/hq/assignments/`: assignment APIs, persistence, grading, and handler factories
+- `internal/hq/inventory/`: inventory, equipment, hotbar, crafting, wallet, and shop APIs
+- `internal/hq/pet/`: pet persistence, REST handlers, and Connect RPC pet service
 - `cmd/sunny-town/main.go`: Sunny Town WebSocket service, rooms, portals, rewards, and mining
 - `deploy/docker-compose.yml`: PostgreSQL and Keycloak services
 - `deploy/sunny-town/Dockerfile`: Sunny Town container build

@@ -13,7 +13,7 @@ This map captures the current HQ schema ownership boundaries for ordered migrati
 
 ### Identity And Auth
 
-Owner: `cmd/hq` auth flow, with future extraction to `internal/hq/auth` if the app split needs it.
+Owner: `internal/hq/auth` for Keycloak token verification and auth user types. Authenticated user persistence and role sync still live in `cmd/hq/schema.go` until the Phase 8 user-management slice moves them behind an internal boundary.
 
 Tables and indexes:
 

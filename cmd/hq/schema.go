@@ -4,17 +4,19 @@ import (
 	"context"
 	"strings"
 
+	hqauth "hq/internal/hq/auth"
+
 	"github.com/jackc/pgx/v5"
 )
 
-func (app *app) syncAuthenticatedUser(ctx context.Context, user authUser) (authUser, error) {
+func (app *app) syncAuthenticatedUser(ctx context.Context, user hqauth.User) (hqauth.User, error) {
 	if user.KeycloakSubject == "" {
-		return authUser{}, errInvalidToken
+		return hqauth.User{}, hqauth.ErrInvalidToken
 	}
 
 	tx, err := app.db.Begin(ctx)
 	if err != nil {
-		return authUser{}, err
+		return hqauth.User{}, err
 	}
 	defer func() {
 		_ = tx.Rollback(ctx)
@@ -40,11 +42,11 @@ func (app *app) syncAuthenticatedUser(ctx context.Context, user authUser) (authU
 		strings.TrimSpace(user.Email),
 	).Scan(&user.ID, &user.DisplayName, &user.Email)
 	if err != nil {
-		return authUser{}, err
+		return hqauth.User{}, err
 	}
 
 	if _, err := tx.Exec(ctx, "delete from app_user_role where user_id = $1", user.ID); err != nil {
-		return authUser{}, err
+		return hqauth.User{}, err
 	}
 
 	for _, role := range user.Roles {
@@ -57,11 +59,11 @@ func (app *app) syncAuthenticatedUser(ctx context.Context, user authUser) (authU
 			user.ID,
 			role,
 		); err != nil {
-			return authUser{}, err
+			return hqauth.User{}, err
 		}
 	}
 
-	if hasRole(user, "student") {
+	if hqauth.HasRole(user, "student") {
 		if _, err := tx.Exec(
 			ctx,
 			`
@@ -71,7 +73,7 @@ func (app *app) syncAuthenticatedUser(ctx context.Context, user authUser) (authU
 			`,
 			user.ID,
 		); err != nil {
-			return authUser{}, err
+			return hqauth.User{}, err
 		}
 		if _, err := tx.Exec(
 			ctx,
@@ -86,18 +88,18 @@ func (app *app) syncAuthenticatedUser(ctx context.Context, user authUser) (authU
 			`,
 			user.ID,
 		); err != nil {
-			return authUser{}, err
+			return hqauth.User{}, err
 		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return authUser{}, err
+		return hqauth.User{}, err
 	}
 
 	return user, nil
 }
 
-func (app *app) loadStudents(ctx context.Context) ([]authUser, error) {
+func (app *app) loadStudents(ctx context.Context) ([]hqauth.User, error) {
 	rows, err := app.db.Query(
 		ctx,
 		`
@@ -112,9 +114,9 @@ func (app *app) loadStudents(ctx context.Context) ([]authUser, error) {
 	}
 	defer rows.Close()
 
-	students := []authUser{}
+	students := []hqauth.User{}
 	for rows.Next() {
-		var student authUser
+		var student hqauth.User
 		if err := rows.Scan(
 			&student.ID,
 			&student.KeycloakSubject,
@@ -132,10 +134,10 @@ func (app *app) loadStudents(ctx context.Context) ([]authUser, error) {
 	return students, nil
 }
 
-func requireUser(ctx context.Context) (authUser, error) {
-	user, ok := userFromContext(ctx)
+func requireUser(ctx context.Context) (hqauth.User, error) {
+	user, ok := hqauth.UserFromContext(ctx)
 	if !ok {
-		return authUser{}, pgx.ErrNoRows
+		return hqauth.User{}, pgx.ErrNoRows
 	}
 	return user, nil
 }

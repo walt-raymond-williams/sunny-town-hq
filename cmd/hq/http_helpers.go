@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	hqauth "hq/internal/hq/auth"
 )
 
 func (app *app) authenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, err := app.auth.authenticateRequest(r.Context(), r)
+		user, err := app.auth.AuthenticateRequest(r.Context(), r)
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "login required",
@@ -31,25 +32,25 @@ func (app *app) authenticated(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), authUserContextKey, user)
+		ctx := hqauth.WithUser(r.Context(), user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-func requireRole(w http.ResponseWriter, r *http.Request, role string) (authUser, bool) {
-	user, ok := userFromContext(r.Context())
+func requireRole(w http.ResponseWriter, r *http.Request, role string) (hqauth.User, bool) {
+	user, ok := hqauth.UserFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{
 			"error": "login required",
 		})
-		return authUser{}, false
+		return hqauth.User{}, false
 	}
 
-	if !hasRole(user, role) {
+	if !hqauth.HasRole(user, role) {
 		writeJSON(w, http.StatusForbidden, map[string]string{
 			"error": role + " role required",
 		})
-		return authUser{}, false
+		return hqauth.User{}, false
 	}
 
 	return user, true

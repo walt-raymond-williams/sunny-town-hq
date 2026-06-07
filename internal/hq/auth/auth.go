@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"context"
@@ -18,14 +18,14 @@ import (
 
 type contextKey string
 
-const authUserContextKey contextKey = "authUser"
+const userContextKey contextKey = "authUser"
 
 var (
-	errMissingBearer = errors.New("missing bearer token")
-	errInvalidToken  = errors.New("invalid token")
+	ErrMissingBearer = errors.New("missing bearer token")
+	ErrInvalidToken  = errors.New("invalid token")
 )
 
-type authVerifier struct {
+type Verifier struct {
 	issuer   string
 	audience string
 	jwksURL  string
@@ -35,7 +35,7 @@ type authVerifier struct {
 	fetched  time.Time
 }
 
-type authUser struct {
+type User struct {
 	ID              int64    `json:"id"`
 	KeycloakSubject string   `json:"keycloak_subject"`
 	DisplayName     string   `json:"display_name"`
@@ -79,14 +79,14 @@ func (claim *audienceClaim) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func newAuthVerifier(issuer string, audience string, jwksURL string) *authVerifier {
+func NewVerifier(issuer string, audience string, jwksURL string) *Verifier {
 	issuer = strings.TrimRight(strings.TrimSpace(issuer), "/")
 	jwksURL = strings.TrimSpace(jwksURL)
 	if jwksURL == "" {
 		jwksURL = issuer + "/protocol/openid-connect/certs"
 	}
 
-	return &authVerifier{
+	return &Verifier{
 		issuer:   issuer,
 		audience: strings.TrimSpace(audience),
 		jwksURL:  jwksURL,
@@ -97,15 +97,15 @@ func newAuthVerifier(issuer string, audience string, jwksURL string) *authVerifi
 	}
 }
 
-func (verifier *authVerifier) authenticateRequest(ctx context.Context, r *http.Request) (authUser, error) {
+func (verifier *Verifier) AuthenticateRequest(ctx context.Context, r *http.Request) (User, error) {
 	header := strings.TrimSpace(r.Header.Get("Authorization"))
 	if !strings.HasPrefix(strings.ToLower(header), "bearer ") {
-		return authUser{}, errMissingBearer
+		return User{}, ErrMissingBearer
 	}
 
 	claims, err := verifier.verifyToken(ctx, strings.TrimSpace(header[len("Bearer "):]))
 	if err != nil {
-		return authUser{}, err
+		return User{}, err
 	}
 
 	roles := claims.rolesForAudience(verifier.audience)
@@ -120,7 +120,7 @@ func (verifier *authVerifier) authenticateRequest(ctx context.Context, r *http.R
 		displayName = claims.Subject
 	}
 
-	return authUser{
+	return User{
 		KeycloakSubject: claims.Subject,
 		DisplayName:     displayName,
 		Email:           strings.TrimSpace(claims.Email),
@@ -128,10 +128,28 @@ func (verifier *authVerifier) authenticateRequest(ctx context.Context, r *http.R
 	}, nil
 }
 
-func (verifier *authVerifier) verifyToken(ctx context.Context, token string) (tokenClaims, error) {
+func WithUser(ctx context.Context, user User) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
+}
+
+func UserFromContext(ctx context.Context) (User, bool) {
+	user, ok := ctx.Value(userContextKey).(User)
+	return user, ok
+}
+
+func HasRole(user User, role string) bool {
+	for _, userRole := range user.Roles {
+		if userRole == role {
+			return true
+		}
+	}
+	return false
+}
+
+func (verifier *Verifier) verifyToken(ctx context.Context, token string) (tokenClaims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return tokenClaims{}, errInvalidToken
+		return tokenClaims{}, ErrInvalidToken
 	}
 
 	var header struct {
@@ -142,7 +160,7 @@ func (verifier *authVerifier) verifyToken(ctx context.Context, token string) (to
 		return tokenClaims{}, err
 	}
 	if header.Algorithm != "RS256" || header.KeyID == "" {
-		return tokenClaims{}, errInvalidToken
+		return tokenClaims{}, ErrInvalidToken
 	}
 
 	key, err := verifier.publicKey(ctx, header.KeyID)
@@ -153,11 +171,11 @@ func (verifier *authVerifier) verifyToken(ctx context.Context, token string) (to
 	signed := []byte(parts[0] + "." + parts[1])
 	signature, err := base64.RawURLEncoding.DecodeString(parts[2])
 	if err != nil {
-		return tokenClaims{}, errInvalidToken
+		return tokenClaims{}, ErrInvalidToken
 	}
 	hash := sha256.Sum256(signed)
 	if err := rsa.VerifyPKCS1v15(key, crypto.SHA256, hash[:], signature); err != nil {
-		return tokenClaims{}, errInvalidToken
+		return tokenClaims{}, ErrInvalidToken
 	}
 
 	var claims tokenClaims
@@ -165,15 +183,15 @@ func (verifier *authVerifier) verifyToken(ctx context.Context, token string) (to
 		return tokenClaims{}, err
 	}
 	if claims.Subject == "" || claims.Issuer != verifier.issuer {
-		return tokenClaims{}, errInvalidToken
+		return tokenClaims{}, ErrInvalidToken
 	}
 
 	now := time.Now().Unix()
 	if claims.ExpiresAt <= now || (claims.NotBefore > 0 && claims.NotBefore > now) {
-		return tokenClaims{}, errInvalidToken
+		return tokenClaims{}, ErrInvalidToken
 	}
 	if verifier.audience != "" && !claims.hasAudience(verifier.audience) && claims.AuthorizedParty != verifier.audience {
-		return tokenClaims{}, errInvalidToken
+		return tokenClaims{}, ErrInvalidToken
 	}
 
 	return claims, nil
@@ -182,15 +200,15 @@ func (verifier *authVerifier) verifyToken(ctx context.Context, token string) (to
 func decodeJWTPart(part string, target any) error {
 	data, err := base64.RawURLEncoding.DecodeString(part)
 	if err != nil {
-		return errInvalidToken
+		return ErrInvalidToken
 	}
 	if err := json.Unmarshal(data, target); err != nil {
-		return errInvalidToken
+		return ErrInvalidToken
 	}
 	return nil
 }
 
-func (verifier *authVerifier) publicKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
+func (verifier *Verifier) publicKey(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	verifier.mu.Lock()
 	key := verifier.keys[kid]
 	stale := time.Since(verifier.fetched) > 10*time.Minute
@@ -208,12 +226,12 @@ func (verifier *authVerifier) publicKey(ctx context.Context, kid string) (*rsa.P
 	defer verifier.mu.Unlock()
 	key = verifier.keys[kid]
 	if key == nil {
-		return nil, errInvalidToken
+		return nil, ErrInvalidToken
 	}
 	return key, nil
 }
 
-func (verifier *authVerifier) refreshKeys(ctx context.Context) error {
+func (verifier *Verifier) refreshKeys(ctx context.Context) error {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, verifier.jwksURL, nil)
 	if err != nil {
 		return err
@@ -310,18 +328,4 @@ func (claims tokenClaims) rolesForAudience(audience string) []string {
 		}
 	}
 	return roles
-}
-
-func userFromContext(ctx context.Context) (authUser, bool) {
-	user, ok := ctx.Value(authUserContextKey).(authUser)
-	return user, ok
-}
-
-func hasRole(user authUser, role string) bool {
-	for _, userRole := range user.Roles {
-		if userRole == role {
-			return true
-		}
-	}
-	return false
 }

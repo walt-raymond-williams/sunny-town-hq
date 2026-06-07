@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	hqauth "hq/internal/hq/auth"
 	hqpet "hq/internal/hq/pet"
 )
 
@@ -16,9 +17,9 @@ func petRequireRole(w http.ResponseWriter, r *http.Request, role string) (hqpet.
 }
 
 func requireStudentID(ctx context.Context) (int64, error) {
-	user, ok := userFromContext(ctx)
-	if !ok || !hasRole(user, "student") {
-		return 0, errInvalidToken
+	user, ok := hqauth.UserFromContext(ctx)
+	if !ok || !hqauth.HasRole(user, "student") {
+		return 0, hqauth.ErrInvalidToken
 	}
 	return user.ID, nil
 }

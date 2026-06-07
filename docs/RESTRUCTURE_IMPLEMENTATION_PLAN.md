@@ -8,28 +8,28 @@ Last updated: 2026-06-07.
 
 Current state:
 
-- All changes through `80442bf Retire HQ assignment adapters` are committed.
-- Active work is Phase 7 Slice 7.11 review and planning after adapter retirement.
+- Phase 8 Slice 8.1 is implemented and verified.
+- Next work is Phase 8 Slice 8.2: move authenticated-user persistence/sync and student listing behind an internal boundary.
 - Phase 7 adapter retirement is complete: inventory, pet, Sunny Town bridge, AI grading, and assignment adapters have been retired.
-- Current `cmd/hq` shape after adapter retirement:
-  - `main.go`: 87 lines
-  - `routes.go`: 99 lines
-  - `handlers.go`: 181 lines
-  - `auth.go`: 327 lines
-  - `schema.go`: 141 lines
+- Current `cmd/hq` shape after Phase 8 Slice 8.1:
+  - `main.go`: 75 lines
+  - `routes.go`: 92 lines
+  - `handlers.go`: 163 lines
+  - `schema.go`: 128 lines
   - `reward_test.go`: 1,358 lines
-- Before the next commit, `git status --short` should show only this plan update plus known untracked local logs:
+  - `internal/hq/auth/auth.go`: 287 lines
+  - `internal/hq/auth/auth_test.go`: 148 lines
+- After committing Phase 8 Slice 8.1, `git status --short` should show only known untracked local logs:
   - `hq-local.err.log`
   - `hq-local.out.log`
 - Phases 1 through 6 are complete except for deferred future guardrails noted below.
-- Remaining structural work should focus on command-local auth/user management before moving app construction.
+- Remaining structural work should focus on moving authenticated user persistence/sync and command HTTP helpers behind internal boundaries before moving app construction.
 
 Recommended next work:
 
-1. Commit Phase 7 Slice 7.11 after verification.
-2. Start Phase 8: HQ command cleanup.
-3. First target: move Keycloak token verification, auth user types, role checks, authenticated middleware support, user sync, and student listing out of `cmd/hq` into an internal package.
-4. After auth/user management moves, reassess moving route construction and shared HTTP helpers into `internal/hq/httpapi`, then reassess moving app construction into `internal/hq/app`.
+1. Move authenticated-user sync, role persistence, default student provisioning, student listing, and `requireUser` from `cmd/hq/schema.go` into `internal/hq/users` or the auth package.
+2. Replace remaining command-local role adapters with shared auth package adapters or narrow exported helpers.
+3. After auth/user management moves, reassess moving route construction and shared HTTP helpers into `internal/hq/httpapi`, then reassess moving app construction into `internal/hq/app`.
 
 ```powershell
 go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
@@ -327,7 +327,7 @@ Start after Phase 7 adapter retirement.
 
 Recommended slice order:
 
-- [ ] Slice 8.1: Move Keycloak JWT verification and auth user types from `cmd/hq/auth.go` into `internal/hq/auth`.
+- [x] Slice 8.1: Move Keycloak JWT verification and auth user types from `cmd/hq/auth.go` into `internal/hq/auth`.
 - [ ] Slice 8.2: Move authenticated-user sync, role persistence, default student provisioning, student listing, and `requireUser` from `cmd/hq/schema.go` into the auth/user package or a focused `internal/hq/users` package.
 - [ ] Slice 8.3: Replace command-local role adapters (`inventory_auth.go`, `pet_auth.go`, inline assignment role bridge, `requireStudentID`) with shared auth package adapters or narrow exported helpers.
 - [ ] Slice 8.4: Move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API is small and boring.
@@ -341,8 +341,8 @@ Non-goals:
 
 Verification:
 
-- [ ] `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`
-- [ ] `go test ./...`
+- [x] `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`
+- [x] `go test ./...`
 
 ## Current Verification Log
 
@@ -503,3 +503,6 @@ Verification:
 - 2026-06-07: Phase 7 Slice 7.11 reassessed `cmd/hq` after adapter retirement. Conclusion: adapter retirement is complete, but moving app construction is still premature until command-local auth/user management moves behind internal package boundaries. Added Phase 8 plan for HQ command cleanup.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slice 7.11 planning update.
 - 2026-06-07: `go test ./...` passed after Phase 7 Slice 7.11 planning update.
+- 2026-06-07: Phase 8 Slice 8.1 moved Keycloak JWT verification, auth user types, context helpers, and role checks from `cmd/hq/auth.go` into `internal/hq/auth`; added direct auth package tests for context helpers, role filtering, missing bearer rejection, and signed JWT verification against a local JWKS server.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 8 Slice 8.1.
+- 2026-06-07: `go test ./...` passed after Phase 8 Slice 8.1.

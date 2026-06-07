@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	hqauth "hq/internal/hq/auth"
 	hqinventory "hq/internal/hq/inventory"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
 	"hq/internal/sunnytownauth"
@@ -57,7 +58,7 @@ func (app *app) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, ok := userFromContext(r.Context())
+	user, ok := hqauth.UserFromContext(r.Context())
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{
 			"error": "login required",

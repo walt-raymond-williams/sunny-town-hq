@@ -9,6 +9,7 @@ import (
 	"time"
 
 	hqapp "hq/internal/hq/app"
+	hqauth "hq/internal/hq/auth"
 	hqschema "hq/internal/hq/schema"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,7 +17,7 @@ import (
 
 type app struct {
 	db                     *pgxpool.Pool
-	auth                   *authVerifier
+	auth                   *hqauth.Verifier
 	sunnyTownJoinSecret    string
 	sunnyTownServiceSecret string
 	sunnyTownWebSocketURL  string
@@ -52,7 +53,7 @@ func main() {
 
 	app := &app{
 		db:                     db,
-		auth:                   newAuthVerifier(cfg.KeycloakIssuer, cfg.KeycloakAudience, cfg.KeycloakJWKSURL),
+		auth:                   hqauth.NewVerifier(cfg.KeycloakIssuer, cfg.KeycloakAudience, cfg.KeycloakJWKSURL),
 		sunnyTownJoinSecret:    cfg.SunnyTownJoinSecret,
 		sunnyTownServiceSecret: cfg.SunnyTownServiceSecret,
 		sunnyTownWebSocketURL:  cfg.SunnyTownWebSocketURL,
