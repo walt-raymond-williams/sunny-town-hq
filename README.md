@@ -27,15 +27,17 @@ The app is designed to run from a laptop on a home network. Teachers can create 
 ## Repository Layout
 
 ```text
-cmd/hq/                 HQ API server and static frontend host
-cmd/sunny-town/         Sunny Town realtime WebSocket service
+cmd/hq/                 HQ binary startup, route composition, and static frontend host
+cmd/sunny-town/         Sunny Town binary startup
+cmd/ai/                 AI grading service
 frontend/               Vue 3 frontend source
 sunny-town/maps/        Sunny Town map JSON
 proto/                  Protobuf definitions and generated Go code
-internal/               Shared internal Go packages
+internal/hq/            HQ domain, auth, schema, and HTTP helper packages
+internal/sunnytown/     Sunny Town config, protocol, map, HQ client, and server packages
 deploy/                 Docker Compose, Dockerfiles, Keycloak, database init
 docs/                   Setup, testing, architecture, and feature notes
-docs/current/           Current-state architecture, API, database, and runtime docs
+docs/current/           Current-state architecture, package boundaries, API, database, and runtime docs
 docs/archive/           Historical planning docs
 web/                    Ignored generated frontend build output
 Taskfile.yml            Common verification and runtime commands

@@ -111,10 +111,9 @@ Tables, constraints, and indexes:
 
 Migration target: `0004_sunny_town_state.sql`
 
-## Phase 5 Conversion Notes
+## Migration Notes
 
-- Preserve the current statement order when converting runtime DDL into migration files.
+- Preserve statement order when adding future schema migrations.
 - Keep data backfills near the schema change they support, for example cookie migration into inventory and default Sunny Town starter items.
-- Convert idempotent `alter table ... add column if not exists` startup patches into one-time migration statements where possible.
 - Keep compatibility constraints explicit; do not rely on application validation alone.
 - Runtime schema patching has been replaced by the HQ startup migration runner in `internal/hq/schema`.

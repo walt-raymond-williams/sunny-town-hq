@@ -17,7 +17,7 @@ internal/hq/schema
 
 Applied versions are recorded in the `schema_migration` table.
 
-Schema ownership for the migration conversion is tracked in:
+Schema ownership is tracked in:
 
 ```text
 docs/current/SCHEMA_OWNERSHIP.md
@@ -41,9 +41,9 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_sunny_town_position`: last accepted Sunny Town map position
 - `sunny_town_map_object`: persisted placed map objects
 
-## Migration Direction
+## Migration Layout
 
-Target structure:
+Current structure:
 
 ```text
 deploy/postgres/migrations/

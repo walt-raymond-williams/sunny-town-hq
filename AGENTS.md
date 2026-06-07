@@ -8,12 +8,12 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 
 ## Repository Shape
 
-- HQ service code lives in `cmd/hq`.
-- Sunny Town realtime service code lives in `cmd/sunny-town`.
+- HQ binary startup and route composition live in `cmd/hq`; HQ domain code lives under `internal/hq/...`.
+- Sunny Town binary startup lives in `cmd/sunny-town`; Sunny Town realtime service code lives under `internal/sunnytown/...`.
 - Sunny Town map JSON lives in `sunny-town/maps`.
 - Vue frontend code lives in `frontend/src`.
 - Project docs, plans, setup notes, and testing guidance live in `docs/`.
-- Current-state architecture, API, database, and runtime docs live in `docs/current/`.
+- Current-state architecture, package boundaries, API, database, and runtime docs live in `docs/current/`.
 - Historical planning docs live in `docs/archive/`.
 - Production frontend assets are generated into local `web/` by `npm run build`; `web/` is ignored and should not be committed.
 - Integration/runtime configuration lives under `deploy/`.

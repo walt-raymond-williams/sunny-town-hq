@@ -1,6 +1,6 @@
 # Current API Surface
 
-This file summarizes the current API ownership and route groups. Handler details remain in code until the backend split creates package-level docs.
+This file summarizes the current API ownership and route groups. Handler ownership now lives in focused packages under `internal/hq/...`, with `cmd/hq/routes.go` composing those handlers into the HQ binary.
 
 ## Public App APIs
 
@@ -30,6 +30,14 @@ Pet APIs use Connect RPC at:
 
 The protobuf source is `proto/hq/pet/v1/pet.proto`. Generated Go code lives under `proto/`; generated TypeScript lives under `frontend/src/gen/`.
 
+Current public API handler ownership:
+
+- Identity/session helper routes: `cmd/hq/handlers.go`, backed by `internal/hq/auth` and `internal/hq/users`
+- Student profile and pet actions: `internal/hq/pet`
+- Inventory, hotbar, crafting, equipment, wallet, and shop: `internal/hq/inventory`
+- Assignments and grading commands: `internal/hq/assignments`
+- Sunny Town session creation: `cmd/hq/handlers.go`, coordinated with `internal/hq/pet`, `internal/hq/inventory`, `internal/hq/sunnytownbridge`, and `internal/sunnytownauth`
+
 ## Internal Service APIs
 
 Sunny Town calls HQ through service-authenticated internal endpoints using `X-HQ-Service-Secret`.
@@ -51,7 +59,13 @@ AI service integration uses internal HQ endpoints under:
 /api/internal/ai/assignment-attempts/...
 ```
 
-Do not refactor the AI route shape while the AI service refactor is in progress.
+Do not refactor the AI route shape without coordinating the AI service and `docs/AI_SERVICE_IMPLEMENTATION_PLAN.md`.
+
+Current internal API handler ownership:
+
+- Sunny Town internal endpoints: `internal/hq/sunnytownbridge`
+- AI grading callback/context endpoints: `internal/hq/ai`
+- Shared internal service authentication helpers: `internal/serviceauth` and package-local endpoint checks where needed
 
 ## Sunny Town WebSocket
 

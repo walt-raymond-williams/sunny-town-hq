@@ -54,15 +54,17 @@ Sunny Town owns live realtime state:
 - portal transitions
 - gameplay validation before reward/resource events reach HQ
 
-The AI service owns assignment grading recommendations and posts results back through service-authenticated HQ endpoints. Active AI implementation details live outside this restructure plan while the AI refactor is in progress.
+The AI service owns assignment grading recommendations and posts results back through service-authenticated HQ endpoints. AI implementation details and future AI changes are tracked separately from the completed repository restructure.
 
 ## Repository Shape
 
 ```text
-cmd/hq/                 HQ API server and static frontend host
-cmd/sunny-town/         Sunny Town realtime WebSocket service
+cmd/hq/                 HQ binary startup, route composition, and static frontend host
+cmd/sunny-town/         Sunny Town binary startup
 cmd/ai/                 AI grading service
-internal/               Shared internal Go packages
+internal/hq/            HQ domain, auth, schema, and HTTP helper packages
+internal/sunnytown/     Sunny Town config, protocol, map, HQ client, and server packages
+internal/aiapi/         Shared AI API DTOs
 proto/                  Protobuf definitions and generated Go/TS code
 frontend/               Vue 3 frontend source
 sunny-town/maps/        Sunny Town map JSON
@@ -72,8 +74,19 @@ docs/archive/           Historical planning docs
 web/                    Ignored generated frontend build output
 ```
 
-## Known Restructure Targets
+## Current Package Boundaries
 
-- Move remaining HQ app construction and route helper boundaries out of `cmd/hq` once the command-package adapters are retired.
-- Convert the migration SQL files into smaller future migrations as schema changes continue.
-- Add CI guardrails for Go tests, frontend builds, and Docker Compose configuration.
+The broad restructure is complete. Current package ownership is documented in:
+
+```text
+docs/current/PACKAGE_BOUNDARIES.md
+docs/current/SCHEMA_OWNERSHIP.md
+```
+
+`cmd/hq` intentionally remains the HQ binary composition layer. It owns startup, DB connection, migrations, route composition, and server logging. HQ business behavior lives under `internal/hq/...`.
+
+Further maintainability work should focus on splitting large files inside the package boundaries that now exist, tracked in:
+
+```text
+docs/BIG_FILE_SPLIT_PLAN.md
+```
