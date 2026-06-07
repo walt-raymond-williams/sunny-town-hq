@@ -16,6 +16,12 @@ cmd/hq/schema.go
 
 This mixed model is acceptable for early development but should be replaced by explicit ordered migrations after active AI schema work settles.
 
+Schema ownership for the migration conversion is tracked in:
+
+```text
+docs/current/SCHEMA_OWNERSHIP.md
+```
+
 ## Main Tables
 
 - `app_user`: local app user profile synced from Keycloak subject
@@ -47,4 +53,4 @@ deploy/postgres/migrations/
   0005_ai_grading.sql
 ```
 
-Do not start this migration conversion until the AI service refactor has settled, because `assignment_ai_grade` and related columns may still change.
+Do not start this migration conversion until the current HQ package-boundary cleanup is finished. Use `docs/current/SCHEMA_OWNERSHIP.md` as the table and migration ownership map.
