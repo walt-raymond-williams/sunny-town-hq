@@ -13,8 +13,16 @@ Current state:
 - Known untracked local files should remain uncommitted unless the user explicitly asks:
   - `hq-local.err.log`
   - `hq-local.out.log`
-- First recommended slice: split `internal/hq/sunnytownbridge/bridge.go` into request/types, store operations, ledger helpers, map-object operations, and HTTP handlers.
-- Second recommended slice: split `frontend/src/features/sunny-town/SunnyTownPage.vue` by extracting interaction/session/rendering state into composables only when each composable has a crisp owner.
+- Slice 1 is complete: `internal/hq/sunnytownbridge/bridge.go` was split into focused production files.
+- Slice 2 is in progress: `frontend/src/features/sunny-town/SunnyTownPage.vue` is down from 1,554 lines to about 1,145 lines.
+- Slice 2 completed sub-slices:
+  - `frontend/src/features/sunny-town/worldObjects.ts` plus tests for world-object conversion helpers.
+  - `frontend/src/composables/useSunnyTownRemotePlayers.ts` plus tests for remote snapshot history/interpolation.
+  - `frontend/src/composables/useSunnyTownLocalPlayer.ts` plus tests for predicted/rendered local-player state.
+  - `frontend/src/composables/useSunnyTownToolUseAnimation.ts` plus tests for tool-use animation progress.
+  - `frontend/src/composables/useSunnyTownNpcInteractions.ts` plus tests for dialogue/shop/schoolwork overlay state and nearest-NPC selection.
+  - `frontend/src/composables/useSunnyTownPlacement.ts` plus tests for placement hover state, pointer-to-grid conversion, and placement validation.
+- Next recommended Slice 2 sub-step: extract rendering helpers from `SunnyTownPage.vue` into `frontend/src/features/sunny-town/rendering/`, starting with pure draw helpers that do not need Vue refs.
 - AI grading file cleanup should wait if another agent is actively refactoring the AI service.
 
 Verification baseline:
@@ -24,10 +32,11 @@ go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownau
 go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth
 go test ./...
 cd frontend
+npm test
 npm run build
 ```
 
-Run the narrow command first for the area touched, then run `go test ./...` or `npm run build` before committing. For mixed backend/frontend slices, run both.
+Run the narrow command first for the area touched, then run `go test ./...` or `npm test`/`npm run build` before committing. For mixed backend/frontend slices, run both backend and frontend checks.
 
 Before committing any Go production-code change, confirm that the touched package has meaningful unit tests. If it does not, add focused unit tests for the moved or changed behavior in the same slice, then run them before committing. Existing broad integration coverage is useful, but it is not a substitute for package-level unit coverage when a package has no direct tests.
 
