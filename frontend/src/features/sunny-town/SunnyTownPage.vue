@@ -8,9 +8,9 @@ import {
   movementDirectionForEvent,
   movementInputEventOptions,
   moveSendIntervalMs,
-  simulatePlayer,
   useSunnyTownMovement,
 } from '../../composables/useSunnyTownMovement'
+import { useSunnyTownLocalPlayer } from '../../composables/useSunnyTownLocalPlayer'
 import { useSunnyTownRemotePlayers } from '../../composables/useSunnyTownRemotePlayers'
 import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
@@ -58,6 +58,7 @@ const toolUseDurationMs = 360
 const router = useRouter()
 const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
+const localPlayerState = useSunnyTownLocalPlayer()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const activeMap = ref<SunnyTownMap | null>(null)
@@ -91,8 +92,6 @@ const schoolworkNotice = ref('')
 const isLoadingSchoolwork = ref(false)
 const isSubmittingSchoolwork = ref(false)
 
-let localSelf: SunnyTownPlayer | null = null
-let renderedSelf: SunnyTownPlayer | null = null
 let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
@@ -156,8 +155,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
   renderer.stop()
   stopSunnyTownSocket()
-  localSelf = null
-  renderedSelf = null
+  localPlayerState.clear()
   remotePlayerState.clear()
 })
 
@@ -463,12 +461,7 @@ async function clearSelectedHotbarSlot() {
 
 function applyLocalEquipmentVisuals() {
   const equipment = { ...inventoryStore.equippedVisuals }
-  if (localSelf) {
-    localSelf.equipment = equipment
-  }
-  if (renderedSelf) {
-    renderedSelf.equipment = equipment
-  }
+  localPlayerState.applyEquipment(equipment)
   players.value = players.value.map((player) => (
     player.id === selfId.value ? { ...player, equipment } : player
   ))
@@ -526,8 +519,7 @@ function applyMapState(message: SunnyTownServerMessage) {
   placedObjects.value = message.placedObjects || []
   worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
   remotePlayerState.clear()
-  localSelf = null
-  renderedSelf = null
+  localPlayerState.clear()
   lastSentMoveJson = ''
   activeToolUse = null
   placementHoverGrid.value = null
@@ -582,7 +574,7 @@ function interactWithNearbyNpc(): boolean {
 }
 
 function useEquippedTool() {
-  const player = localSelf || players.value.find((candidate) => candidate.id === selfId.value)
+  const player = localPlayerState.current(players.value, selfId.value)
   const toolKey = selectedHotbarItemKey.value
   if (!player || !toolKey) {
     return
@@ -736,13 +728,11 @@ async function submitSchoolworkAnswer() {
 }
 
 function refreshLocalMovementState() {
-  if (!localSelf) {
-    return
-  }
-  localSelf = simulatePlayer(localSelf, movement.currentInput(), activeMap.value, worldObjects.value, 0)
+  localPlayerState.refreshMovement(movement.currentInput(), activeMap.value, worldObjects.value)
 }
 
 function sendMove(force = false) {
+  const localSelf = localPlayerState.local()
   if (!isSunnyTownSocketOpen() || !localSelf) {
     return
   }
@@ -820,7 +810,7 @@ function refreshNpcInteractionState() {
 
 function nearestNpcToSelf(): SunnyTownNpc | null {
   const map = activeMap.value
-  const self = localSelf || players.value.find((player) => player.id === selfId.value)
+  const self = localPlayerState.current(players.value, selfId.value)
   if (!map || !self) {
     return null
   }
@@ -841,28 +831,7 @@ function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
   const selfSnapshot = players.value.find((player) => player.id === selfId.value)
   const remotePlayers = players.value.filter((player) => player.id !== selfId.value)
   const renderedRemotePlayers = remotePlayerState.smoothPlayers(remotePlayers)
-  if (!selfSnapshot) {
-    return renderedRemotePlayers
-  }
-
-  if (!localSelf) {
-    localSelf = { ...selfSnapshot }
-  }
-  if (!renderedSelf) {
-    renderedSelf = { ...localSelf }
-  }
-
-  const target = localSelf
-  renderedSelf.x = target.x
-  renderedSelf.y = target.y
-  renderedSelf.displayName = target.displayName
-  renderedSelf.facing = target.facing
-  renderedSelf.moving = target.moving
-  renderedSelf.avatarId = target.avatarId
-  renderedSelf.equipment = target.equipment ? { ...target.equipment } : undefined
-  renderedSelf.lastProcessedSeq = target.lastProcessedSeq
-
-  return [...renderedRemotePlayers, renderedSelf]
+  return localPlayerState.renderedPlayers(selfSnapshot, renderedRemotePlayers)
 }
 
 function predictSelf(deltaSeconds: number) {
@@ -874,12 +843,8 @@ function predictSelf(deltaSeconds: number) {
   if (!selfSnapshot) {
     return
   }
-  if (!localSelf) {
-    localSelf = { ...selfSnapshot }
-  }
-
   const input = movement.currentInput()
-  localSelf = simulatePlayer(localSelf, input, activeMap.value, worldObjects.value, deltaSeconds)
+  localPlayerState.predict(selfSnapshot, input, activeMap.value, worldObjects.value, deltaSeconds)
   sendMove(false)
 }
 
@@ -890,24 +855,14 @@ function syncLocalSelfFromSnapshot() {
 
   const selfSnapshot = players.value.find((player) => player.id === selfId.value)
   if (!selfSnapshot) {
-    localSelf = null
-    renderedSelf = null
+    localPlayerState.clear()
     return
   }
-
-  if (!localSelf) {
-    localSelf = { ...selfSnapshot }
-    return
-  }
-
-  localSelf.displayName = selfSnapshot.displayName
-  localSelf.avatarId = selfSnapshot.avatarId
-  localSelf.equipment = selfSnapshot.equipment ? { ...selfSnapshot.equipment } : undefined
-  localSelf.lastProcessedSeq = selfSnapshot.lastProcessedSeq
+  localPlayerState.syncFromSnapshot(selfSnapshot)
 }
 
 function canPlaceStoneBlock(map: SunnyTownMap, gridX: number, gridY: number): boolean {
-  const self = localSelf || players.value.find((player) => player.id === selfId.value)
+  const self = localPlayerState.current(players.value, selfId.value)
   return canPlaceStoneBlockOnMap(map, gridX, gridY, stoneBlockQuantity.value, worldObjects.value, self)
 }
 
