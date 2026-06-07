@@ -50,8 +50,8 @@ Current state:
   - Moved `Feed`, `Play`, `PutToSleep`, and `Wake` into `internal/hq/pet/actions.go`.
   - Moved `ApplyGameResult` and pet star reward integration into `internal/hq/pet/game_rewards.go`.
   - Moved decay ticker/orchestration and decay math into `internal/hq/pet/decay.go`.
-- Next recommended step: reassess Slice 7 (`internal/hq/ai/grading.go`) and confirm no active AI refactor is in progress before splitting.
-- AI grading file cleanup should wait if another agent is actively refactoring the AI service.
+- Slice 7 is deferred: AI grading is still prototype code and has not been tested against the real API, so do not split or polish it until the integration direction is clearer.
+- Next recommended step: move to Slice 8 reassessment and only split lower-priority files when there is clear edit pain, repeated conflicts, or an obvious ownership boundary.
 
 Verification baseline:
 
@@ -127,7 +127,7 @@ Snapshot generated on 2026-06-07:
 - [x] Slice 4: Split `internal/sunnytown/server/room_test.go` by behavior area.
 - [x] Slice 5: Split `internal/hq/assignments/http.go`.
 - [x] Slice 6: Split `internal/hq/pet/store.go`.
-- [ ] Slice 7: Reassess `internal/hq/ai/grading.go` after AI refactor status is clear.
+- [ ] Slice 7: Deferred until AI grading is validated against the real API and the integration direction is clear.
 - [ ] Slice 8: Reassess lower-priority files and duplicate helper opportunities.
 
 ## Slice 1: HQ Sunny Town Bridge
