@@ -8,20 +8,28 @@ Last updated: 2026-06-07.
 
 Current state:
 
-- All changes through `78f1531 Plan HQ adapter retirement phase` are committed.
-- Active work is Phase 7 HQ adapter retirement.
-- Phase 7 Slices 7.1 through 7.4 moved inventory/equipment/hotbar/crafting/shop HTTP handlers into `internal/hq/inventory`, mounted those handlers directly from routes, added direct HTTP handler tests, and deleted the matching command-package adapter files.
-- Before the next commit, `git status --short` should show only intentional Phase 7 files plus known untracked local logs:
+- All changes through `80442bf Retire HQ assignment adapters` are committed.
+- Active work is Phase 7 Slice 7.11 review and planning after adapter retirement.
+- Phase 7 adapter retirement is complete: inventory, pet, Sunny Town bridge, AI grading, and assignment adapters have been retired.
+- Current `cmd/hq` shape after adapter retirement:
+  - `main.go`: 87 lines
+  - `routes.go`: 99 lines
+  - `handlers.go`: 181 lines
+  - `auth.go`: 327 lines
+  - `schema.go`: 141 lines
+  - `reward_test.go`: 1,358 lines
+- Before the next commit, `git status --short` should show only this plan update plus known untracked local logs:
   - `hq-local.err.log`
   - `hq-local.out.log`
 - Phases 1 through 6 are complete except for deferred future guardrails noted below.
-- Remaining Phase 7 adapter retirement is complete. Remaining work is to reassess whether app construction and shared HTTP helpers can move now that command-package adapters are gone.
+- Remaining structural work should focus on command-local auth/user management before moving app construction.
 
 Recommended next work:
 
-1. Commit Phase 7 Slices 7.1 through 7.4 after full verification is recorded.
-2. Start Phase 7 Slice 7.5 by reviewing `cmd/hq/handlers.go` and remaining adapter clusters.
-3. Reassess whether app construction can move into `internal/hq/app` and whether shared HTTP helpers should move into `internal/hq/httpapi`.
+1. Commit Phase 7 Slice 7.11 after verification.
+2. Start Phase 8: HQ command cleanup.
+3. First target: move Keycloak token verification, auth user types, role checks, authenticated middleware support, user sync, and student listing out of `cmd/hq` into an internal package.
+4. After auth/user management moves, reassess moving route construction and shared HTTP helpers into `internal/hq/httpapi`, then reassess moving app construction into `internal/hq/app`.
 
 ```powershell
 go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
@@ -200,18 +208,18 @@ Pet module direction:
 - [x] Keep pet in the HQ binary for Phase 4, but separate it as `internal/hq/pet`.
 - [x] Keep pet schema in the shared HQ database for now.
 - [x] Make pet depend on narrow interfaces for wallet/inventory/profile operations instead of broad app internals where practical.
-- [ ] Do not merge pet into AI; leave room for AI to consume pet context or emit pet-affecting commands through explicit interfaces later.
+- [x] Do not merge pet into AI; leave room for AI to consume pet context or emit pet-affecting commands through explicit interfaces later.
 
 Original task coverage:
 
 - [x] Move app config into `internal/hq/app`.
-- [ ] Move app construction into `internal/hq/app` after the remaining command-package adapters are retired.
+- [ ] Move app construction into `internal/hq/app` after command-local auth/user management is internalized.
 - [x] Split route registration out of HQ startup.
-- [ ] Move route registration and HTTP helpers into `internal/hq/httpapi` after route dependencies are narrow enough to avoid moving the whole command package.
+- [ ] Move route registration and HTTP helpers into `internal/hq/httpapi` after auth/user dependencies are narrow enough to avoid moving the whole command package.
 - [x] Move assignment handlers and assignment service logic.
 - [x] Replace temporary raw SQL suffix APIs with typed package operations where package boundaries now own the queries.
 - [x] Add direct package tests for extracted HQ domain packages, starting with assignments and inventory.
-- [ ] Remove temporary adapter aliases/wrappers once routes and handlers no longer need them.
+- [x] Remove temporary adapter aliases/wrappers once routes and handlers no longer need them.
 - [x] Move inventory, equipment, hotbar, and crafting logic.
 - [x] Move pet service logic into `internal/hq/pet`.
 - [x] Move Sunny Town bridge endpoints.
@@ -297,17 +305,44 @@ Recommended slice order:
 - [x] Slice 7.8: Retire Sunny Town bridge adapters by wiring routes and tests directly to `internal/hq/sunnytownbridge` and deleting `cmd/hq/sunnytown_bridge.go`.
 - [x] Slice 7.9: Retire AI grading adapters by wiring internal AI routes, tests, and async grade triggering directly to `internal/hq/ai`, then deleting `cmd/hq/ai_grading.go`.
 - [x] Slice 7.10: Retire remaining assignment compatibility adapters in `cmd/hq/assignment_grading.go` and `cmd/hq/assignments.go`.
-- [ ] Slice 7.11: Reassess `cmd/hq` after adapter retirement and decide whether Phase 4 deferred app construction or HTTP helper internalization is now worth doing.
+- [x] Slice 7.11: Reassess `cmd/hq` after adapter retirement and decide whether Phase 4 deferred app construction or HTTP helper internalization is now worth doing.
 
-Deferred until enough adapters are retired:
+Phase 7 reassessment result:
 
-- [ ] Move HQ app construction into `internal/hq/app`.
-- [ ] Move route registration/shared HTTP helpers into `internal/hq/httpapi`.
+- [x] Adapter retirement is complete.
+- [x] Moving all HQ app construction into `internal/hq/app` is not the next best code move. The `app` type still depends on command-local auth/user-sync types and static/logging helpers.
+- [x] Moving route registration into `internal/hq/httpapi` is now plausible, but should wait until auth/user management is internalized or expressed behind narrow interfaces.
+- [x] Next code phase should internalize HQ auth/user management first.
 
 Verification:
 
 - [x] `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`
 - [x] `go test ./...`
+
+## Phase 8: HQ Command Cleanup
+
+Goal: shrink `cmd/hq` to binary startup plus minimal route composition by moving command-local auth/user management and HTTP infrastructure behind internal package boundaries.
+
+Start after Phase 7 adapter retirement.
+
+Recommended slice order:
+
+- [ ] Slice 8.1: Move Keycloak JWT verification and auth user types from `cmd/hq/auth.go` into `internal/hq/auth`.
+- [ ] Slice 8.2: Move authenticated-user sync, role persistence, default student provisioning, student listing, and `requireUser` from `cmd/hq/schema.go` into the auth/user package or a focused `internal/hq/users` package.
+- [ ] Slice 8.3: Replace command-local role adapters (`inventory_auth.go`, `pet_auth.go`, inline assignment role bridge, `requireStudentID`) with shared auth package adapters or narrow exported helpers.
+- [ ] Slice 8.4: Move shared JSON/static/logging HTTP helpers into `internal/hq/httpapi` if the resulting API is small and boring.
+- [ ] Slice 8.5: Reassess route registration after auth/user cleanup; move route construction only if it reduces `cmd/hq` coupling without creating a large configuration object.
+- [ ] Slice 8.6: Reassess app construction in `internal/hq/app`; move only if `cmd/hq/main.go` can remain a readable binary entrypoint and tests stay straightforward.
+
+Non-goals:
+
+- [ ] Do not move package-main tests mechanically just to chase line counts; split `cmd/hq/reward_test.go` only when it improves ownership or lets tests live beside the package under test.
+- [ ] Do not move `cmd/hq/main.go` startup concerns that are specific to the binary, such as fatal startup logging and local address printing, unless they become reusable.
+
+Verification:
+
+- [ ] `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`
+- [ ] `go test ./...`
 
 ## Current Verification Log
 
@@ -465,3 +500,6 @@ Verification:
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/assignments` passed after Phase 7 Slice 7.10.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slice 7.10.
 - 2026-06-07: `go test ./...` passed after Phase 7 Slice 7.10.
+- 2026-06-07: Phase 7 Slice 7.11 reassessed `cmd/hq` after adapter retirement. Conclusion: adapter retirement is complete, but moving app construction is still premature until command-local auth/user management moves behind internal package boundaries. Added Phase 8 plan for HQ command cleanup.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slice 7.11 planning update.
+- 2026-06-07: `go test ./...` passed after Phase 7 Slice 7.11 planning update.
