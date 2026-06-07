@@ -3,7 +3,7 @@ package main
 import (
 	"net/http"
 
-	petv1connect "hq/proto/hq/pet/v1/petv1connect"
+	hqpet "hq/internal/hq/pet"
 )
 
 func (app *app) routes(webRoot string) http.Handler {
@@ -46,7 +46,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	mux.HandleFunc("/api/internal/ai/assignment-attempts/", app.handleInternalAIAssignmentAttempt)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
-	petServicePath, petServiceHandler := petv1connect.NewPetServiceHandler(&petService{app: app})
+	petServicePath, petServiceHandler := hqpet.NewServiceHandler(hqPetBackend{app: app}, requireStudentID, errNoCookies)
 	mux.Handle(petServicePath, app.authenticated(petServiceHandler))
 
 	mux.HandleFunc("/", staticHandler(webRoot))

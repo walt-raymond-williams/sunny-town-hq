@@ -179,8 +179,9 @@ Slice plan:
 - [ ] Slice 4.4: Move HTTP route registration and shared HTTP helpers into `internal/hq/httpapi`.
 - [ ] Slice 4.5: Move pet domain into `internal/hq/pet`.
   - [x] Slice 4.5a: Move deterministic pet rules, game result normalization, and proto mood mapping into `internal/hq/pet`.
-  - [ ] Slice 4.5b: Move pet persistence operations and decay logic behind a pet store/service boundary.
-  - [ ] Slice 4.5c: Move pet decay ticker orchestration and Connect RPC handler behind the new pet boundary.
+  - [x] Slice 4.5b: Move the Connect RPC handler into `internal/hq/pet` behind a narrow backend interface.
+  - [ ] Slice 4.5c: Move pet persistence operations and decay logic behind a pet store/service boundary.
+  - [ ] Slice 4.5d: Move pet decay ticker orchestration behind the new pet boundary.
 - [ ] Slice 4.6: Move inventory, equipment, hotbar, crafting, wallet, and shop logic into `internal/hq/inventory`.
 - [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
 - [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
@@ -338,3 +339,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.5a created `internal/hq/pet` for deterministic pet rules, game result normalization, and proto mood mapping.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.5a.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.5a.
+- 2026-06-07: Phase 4 Slice 4.5b moved the pet Connect RPC handler into `internal/hq/pet` and added a `cmd/hq` adapter for existing app persistence methods.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.5b.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.5b.
