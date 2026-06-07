@@ -131,7 +131,7 @@ Update:
 ```text
 deploy/docker-compose.yml
 cmd/hq/main.go
-cmd/hq/schema.go
+internal/hq/users/
 cmd/hq/reward_test.go or new assignment tests
 docs/PROJECT_SETUP.md
 docs/TESTING_GUIDELINES.md

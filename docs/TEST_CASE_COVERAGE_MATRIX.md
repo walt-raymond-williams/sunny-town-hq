@@ -114,10 +114,10 @@ Proposed cases:
 
 - Database migrations seed catalog item types.
 - Existing students receive starter equipment without duplicating quantities.
-- `syncAuthenticatedUser` creates app user, roles, wallet/pet defaults, starter equipment, and default hotbar.
+- `internal/hq/users.Store.SyncAuthenticated` creates app user, roles, wallet/pet defaults, starter equipment, and default hotbar.
 - Removing an owned equipped item causes equipment load to hide it.
 
-Likely location: `cmd/hq/schema_test.go`
+Likely location: `internal/hq/users/users_test.go`
 
 ### P2: Add Frontend Type-Level or Unit Tests
 

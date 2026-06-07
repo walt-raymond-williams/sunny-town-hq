@@ -251,8 +251,8 @@ Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 18080,18081
 
 - `cmd/hq/main.go`: HQ binary startup and server construction
 - `cmd/hq/routes.go`: HQ route composition
-- `cmd/hq/schema.go`: app-user sync for authenticated requests
 - `internal/hq/auth/`: Keycloak JWT/JWKS validation and auth user context helpers
+- `internal/hq/users/`: app-user sync, role persistence, student defaults, and student listing
 - `internal/hq/assignments/`: assignment APIs, persistence, grading, and handler factories
 - `internal/hq/inventory/`: inventory, equipment, hotbar, crafting, wallet, and shop APIs
 - `internal/hq/pet/`: pet persistence, REST handlers, and Connect RPC pet service

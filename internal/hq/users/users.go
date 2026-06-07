@@ -1,4 +1,4 @@
-package main
+package users
 
 import (
 	"context"
@@ -7,14 +7,23 @@ import (
 	hqauth "hq/internal/hq/auth"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func (app *app) syncAuthenticatedUser(ctx context.Context, user hqauth.User) (hqauth.User, error) {
+type Store struct {
+	db *pgxpool.Pool
+}
+
+func NewStore(db *pgxpool.Pool) *Store {
+	return &Store{db: db}
+}
+
+func (store *Store) SyncAuthenticated(ctx context.Context, user hqauth.User) (hqauth.User, error) {
 	if user.KeycloakSubject == "" {
 		return hqauth.User{}, hqauth.ErrInvalidToken
 	}
 
-	tx, err := app.db.Begin(ctx)
+	tx, err := store.db.Begin(ctx)
 	if err != nil {
 		return hqauth.User{}, err
 	}
@@ -99,8 +108,8 @@ func (app *app) syncAuthenticatedUser(ctx context.Context, user hqauth.User) (hq
 	return user, nil
 }
 
-func (app *app) loadStudents(ctx context.Context) ([]hqauth.User, error) {
-	rows, err := app.db.Query(
+func (store *Store) LoadStudents(ctx context.Context) ([]hqauth.User, error) {
+	rows, err := store.db.Query(
 		ctx,
 		`
 			select u.id, u.keycloak_subject, u.display_name, coalesce(u.email, '')
@@ -134,7 +143,7 @@ func (app *app) loadStudents(ctx context.Context) ([]hqauth.User, error) {
 	return students, nil
 }
 
-func requireUser(ctx context.Context) (hqauth.User, error) {
+func Require(ctx context.Context) (hqauth.User, error) {
 	user, ok := hqauth.UserFromContext(ctx)
 	if !ok {
 		return hqauth.User{}, pgx.ErrNoRows

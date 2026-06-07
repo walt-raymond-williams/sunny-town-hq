@@ -23,7 +23,7 @@ func (app *app) authenticated(next http.Handler) http.Handler {
 			return
 		}
 
-		user, err = app.syncAuthenticatedUser(r.Context(), user)
+		user, err = app.userStore.SyncAuthenticated(r.Context(), user)
 		if err != nil {
 			log.Printf("sync authenticated user: %v", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{

@@ -78,7 +78,7 @@ func (app *app) handleStudents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	students, err := app.loadStudents(r.Context())
+	students, err := app.userStore.LoadStudents(r.Context())
 	if err != nil {
 		log.Printf("load students: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
