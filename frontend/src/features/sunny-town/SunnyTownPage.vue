@@ -4,6 +4,10 @@ import { useRouter } from 'vue-router'
 import { getNextStudentAssignment, submitStudentAnswer } from '../../api/studentAssignmentsApi'
 import { purchaseShopItem } from '../../api/shopApi'
 import {
+  nearestSunnyTownNpc,
+  useSunnyTownNpcInteractions,
+} from '../../composables/useSunnyTownNpcInteractions'
+import {
   canPlaceStoneBlock as canPlaceStoneBlockOnMap,
   movementDirectionForEvent,
   movementInputEventOptions,
@@ -16,7 +20,6 @@ import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useSunnyTownToolUseAnimation } from '../../composables/useSunnyTownToolUseAnimation'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
-import type { Assignment } from '../../types/assignment'
 import type { EquipmentSlot } from '../../types/inventory'
 import type {
   SunnyTownCollectible,
@@ -55,6 +58,30 @@ const movement = useSunnyTownMovement()
 const localPlayerState = useSunnyTownLocalPlayer()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
+const {
+  activeDialogueLine,
+  activeDialogueNpc,
+  activeSchoolworkNpc,
+  activeShopNpc,
+  closeDialogue,
+  closeOverlays: closeNpcOverlays,
+  dialogueProgress,
+  hasActiveOverlay,
+  interactWith: interactWithNpc,
+  isLoadingSchoolwork,
+  isPurchasing,
+  isSubmittingSchoolwork,
+  nearbyNpc,
+  refreshNearby: refreshNearbyNpc,
+  schoolworkAnswer,
+  schoolworkAssignment,
+  schoolworkError,
+  schoolworkNotice,
+  schoolworkOpen,
+  shopError,
+  shopNotice,
+  shopOpen,
+} = useSunnyTownNpcInteractions()
 const canvas = ref<HTMLCanvasElement | null>(null)
 const activeMap = ref<SunnyTownMap | null>(null)
 const players = ref<SunnyTownPlayer[]>([])
@@ -70,23 +97,6 @@ const craftingPanelOpen = ref(false)
 const showAllCraftingRecipes = ref(false)
 const selectedHotbarIndex = ref(0)
 const placementHoverGrid = ref<{ gridX: number; gridY: number } | null>(null)
-const nearbyNpc = ref<SunnyTownNpc | null>(null)
-const activeDialogueNpc = ref<SunnyTownNpc | null>(null)
-const activeDialogueLineIndex = ref(0)
-const activeShopNpc = ref<SunnyTownNpc | null>(null)
-const shopOpen = ref(false)
-const shopError = ref('')
-const shopNotice = ref('')
-const isPurchasing = ref(false)
-const activeSchoolworkNpc = ref<SunnyTownNpc | null>(null)
-const schoolworkOpen = ref(false)
-const schoolworkAssignment = ref<Assignment | null>(null)
-const schoolworkAnswer = ref('')
-const schoolworkError = ref('')
-const schoolworkNotice = ref('')
-const isLoadingSchoolwork = ref(false)
-const isSubmittingSchoolwork = ref(false)
-
 let moveSeq = 0
 let lastMoveSendAtMs = 0
 let lastSentMoveJson = ''
@@ -118,13 +128,6 @@ const renderer = useSunnyTownRenderer(canvas, {
 const draw = renderer.draw
 
 const playerCount = computed(() => players.value.length)
-const activeDialogueLine = computed(() => activeDialogueNpc.value?.dialogue[activeDialogueLineIndex.value] || '')
-const dialogueProgress = computed(() => {
-  if (!activeDialogueNpc.value) {
-    return ''
-  }
-  return `${activeDialogueLineIndex.value + 1}/${activeDialogueNpc.value.dialogue.length}`
-})
 const stoneBlockQuantity = computed(() => inventoryStore.items.find((item) => item.key === 'stone_block')?.quantity || 0)
 const selectedHotbarSlot = computed(() => inventoryStore.hotbarSlots[selectedHotbarIndex.value] || null)
 const selectedHotbarItem = computed(() => selectedHotbarSlot.value?.item || null)
@@ -266,7 +269,7 @@ function handleServerMessage(message: SunnyTownServerMessage) {
 
 function handleKeyDown(event: KeyboardEvent) {
   if (event.code === 'Escape') {
-    if (activeDialogueNpc.value || activeShopNpc.value || activeSchoolworkNpc.value || inventoryOpen.value) {
+    if (hasActiveOverlay() || inventoryOpen.value) {
       event.preventDefault()
       closeNpcOverlays()
       inventoryOpen.value = false
@@ -350,7 +353,7 @@ function handleCanvasPointerDown(event: PointerEvent) {
     placeStoneBlockAtPointer(event)
     return
   }
-  if (activeDialogueNpc.value || activeShopNpc.value || activeSchoolworkNpc.value || inventoryOpen.value) {
+  if (hasActiveOverlay() || inventoryOpen.value) {
     return
   }
   event.preventDefault()
@@ -535,36 +538,11 @@ function interactWithNearbyNpc(): boolean {
   if (!activeMap.value) {
     return false
   }
-  if (activeSchoolworkNpc.value) {
-    return true
+  const result = interactWithNpc(nearestNpcToSelf())
+  if (result.openedSchoolwork) {
+    handleInputCancel()
   }
-  if (activeShopNpc.value) {
-    return true
-  }
-  if (activeDialogueNpc.value) {
-    if (activeDialogueLineIndex.value < activeDialogueNpc.value.dialogue.length - 1) {
-      activeDialogueLineIndex.value++
-    } else {
-      closeDialogue()
-    }
-    return true
-  }
-
-  const npc = nearestNpcToSelf()
-  if (!npc) {
-    return false
-  }
-  if (npc.shop) {
-    openShopMenu(npc)
-    return true
-  }
-  if (npc.activity?.type === 'schoolwork') {
-    openSchoolworkMenu(npc)
-    return true
-  }
-  activeDialogueNpc.value = npc
-  activeDialogueLineIndex.value = 0
-  return true
+  return result.handled
 }
 
 function useEquippedTool() {
@@ -591,36 +569,6 @@ function useEquippedTool() {
     sendSunnyTownMessage(JSON.stringify(message))
   }
   draw()
-}
-
-function closeDialogue() {
-  activeDialogueNpc.value = null
-  activeDialogueLineIndex.value = 0
-}
-
-function openShopMenu(npc: SunnyTownNpc) {
-  activeDialogueNpc.value = null
-  activeDialogueLineIndex.value = 0
-  activeSchoolworkNpc.value = null
-  schoolworkOpen.value = false
-  activeShopNpc.value = npc
-  shopOpen.value = false
-  shopError.value = ''
-  shopNotice.value = ''
-}
-
-function openSchoolworkMenu(npc: SunnyTownNpc) {
-  activeDialogueNpc.value = null
-  activeDialogueLineIndex.value = 0
-  activeShopNpc.value = null
-  shopOpen.value = false
-  activeSchoolworkNpc.value = npc
-  schoolworkOpen.value = false
-  schoolworkAssignment.value = null
-  schoolworkAnswer.value = ''
-  schoolworkError.value = ''
-  schoolworkNotice.value = ''
-  handleInputCancel()
 }
 
 async function startSchoolwork() {
@@ -651,23 +599,6 @@ async function openTrade() {
   shopError.value = ''
   shopNotice.value = ''
   await inventoryStore.loadInventory()
-}
-
-function closeNpcOverlays() {
-  closeDialogue()
-  activeShopNpc.value = null
-  shopOpen.value = false
-  shopError.value = ''
-  shopNotice.value = ''
-  isPurchasing.value = false
-  activeSchoolworkNpc.value = null
-  schoolworkOpen.value = false
-  schoolworkAssignment.value = null
-  schoolworkAnswer.value = ''
-  schoolworkError.value = ''
-  schoolworkNotice.value = ''
-  isLoadingSchoolwork.value = false
-  isSubmittingSchoolwork.value = false
 }
 
 async function buyShopItem(itemKey: string) {
@@ -784,36 +715,16 @@ function drawScene(context: CanvasRenderingContext2D, width: number, height: num
 }
 
 function refreshNpcInteractionState() {
-  const nextNearbyNpc = nearestNpcToSelf()
-  nearbyNpc.value = nextNearbyNpc
-  if (activeDialogueNpc.value && nextNearbyNpc?.id !== activeDialogueNpc.value.id) {
-    closeDialogue()
-  }
-  if (activeShopNpc.value && nextNearbyNpc?.id !== activeShopNpc.value.id) {
-    closeNpcOverlays()
-  }
-  if (activeSchoolworkNpc.value && nextNearbyNpc?.id !== activeSchoolworkNpc.value.id) {
-    closeNpcOverlays()
-  }
+  refreshNearbyNpc(nearestNpcToSelf())
 }
 
 function nearestNpcToSelf(): SunnyTownNpc | null {
   const map = activeMap.value
   const self = localPlayerState.current(players.value, selfId.value)
-  if (!map || !self) {
+  if (!map) {
     return null
   }
-
-  let nearest: SunnyTownNpc | null = null
-  let nearestDistance = npcInteractionRadius
-  for (const npc of map.npcs) {
-    const distance = Math.hypot(self.x - npc.x, self.y - npc.y)
-    if (distance <= nearestDistance) {
-      nearest = npc
-      nearestDistance = distance
-    }
-  }
-  return nearest
+  return nearestSunnyTownNpc(map.npcs, self, npcInteractionRadius)
 }
 
 function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
