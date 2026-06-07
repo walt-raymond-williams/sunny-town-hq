@@ -265,15 +265,15 @@ Goal: make the established verification path automatic.
 
 Tasks:
 
-- [ ] Add CI for `go test ./...`.
-- [ ] Add CI for `cd frontend && npm ci && npm run build`.
-- [ ] Add CI for `docker compose -f deploy/docker-compose.yml config`.
+- [x] Add CI for `go test ./...`.
+- [x] Add CI for `cd frontend && npm ci && npm run build`.
+- [x] Add CI for `docker compose -f deploy/docker-compose.yml config`.
 - [ ] Consider `buf lint` and `buf breaking` after generated-code workflow is documented.
 - [ ] Consider frontend unit or browser smoke tests after Sunny Town frontend split.
 
 Verification:
 
-- [ ] CI passes on the restructure branch.
+- [ ] CI passes on the restructure branch once pushed.
 
 ## Current Verification Log
 
@@ -413,3 +413,4 @@ Verification:
 - 2026-06-07: `go test ./...` passed after replacing runtime schema patching with the migration runner.
 - 2026-06-07: `docker compose -f deploy\docker-compose.yml config` passed after replacing runtime schema patching with the migration runner.
 - 2026-06-07: Phase 5 documented migration creation, applied-version inspection, disposable migration smoke tests, and Docker volume reset workflows in `docs/current/DATABASE.md`.
+- 2026-06-07: Phase 6 added `.github/workflows/verify.yml` with jobs for `go test ./...`, `npm ci && npm run build` from `frontend/`, and `docker compose -f deploy/docker-compose.yml config`.
