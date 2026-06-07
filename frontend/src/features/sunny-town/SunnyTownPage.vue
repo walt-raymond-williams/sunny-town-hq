@@ -7,6 +7,7 @@ import {
   hotbarIndexForEvent,
   useSunnyTownInventoryActions,
 } from '../../composables/useSunnyTownInventoryActions'
+import { useSunnyTownMessageEffects } from '../../composables/useSunnyTownMessageEffects'
 import {
   nearestSunnyTownNpc,
   useSunnyTownNpcInteractions,
@@ -151,6 +152,13 @@ const {
   },
   onMessage: handleServerMessage,
 })
+const messageEffects = useSunnyTownMessageEffects({
+  craftingPanelOpen,
+  error,
+  gameToast,
+  inventoryStore,
+  starBalance,
+})
 
 const renderer = useSunnyTownRenderer(canvas, {
   drawScene,
@@ -204,61 +212,31 @@ function handleServerMessage(message: SunnyTownServerMessage) {
     return
   }
   if (message.type === 'reward_committed') {
-    starBalance.value = message.newStarBalance ?? starBalance.value + (message.amount || 0)
-    gameToast.value = `+${message.amount || 1} star`
-    window.setTimeout(() => {
-      gameToast.value = ''
-    }, 1200)
+    messageEffects.applyRewardCommitted(message)
     return
   }
   if (message.type === 'reward_failed') {
-    error.value = 'That star could not be saved. Try again in a moment.'
+    messageEffects.applyRewardFailed()
     return
   }
   if (message.type === 'resource_committed') {
-    const amount = message.amount || 1
-    const resourceKey = message.resourceKey || 'rock'
-    gameToast.value = `+${amount} ${resourceKey}`
-    if (message.quantity !== undefined) {
-      inventoryStore.setItemQuantity(resourceKey, message.quantity)
-    }
-    if (craftingPanelOpen.value) {
-      void inventoryStore.loadCraftingRecipes()
-    }
-    window.setTimeout(() => {
-      gameToast.value = ''
-    }, 1200)
+    messageEffects.applyResourceCommitted(message)
     return
   }
   if (message.type === 'map_object_placed') {
     applyPlacedObject(message)
-    if (message.resourceKey && message.quantity !== undefined) {
-      inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
-      gameToast.value = 'Stone block placed'
-      window.setTimeout(() => {
-        gameToast.value = ''
-      }, 1200)
-    }
+    messageEffects.applyPlacedObjectCommitted(message)
     draw()
     return
   }
   if (message.type === 'map_object_removed') {
     applyRemovedObject(message)
-    if (message.resourceKey && message.quantity !== undefined) {
-      inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
-      gameToast.value = '+1 stone_block'
-      window.setTimeout(() => {
-        gameToast.value = ''
-      }, 1200)
-    }
-    if (craftingPanelOpen.value) {
-      void inventoryStore.loadCraftingRecipes()
-    }
+    messageEffects.applyRemovedObjectCommitted(message)
     draw()
     return
   }
   if (message.type === 'resource_failed') {
-    error.value = 'That resource could not be saved. Try again in a moment.'
+    messageEffects.applyResourceFailed()
     return
   }
   if (message.type === 'error') {
