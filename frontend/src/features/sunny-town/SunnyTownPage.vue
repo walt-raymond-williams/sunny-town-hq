@@ -19,21 +19,18 @@ import { useSunnyTownRemotePlayers } from '../../composables/useSunnyTownRemoteP
 import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useSunnyTownToolUseAnimation } from '../../composables/useSunnyTownToolUseAnimation'
+import { useSunnyTownWorldState } from '../../composables/useSunnyTownWorldState'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { EquipmentSlot } from '../../types/inventory'
 import type {
-  SunnyTownCollectible,
   SunnyTownEquipmentChangedMessage,
   SunnyTownMap,
   SunnyTownMoveMessage,
   SunnyTownNpc,
   SunnyTownPlaceObjectMessage,
-  SunnyTownPlacedObject,
   SunnyTownPlayer,
-  SunnyTownResourceNode,
   SunnyTownServerMessage,
   SunnyTownToolUseMessage,
-  SunnyTownWorldObject,
 } from '../../types/sunnyTown'
 import SunnyTownCanvas from './SunnyTownCanvas.vue'
 import SunnyTownDialogue from './SunnyTownDialogue.vue'
@@ -51,11 +48,6 @@ import {
   drawPlacementPreview,
   drawWorldObjects,
 } from './rendering/objectDrawing'
-import {
-  legacyWorldObjects,
-  placedObjectToWorldObject,
-  sameWorldObject,
-} from './worldObjects'
 
 const npcInteractionRadius = 54
 const toolUseDurationMs = 360
@@ -67,6 +59,7 @@ const localPlayerState = useSunnyTownLocalPlayer()
 const placement = useSunnyTownPlacement()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
+const worldState = useSunnyTownWorldState()
 const {
   activeDialogueLine,
   activeDialogueNpc,
@@ -92,12 +85,15 @@ const {
   shopOpen,
 } = useSunnyTownNpcInteractions()
 const canvas = ref<HTMLCanvasElement | null>(null)
-const activeMap = ref<SunnyTownMap | null>(null)
-const players = ref<SunnyTownPlayer[]>([])
-const collectibles = ref<SunnyTownCollectible[]>([])
-const resourceNodes = ref<SunnyTownResourceNode[]>([])
-const placedObjects = ref<SunnyTownPlacedObject[]>([])
-const worldObjects = ref<SunnyTownWorldObject[]>([])
+const {
+  activeMap,
+  applyPlacedObject,
+  applyRemovedObject,
+  applySnapshot,
+  collectibles,
+  players,
+  worldObjects,
+} = worldState
 const selfId = ref('')
 const starBalance = ref(0)
 const gameToast = ref('')
@@ -172,14 +168,9 @@ function handleServerMessage(message: SunnyTownServerMessage) {
     return
   }
   if (message.type === 'snapshot') {
-    if (message.mapId && activeMap.value && message.mapId !== activeMap.value.id) {
+    if (!applySnapshot(message)) {
       return
     }
-    players.value = message.players || []
-    collectibles.value = message.collectibles || []
-    resourceNodes.value = message.resourceNodes || []
-    placedObjects.value = message.placedObjects || placedObjects.value
-    worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
     remotePlayerState.recordSnapshots(players.value, selfId.value, message.serverTimeMs || Date.now())
     syncLocalSelfFromSnapshot()
     return
@@ -216,24 +207,7 @@ function handleServerMessage(message: SunnyTownServerMessage) {
     return
   }
   if (message.type === 'map_object_placed') {
-    if (message.placedObject) {
-      placedObjects.value = [
-        ...placedObjects.value.filter((object) => object.id !== message.placedObject?.id),
-        message.placedObject,
-      ]
-    }
-    const placedWorldObject = message.worldObject
-    if (placedWorldObject) {
-      worldObjects.value = [
-        ...worldObjects.value.filter((object) => !sameWorldObject(object, placedWorldObject)),
-        placedWorldObject,
-      ]
-    } else if (message.placedObject) {
-      worldObjects.value = [
-        ...worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id),
-        placedObjectToWorldObject(message.placedObject),
-      ]
-    }
+    applyPlacedObject(message)
     if (message.resourceKey && message.quantity !== undefined) {
       inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
       gameToast.value = 'Stone block placed'
@@ -245,15 +219,7 @@ function handleServerMessage(message: SunnyTownServerMessage) {
     return
   }
   if (message.type === 'map_object_removed') {
-    if (message.placedObject) {
-      placedObjects.value = placedObjects.value.filter((object) => object.id !== message.placedObject?.id)
-    }
-    const removedWorldObject = message.worldObject
-    if (removedWorldObject) {
-      worldObjects.value = worldObjects.value.filter((object) => !sameWorldObject(object, removedWorldObject))
-    } else if (message.placedObject) {
-      worldObjects.value = worldObjects.value.filter((object) => object.source !== 'placed' || object.id !== message.placedObject?.id)
-    }
+    applyRemovedObject(message)
     if (message.resourceKey && message.quantity !== undefined) {
       inventoryStore.setItemQuantity(message.resourceKey, message.quantity)
       gameToast.value = '+1 stone_block'
@@ -499,22 +465,7 @@ function currentCamera(viewWidth: number, viewHeight: number): { x: number; y: n
 }
 
 function applyMapState(message: SunnyTownServerMessage) {
-  if (message.map) {
-    activeMap.value = {
-      ...message.map,
-      portals: message.map.portals || [],
-      npcs: message.map.npcs || [],
-      resourceNodes: message.map.resourceNodes || [],
-      blockedRects: message.map.blockedRects || [],
-      starSpawns: message.map.starSpawns || [],
-      spawns: message.map.spawns || [],
-    }
-  }
-  players.value = message.players || []
-  collectibles.value = message.collectibles || []
-  resourceNodes.value = message.resourceNodes || []
-  placedObjects.value = message.placedObjects || []
-  worldObjects.value = message.worldObjects || legacyWorldObjects(resourceNodes.value, placedObjects.value)
+  worldState.applyMapState(message)
   remotePlayerState.clear()
   localPlayerState.clear()
   lastSentMoveJson = ''
