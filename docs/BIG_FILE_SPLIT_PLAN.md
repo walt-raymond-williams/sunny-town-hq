@@ -15,7 +15,7 @@ Current state:
   - `hq-local.out.log`
 - Slice 1 is complete: `internal/hq/sunnytownbridge/bridge.go` was split into focused production files.
 - Slice 2 is complete: `frontend/src/features/sunny-town/SunnyTownPage.vue` is down from 1,554 lines to about 699 lines and now mainly orchestrates input, socket ordering, camera, and rendering composition.
-- Slice 3 is in progress: `cmd/hq/reward_test.go` is down from 1,358 lines to about 1,049 lines after moving Sunny Town bridge integration tests into the bridge package.
+- Slice 3 is in progress: `cmd/hq/reward_test.go` is down from 1,358 lines to about 716 lines after moving Sunny Town bridge and inventory integration tests into owning packages.
 - Slice 2 completed sub-slices:
   - `frontend/src/features/sunny-town/worldObjects.ts` plus tests for world-object conversion helpers.
   - `frontend/src/composables/useSunnyTownRemotePlayers.ts` plus tests for remote snapshot history/interpolation.
@@ -30,7 +30,8 @@ Current state:
   - Expanded `frontend/src/composables/useSunnyTownNpcInteractions.ts` to own shop and schoolwork actions, with tests for injected APIs.
 - Slice 3 completed sub-slices:
   - Moved Sunny Town bridge reward/resource/position/map-object integration tests into `internal/hq/sunnytownbridge/store_integration_test.go` with a smaller package-owned DB fixture.
-- Next recommended step: continue Slice 3 by reviewing the inventory/shop/crafting/equipment/hotbar tests in `cmd/hq/reward_test.go` and moving only tests that can target `internal/hq/inventory` directly.
+  - Moved inventory shop/crafting/equipment/hotbar integration tests into `internal/hq/inventory/store_integration_test.go` with a package-owned DB fixture.
+- Next recommended step: continue Slice 3 by reviewing pet store tests in `cmd/hq/reward_test.go` and moving only tests that can target `internal/hq/pet` directly.
 - AI grading file cleanup should wait if another agent is actively refactoring the AI service.
 
 Verification baseline:
@@ -88,7 +89,7 @@ Snapshot generated on 2026-06-07:
 | File | Lines | Priority | Notes |
 | --- | ---: | --- | --- |
 | `frontend/src/features/sunny-town/SunnyTownPage.vue` | 699 | Complete | Now mainly holds orchestration, socket ordering, movement send, camera/input routing, and rendering composition. |
-| `cmd/hq/reward_test.go` | 1,049 | Medium | Still mixes pet, inventory/shop/crafting/equipment/hotbar, and AI grading regression tests. Useful but broad. |
+| `cmd/hq/reward_test.go` | 716 | Medium | Still mixes pet store and AI grading regression tests. Useful but broad. |
 | `internal/sunnytown/server/room_test.go` | 974 | Medium | Mixed room/world tests for movement, collisions, portals, mining, map validation, NPCs, and fixtures. |
 | `internal/hq/sunnytownbridge/bridge.go` | 848 | High | Store operations, ledgers, positions, map objects, service HTTP handlers, auth, parsing, and JSON helpers in one file. |
 | `internal/hq/assignments/http.go` | 517 | Medium | Teacher and student handlers plus helper parsing/JSON in one file. |
@@ -411,3 +412,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 - 2026-06-07: Continued Slice 2 by extracting Sunny Town reward/resource message side effects into `frontend/src/composables/useSunnyTownMessageEffects.ts` with focused unit tests. Verified with `npm test` and `npm run build` from `frontend/`.
 - 2026-06-07: Completed Slice 2 by moving Sunny Town shop and schoolwork actions into `frontend/src/composables/useSunnyTownNpcInteractions.ts` with injected-API unit tests. Verified with `npm test` and `npm run build` from `frontend/`.
 - 2026-06-07: Started Slice 3 by moving Sunny Town bridge reward/resource/position/map-object integration tests from `cmd/hq/reward_test.go` into `internal/hq/sunnytownbridge/store_integration_test.go` with a package-owned DB fixture. Verified with `go test ./internal/hq/sunnytownbridge`, `go test ./cmd/hq`, and `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`.
+- 2026-06-07: Continued Slice 3 by moving inventory shop/crafting/equipment/hotbar integration tests from `cmd/hq/reward_test.go` into `internal/hq/inventory/store_integration_test.go` with a package-owned DB fixture. Verified with `go test ./internal/hq/inventory` and `go test ./cmd/hq`.
