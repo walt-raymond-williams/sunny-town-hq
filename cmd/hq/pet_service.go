@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
 
 	"github.com/jackc/pgx/v5"
@@ -11,7 +12,7 @@ import (
 func (app *app) petStore() *hqpet.Store {
 	return &hqpet.Store{
 		DB:                    app.db,
-		CookieInventoryKey:    cookieInventoryKey,
+		CookieInventoryKey:    hqinventory.CookieKey,
 		NoCookiesError:        errNoCookies,
 		ConsumeInventoryItem:  consumePetInventoryItem,
 		CommitStudentStarOnce: commitPetStarReward,
@@ -19,7 +20,7 @@ func (app *app) petStore() *hqpet.Store {
 }
 
 func consumePetInventoryItem(ctx context.Context, tx pgx.Tx, userID int64, itemKey string, quantity int) (bool, error) {
-	return consumeStudentInventoryItem(ctx, tx, userID, itemKey, quantity)
+	return hqinventory.ConsumeStudentItem(ctx, tx, userID, itemKey, quantity)
 }
 
 func (app *app) startPetDecayTicker(ctx context.Context) {

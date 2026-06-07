@@ -4,32 +4,28 @@ This plan tracks the repository restructure work identified in the project revie
 
 ## Resume Snapshot
 
-Last updated: 2026-06-06.
+Last updated: 2026-06-07.
 
 Current state:
 
-- All changes through `97e1471 Extract Sunny Town overlay panels` are committed.
-- Active work is at Phase 3 Slice 3.8 final verification and documentation.
-- Before commit, `git status --short` should show only this plan update and known untracked local logs:
+- All changes through `78f1531 Plan HQ adapter retirement phase` are committed.
+- Active work is Phase 7 HQ adapter retirement.
+- Phase 7 Slices 7.1 through 7.4 moved inventory/equipment/hotbar/crafting/shop HTTP handlers into `internal/hq/inventory`, mounted those handlers directly from routes, added direct HTTP handler tests, and deleted the matching command-package adapter files.
+- Before the next commit, `git status --short` should show only intentional Phase 7 files plus known untracked local logs:
   - `hq-local.err.log`
   - `hq-local.out.log`
-- Phase 2 is complete.
-- Phase 3 implementation slices 3.1 through 3.7 are complete and committed.
-- Current Sunny Town backend package shape:
-  - `cmd/sunny-town/main.go`
-  - `internal/sunnytown/server/`
+- Phases 1 through 6 are complete except for deferred future guardrails noted below.
+- Remaining Phase 7 work is to reassess `cmd/hq/handlers.go` and choose the next adapter cluster.
 
 Recommended next work:
 
-1. Commit Phase 3 Slice 3.8 after final verification is recorded.
-2. Move to Phase 4: HQ backend split.
-3. Keep each promotion behavior-preserving and run the relevant scoped checks plus final full checks.
+1. Commit Phase 7 Slices 7.1 through 7.4 after full verification is recorded.
+2. Start Phase 7 Slice 7.5 by reviewing `cmd/hq/handlers.go` and remaining adapter clusters.
+3. Pick the next cluster: likely pet service/profile adapters, then Sunny Town bridge, then AI/assignment compatibility adapters.
 
 ```powershell
-go test ./cmd/sunny-town ./internal/sunnytown/... ./internal/sunnytownauth
+go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth
 go test ./...
-cd frontend
-npm run build
 ```
 
 ## Coordination Rules
@@ -283,7 +279,7 @@ Do this one domain at a time. The point is not to move files for neatness; the p
 
 Current adapter clusters:
 
-- [ ] Inventory/equipment/hotbar/crafting/shop adapters in `cmd/hq/inventory.go`, `cmd/hq/equipment.go`, `cmd/hq/hotbar.go`, `cmd/hq/crafting.go`, and `cmd/hq/shop.go`.
+- [x] Inventory/equipment/hotbar/crafting/shop adapters in `cmd/hq/inventory.go`, `cmd/hq/equipment.go`, `cmd/hq/hotbar.go`, `cmd/hq/crafting.go`, and `cmd/hq/shop.go`.
 - [ ] Pet profile/service adapters in `cmd/hq/pet_adapter.go` and `cmd/hq/pet_service.go`.
 - [ ] Sunny Town bridge compatibility adapters in `cmd/hq/sunnytown_bridge.go`.
 - [ ] AI grading compatibility adapters in `cmd/hq/ai_grading.go`.
@@ -291,10 +287,10 @@ Current adapter clusters:
 
 Recommended slice order:
 
-- [ ] Slice 7.1: Move inventory, equipment, hotbar, crafting, and shop HTTP handlers from `cmd/hq/handlers.go` into `internal/hq/inventory` behind a route-ready handler factory.
-- [ ] Slice 7.2: Update `cmd/hq/routes.go` to mount the new inventory handler methods directly.
-- [ ] Slice 7.3: Add focused `internal/hq/inventory` HTTP handler tests for method checks, auth role behavior, bad JSON, known validation errors, and happy paths where practical.
-- [ ] Slice 7.4: Delete inventory/equipment/hotbar/crafting/shop adapter aliases and wrappers once no production code or tests depend on them.
+- [x] Slice 7.1: Move inventory, equipment, hotbar, crafting, and shop HTTP handlers from `cmd/hq/handlers.go` into `internal/hq/inventory` behind a route-ready handler factory.
+- [x] Slice 7.2: Update `cmd/hq/routes.go` to mount the new inventory handler methods directly.
+- [x] Slice 7.3: Add focused `internal/hq/inventory` HTTP handler tests for method checks, auth role behavior, bad JSON, known validation errors, and happy paths where practical.
+- [x] Slice 7.4: Delete inventory/equipment/hotbar/crafting/shop adapter aliases and wrappers once no production code or tests depend on them.
 - [ ] Slice 7.5: Reassess `cmd/hq/handlers.go` line count and remaining adapter clusters before choosing the next domain.
 
 Deferred until enough adapters are retired:
@@ -304,8 +300,8 @@ Deferred until enough adapters are retired:
 
 Verification:
 
-- [ ] `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`
-- [ ] `go test ./...`
+- [x] `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`
+- [x] `go test ./...`
 
 ## Current Verification Log
 
@@ -447,3 +443,6 @@ Verification:
 - 2026-06-07: Phase 5 documented migration creation, applied-version inspection, disposable migration smoke tests, and Docker volume reset workflows in `docs/current/DATABASE.md`.
 - 2026-06-07: Phase 6 added `.github/workflows/verify.yml` with jobs for `go test ./...`, `npm ci && npm run build` from `frontend/`, and `docker compose -f deploy/docker-compose.yml config`.
 - 2026-06-07: Added Phase 7 adapter-retirement plan. First target is moving inventory/equipment/hotbar/crafting/shop HTTP handlers into `internal/hq/inventory`, then deleting the matching `cmd/hq` adapters once unused.
+- 2026-06-07: Phase 7 Slices 7.1-7.4 moved inventory/equipment/hotbar/crafting/shop HTTP handlers into `internal/hq/inventory`, mounted them directly from `cmd/hq/routes.go`, added direct inventory HTTP handler tests, updated command tests to call `internal/hq/inventory` directly, and deleted `cmd/hq/inventory.go`, `cmd/hq/equipment.go`, `cmd/hq/hotbar.go`, `cmd/hq/crafting.go`, and `cmd/hq/shop.go`.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 7 Slices 7.1-7.4.
+- 2026-06-07: `go test ./...` passed after Phase 7 Slices 7.1-7.4.

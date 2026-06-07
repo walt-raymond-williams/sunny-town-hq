@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"time"
 
+	hqinventory "hq/internal/hq/inventory"
 	"hq/internal/sunnytownauth"
 )
 
@@ -30,15 +30,15 @@ type studentProfileResponse struct {
 }
 
 type sunnyTownSessionResponse struct {
-	RoomID       string                   `json:"room_id"`
-	MapID        string                   `json:"map_id"`
-	AvatarID     string                   `json:"avatar_id"`
-	WebSocketURL string                   `json:"websocket_url"`
-	JoinToken    string                   `json:"join_token"`
-	ExpiresAt    time.Time                `json:"expires_at"`
-	Wallet       sunnyTownWalletResponse  `json:"wallet"`
-	Inventory    studentInventoryResponse `json:"inventory"`
-	Hotbar       studentHotbarResponse    `json:"hotbar"`
+	RoomID       string                            `json:"room_id"`
+	MapID        string                            `json:"map_id"`
+	AvatarID     string                            `json:"avatar_id"`
+	WebSocketURL string                            `json:"websocket_url"`
+	JoinToken    string                            `json:"join_token"`
+	ExpiresAt    time.Time                         `json:"expires_at"`
+	Wallet       sunnyTownWalletResponse           `json:"wallet"`
+	Inventory    hqinventory.StudentResponse       `json:"inventory"`
+	Hotbar       hqinventory.StudentHotbarResponse `json:"hotbar"`
 }
 
 type sunnyTownWalletResponse struct {
@@ -130,241 +130,6 @@ func (app *app) handleStudentProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, profile)
 }
 
-func (app *app) handleStudentInventory(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	inventory, err := app.loadStudentInventory(r.Context(), user.ID)
-	if err != nil {
-		log.Printf("load student inventory: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "inventory could not be loaded",
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, inventory)
-}
-
-func (app *app) handleStudentHotbar(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		hotbar, err := app.loadStudentHotbar(r.Context(), user.ID)
-		if err != nil {
-			log.Printf("load student hotbar: %v", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{
-				"error": "hotbar could not be loaded",
-			})
-			return
-		}
-		writeJSON(w, http.StatusOK, hotbar)
-	case http.MethodPut:
-		var request hotbarSlotRequest
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid hotbar request",
-			})
-			return
-		}
-		hotbar, err := app.setStudentHotbarSlot(r.Context(), user.ID, request)
-		if err != nil {
-			status := http.StatusBadRequest
-			if !errors.Is(err, errInvalidHotbarSlot) && !errors.Is(err, errHotbarItemNotOwned) {
-				status = http.StatusInternalServerError
-				log.Printf("set student hotbar: %v", err)
-			}
-			writeJSON(w, status, map[string]string{
-				"error": hotbarErrorMessage(err),
-			})
-			return
-		}
-		writeJSON(w, http.StatusOK, hotbar)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (app *app) handleStudentCraftingRecipes(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	recipes, err := app.loadCraftingRecipes(r.Context(), user.ID)
-	if err != nil {
-		log.Printf("load crafting recipes: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "crafting recipes could not be loaded",
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, recipes)
-}
-
-func (app *app) handleCraftStudentRecipe(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var request craftRecipeRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "request body must be valid JSON",
-		})
-		return
-	}
-
-	response, err := app.craftStudentRecipe(r.Context(), user.ID, request)
-	if err != nil {
-		log.Printf("craft student recipe: %v", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": craftingErrorMessage(err),
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, response)
-}
-
-func (app *app) handleStudentEquipment(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	equipment, err := app.loadStudentEquipment(r.Context(), user.ID)
-	if err != nil {
-		log.Printf("load student equipment: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "equipment could not be loaded",
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, equipment)
-}
-
-func (app *app) handleEquipStudentItem(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var request equipmentChangeRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "request body must be valid JSON",
-		})
-		return
-	}
-
-	equipment, err := app.equipStudentItem(r.Context(), user.ID, request)
-	if err != nil {
-		log.Printf("equip student item: %v", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": equipmentErrorMessage(err),
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, equipment)
-}
-
-func (app *app) handleUnequipStudentItem(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var request equipmentChangeRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "request body must be valid JSON",
-		})
-		return
-	}
-
-	equipment, err := app.unequipStudentItem(r.Context(), user.ID, request)
-	if err != nil {
-		log.Printf("unequip student item: %v", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": equipmentErrorMessage(err),
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, equipment)
-}
-
-func (app *app) handleStudentShopPurchase(w http.ResponseWriter, r *http.Request) {
-	user, ok := requireRole(w, r, "student")
-	if !ok {
-		return
-	}
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var request shopPurchaseRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "request body must be valid JSON",
-		})
-		return
-	}
-
-	response, err := app.purchaseStudentShopItem(r.Context(), user.ID, request)
-	if errors.Is(err, errInsufficientStars) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "not enough stars",
-		})
-		return
-	}
-	if err != nil {
-		log.Printf("purchase student shop item: %v", err)
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "shop purchase could not be completed",
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, response)
-}
-
 func (app *app) handleFeedStudentPet(w http.ResponseWriter, r *http.Request) {
 	user, ok := requireRole(w, r, "student")
 	if !ok {
@@ -446,7 +211,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	starBalance, err := app.ensureStudentWallet(r.Context(), user.ID)
+	starBalance, err := hqinventory.EnsureStudentWallet(r.Context(), app.db, user.ID)
 	if err != nil {
 		log.Printf("load sunny town wallet: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -454,7 +219,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	inventory, err := app.loadStudentInventory(r.Context(), user.ID)
+	inventory, err := hqinventory.LoadStudent(r.Context(), app.db, user.ID)
 	if err != nil {
 		log.Printf("load sunny town inventory: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -462,7 +227,7 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	hotbar, err := app.loadStudentHotbar(r.Context(), user.ID)
+	hotbar, err := hqinventory.LoadStudentHotbar(r.Context(), app.db, user.ID)
 	if err != nil {
 		log.Printf("load sunny town hotbar: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -482,30 +247,6 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 		Inventory:    inventory,
 		Hotbar:       hotbar,
 	})
-}
-
-func equipmentErrorMessage(err error) string {
-	switch {
-	case errors.Is(err, errInvalidEquipmentSlot):
-		return "invalid equipment slot"
-	case errors.Is(err, errItemNotEquippable):
-		return "item cannot be equipped in that slot"
-	case errors.Is(err, errItemNotOwned):
-		return "item is not in your inventory"
-	default:
-		return "equipment could not be updated"
-	}
-}
-
-func hotbarErrorMessage(err error) string {
-	switch {
-	case errors.Is(err, errInvalidHotbarSlot):
-		return "invalid hotbar slot"
-	case errors.Is(err, errHotbarItemNotOwned):
-		return "item is not in your inventory"
-	default:
-		return "hotbar could not be updated"
-	}
 }
 
 func (app *app) loadStudentProfile(ctx context.Context, userID int64) (studentProfileResponse, error) {

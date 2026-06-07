@@ -1,0 +1,298 @@
+package inventory
+
+import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type RoleUser struct {
+	ID int64
+}
+
+type RequireRoleFunc func(http.ResponseWriter, *http.Request, string) (RoleUser, bool)
+
+type HTTPHandler struct {
+	store       *pgxpool.Pool
+	requireRole RequireRoleFunc
+}
+
+type HTTPHandlerConfig struct {
+	Store       *pgxpool.Pool
+	RequireRole RequireRoleFunc
+}
+
+func NewHTTPHandler(config HTTPHandlerConfig) HTTPHandler {
+	return HTTPHandler{
+		store:       config.Store,
+		requireRole: config.RequireRole,
+	}
+}
+
+func (handler HTTPHandler) HandleStudentInventory(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	inventory, err := LoadStudent(r.Context(), handler.store, user.ID)
+	if err != nil {
+		log.Printf("load student inventory: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "inventory could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, inventory)
+}
+
+func (handler HTTPHandler) HandleStudentHotbar(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		hotbar, err := LoadStudentHotbar(r.Context(), handler.store, user.ID)
+		if err != nil {
+			log.Printf("load student hotbar: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "hotbar could not be loaded",
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, hotbar)
+	case http.MethodPut:
+		var request HotbarSlotRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid hotbar request",
+			})
+			return
+		}
+		hotbar, err := SetStudentHotbarSlot(r.Context(), handler.store, user.ID, request)
+		if err != nil {
+			status := http.StatusBadRequest
+			if !errors.Is(err, ErrInvalidHotbarSlot) && !errors.Is(err, ErrHotbarItemNotOwned) {
+				status = http.StatusInternalServerError
+				log.Printf("set student hotbar: %v", err)
+			}
+			writeJSON(w, status, map[string]string{
+				"error": HotbarErrorMessage(err),
+			})
+			return
+		}
+		writeJSON(w, http.StatusOK, hotbar)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (handler HTTPHandler) HandleStudentCraftingRecipes(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	recipes, err := LoadCraftingRecipes(r.Context(), handler.store, user.ID)
+	if err != nil {
+		log.Printf("load crafting recipes: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "crafting recipes could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, recipes)
+}
+
+func (handler HTTPHandler) HandleCraftStudentRecipe(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request CraftRecipeRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := CraftStudentRecipe(r.Context(), handler.store, user.ID, request)
+	if err != nil {
+		log.Printf("craft student recipe: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": CraftingErrorMessage(err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (handler HTTPHandler) HandleStudentEquipment(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	equipment, err := LoadStudentEquipment(r.Context(), handler.store, user.ID)
+	if err != nil {
+		log.Printf("load student equipment: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "equipment could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, equipment)
+}
+
+func (handler HTTPHandler) HandleEquipStudentItem(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request EquipmentChangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	equipment, err := EquipStudentItem(r.Context(), handler.store, user.ID, request)
+	if err != nil {
+		log.Printf("equip student item: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": EquipmentErrorMessage(err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, equipment)
+}
+
+func (handler HTTPHandler) HandleUnequipStudentItem(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request EquipmentChangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	equipment, err := UnequipStudentItem(r.Context(), handler.store, user.ID, request)
+	if err != nil {
+		log.Printf("unequip student item: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": EquipmentErrorMessage(err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, equipment)
+}
+
+func (handler HTTPHandler) HandleStudentShopPurchase(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request ShopPurchaseRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	response, err := PurchaseStudentShopItem(r.Context(), handler.store, user.ID, request)
+	if errors.Is(err, ErrInsufficientStars) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "not enough stars",
+		})
+		return
+	}
+	if err != nil {
+		log.Printf("purchase student shop item: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "shop purchase could not be completed",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func EquipmentErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrInvalidEquipmentSlot):
+		return "invalid equipment slot"
+	case errors.Is(err, ErrItemNotEquippable):
+		return "item cannot be equipped in that slot"
+	case errors.Is(err, ErrItemNotOwned):
+		return "item is not in your inventory"
+	default:
+		return "equipment could not be updated"
+	}
+}
+
+func HotbarErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrInvalidHotbarSlot):
+		return "invalid hotbar slot"
+	case errors.Is(err, ErrHotbarItemNotOwned):
+		return "item is not in your inventory"
+	default:
+		return "hotbar could not be updated"
+	}
+}
+
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"hq/internal/aiapi"
+	hqinventory "hq/internal/hq/inventory"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -244,7 +245,7 @@ func TestFeedStudentPetConsumesCookieInventory(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, cookieInventoryKey, 2); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, hqinventory.CookieKey, 2); err != nil {
 		t.Fatalf("seed cookie inventory: %v", err)
 	}
 
@@ -276,9 +277,9 @@ func TestPurchaseStudentShopItemBuysCookie(t *testing.T) {
 		t.Fatalf("seed wallet: %v", err)
 	}
 
-	response, err := app.purchaseStudentShopItem(ctx, 123, shopPurchaseRequest{
+	response, err := hqinventory.PurchaseStudentShopItem(ctx, app.db, 123, hqinventory.ShopPurchaseRequest{
 		ShopID:   "cookie-keeper-shop",
-		ItemKey:  cookieInventoryKey,
+		ItemKey:  hqinventory.CookieKey,
 		Quantity: 1,
 	})
 	if err != nil {
@@ -287,7 +288,7 @@ func TestPurchaseStudentShopItemBuysCookie(t *testing.T) {
 	if response.StarBalance != 75 {
 		t.Fatalf("star balance = %d, want 75", response.StarBalance)
 	}
-	if len(response.Inventory.Items) != 1 || response.Inventory.Items[0].Key != cookieInventoryKey || response.Inventory.Items[0].Quantity != 1 {
+	if len(response.Inventory.Items) != 1 || response.Inventory.Items[0].Key != hqinventory.CookieKey || response.Inventory.Items[0].Quantity != 1 {
 		t.Fatalf("inventory = %#v, want 1 cookie", response.Inventory)
 	}
 
@@ -325,13 +326,13 @@ func TestPurchaseStudentShopItemRequiresStars(t *testing.T) {
 		t.Fatalf("seed wallet: %v", err)
 	}
 
-	_, err := app.purchaseStudentShopItem(ctx, 123, shopPurchaseRequest{
+	_, err := hqinventory.PurchaseStudentShopItem(ctx, app.db, 123, hqinventory.ShopPurchaseRequest{
 		ShopID:   "cookie-keeper-shop",
-		ItemKey:  cookieInventoryKey,
+		ItemKey:  hqinventory.CookieKey,
 		Quantity: 1,
 	})
-	if err != errInsufficientStars {
-		t.Fatalf("purchase error = %v, want errInsufficientStars", err)
+	if err != hqinventory.ErrInsufficientStars {
+		t.Fatalf("purchase error = %v, want ErrInsufficientStars", err)
 	}
 
 	var walletBalance int
@@ -351,13 +352,13 @@ func TestPurchaseStudentShopItemRejectsInvalidPurchase(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
 
-	invalidRequests := []shopPurchaseRequest{
-		{ShopID: "other-shop", ItemKey: cookieInventoryKey, Quantity: 1},
+	invalidRequests := []hqinventory.ShopPurchaseRequest{
+		{ShopID: "other-shop", ItemKey: hqinventory.CookieKey, Quantity: 1},
 		{ShopID: "cookie-keeper-shop", ItemKey: "star", Quantity: 1},
-		{ShopID: "cookie-keeper-shop", ItemKey: cookieInventoryKey, Quantity: 0},
+		{ShopID: "cookie-keeper-shop", ItemKey: hqinventory.CookieKey, Quantity: 0},
 	}
 	for _, request := range invalidRequests {
-		if _, err := app.purchaseStudentShopItem(context.Background(), 123, request); err == nil {
+		if _, err := hqinventory.PurchaseStudentShopItem(context.Background(), app.db, 123, request); err == nil {
 			t.Fatalf("purchase %#v succeeded, want error", request)
 		}
 	}
@@ -368,11 +369,11 @@ func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, "rock", 5); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, "rock", 5); err != nil {
 		t.Fatalf("seed rock inventory: %v", err)
 	}
 
-	recipes, err := app.loadCraftingRecipes(ctx, 123)
+	recipes, err := hqinventory.LoadCraftingRecipes(ctx, app.db, 123)
 	if err != nil {
 		t.Fatalf("load recipes: %v", err)
 	}
@@ -380,7 +381,7 @@ func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 		t.Fatalf("recipes = %#v, want craftable stone_block", recipes)
 	}
 
-	response, err := app.craftStudentRecipe(ctx, 123, craftRecipeRequest{RecipeKey: "stone_block"})
+	response, err := hqinventory.CraftStudentRecipe(ctx, app.db, 123, hqinventory.CraftRecipeRequest{RecipeKey: "stone_block"})
 	if err != nil {
 		t.Fatalf("craft recipe error = %v", err)
 	}
@@ -402,13 +403,13 @@ func TestCraftStudentRecipeRequiresIngredients(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, "rock", 3); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, "rock", 3); err != nil {
 		t.Fatalf("seed rock inventory: %v", err)
 	}
 
-	_, err := app.craftStudentRecipe(ctx, 123, craftRecipeRequest{RecipeKey: "stone_block"})
-	if err != errInsufficientIngredient {
-		t.Fatalf("craft recipe error = %v, want errInsufficientIngredient", err)
+	_, err := hqinventory.CraftStudentRecipe(ctx, app.db, 123, hqinventory.CraftRecipeRequest{RecipeKey: "stone_block"})
+	if err != hqinventory.ErrInsufficientIngredient {
+		t.Fatalf("craft recipe error = %v, want ErrInsufficientIngredient", err)
 	}
 
 	var rockQuantity int
@@ -444,9 +445,9 @@ func TestCraftStudentRecipeRejectsUnknownRecipe(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
 
-	_, err := app.craftStudentRecipe(context.Background(), 123, craftRecipeRequest{RecipeKey: "missing"})
-	if err != errUnknownRecipe {
-		t.Fatalf("craft recipe error = %v, want errUnknownRecipe", err)
+	_, err := hqinventory.CraftStudentRecipe(context.Background(), app.db, 123, hqinventory.CraftRecipeRequest{RecipeKey: "missing"})
+	if err != hqinventory.ErrUnknownRecipe {
+		t.Fatalf("craft recipe error = %v, want ErrUnknownRecipe", err)
 	}
 }
 
@@ -455,7 +456,7 @@ func TestPlaceSunnyTownMapObjectConsumesStoneBlock(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
 		t.Fatalf("seed stone block inventory: %v", err)
 	}
 
@@ -488,7 +489,7 @@ func TestPlaceSunnyTownMapObjectRollsBackInventoryWhenOccupied(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, stoneBlockItemKey, 2); err != nil {
 		t.Fatalf("seed stone block inventory: %v", err)
 	}
 	request := sunnyTownPlaceMapObjectRequest{
@@ -520,7 +521,7 @@ func TestRemoveSunnyTownMapObjectRefundsStoneBlock(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, stoneBlockItemKey, 1); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, stoneBlockItemKey, 1); err != nil {
 		t.Fatalf("seed stone block inventory: %v", err)
 	}
 	if _, err := app.placeSunnyTownMapObject(ctx, sunnyTownPlaceMapObjectRequest{
@@ -562,12 +563,12 @@ func TestEquipStudentItemRequiresOwnedEquippableItem(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, "sunny_hoodie", 1); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, "sunny_hoodie", 1); err != nil {
 		t.Fatalf("seed hoodie inventory: %v", err)
 	}
 
-	equipment, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
-		Slot:    equipmentSlotGear,
+	equipment, err := hqinventory.EquipStudentItem(ctx, app.db, 123, hqinventory.EquipmentChangeRequest{
+		Slot:    hqinventory.EquipmentSlotGear,
 		ItemKey: "sunny_hoodie",
 	})
 	if err != nil {
@@ -577,7 +578,7 @@ func TestEquipStudentItemRequiresOwnedEquippableItem(t *testing.T) {
 		t.Fatalf("equipment = %#v, want hoodie in gear slot", equipment)
 	}
 
-	inventory, err := app.loadStudentInventory(ctx, 123)
+	inventory, err := hqinventory.LoadStudent(ctx, app.db, 123)
 	if err != nil {
 		t.Fatalf("load inventory: %v", err)
 	}
@@ -591,24 +592,24 @@ func TestEquipStudentItemRejectsCookieAndMissingOwnership(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, cookieInventoryKey, 1); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, hqinventory.CookieKey, 1); err != nil {
 		t.Fatalf("seed cookie inventory: %v", err)
 	}
 
-	_, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
-		Slot:    equipmentSlotGear,
-		ItemKey: cookieInventoryKey,
+	_, err := hqinventory.EquipStudentItem(ctx, app.db, 123, hqinventory.EquipmentChangeRequest{
+		Slot:    hqinventory.EquipmentSlotGear,
+		ItemKey: hqinventory.CookieKey,
 	})
-	if err != errItemNotEquippable {
-		t.Fatalf("equip cookie error = %v, want errItemNotEquippable", err)
+	if err != hqinventory.ErrItemNotEquippable {
+		t.Fatalf("equip cookie error = %v, want ErrItemNotEquippable", err)
 	}
 
-	_, err = app.equipStudentItem(ctx, 123, equipmentChangeRequest{
-		Slot:    equipmentSlotAccessory,
+	_, err = hqinventory.EquipStudentItem(ctx, app.db, 123, hqinventory.EquipmentChangeRequest{
+		Slot:    hqinventory.EquipmentSlotAccessory,
 		ItemKey: "star_cap",
 	})
-	if err != errItemNotOwned {
-		t.Fatalf("equip unowned cap error = %v, want errItemNotOwned", err)
+	if err != hqinventory.ErrItemNotOwned {
+		t.Fatalf("equip unowned cap error = %v, want ErrItemNotOwned", err)
 	}
 }
 
@@ -617,17 +618,17 @@ func TestUnequipStudentItemClearsSlot(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, "star_cap", 1); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, "star_cap", 1); err != nil {
 		t.Fatalf("seed cap inventory: %v", err)
 	}
-	if _, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
-		Slot:    equipmentSlotAccessory,
+	if _, err := hqinventory.EquipStudentItem(ctx, app.db, 123, hqinventory.EquipmentChangeRequest{
+		Slot:    hqinventory.EquipmentSlotAccessory,
 		ItemKey: "star_cap",
 	}); err != nil {
 		t.Fatalf("equip cap error = %v", err)
 	}
 
-	equipment, err := app.unequipStudentItem(ctx, 123, equipmentChangeRequest{Slot: equipmentSlotAccessory})
+	equipment, err := hqinventory.UnequipStudentItem(ctx, app.db, 123, hqinventory.EquipmentChangeRequest{Slot: hqinventory.EquipmentSlotAccessory})
 	if err != nil {
 		t.Fatalf("unequip cap error = %v", err)
 	}
@@ -641,12 +642,12 @@ func TestEquipStudentItemSupportsToolSlot(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, "pickaxe", 1); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, "pickaxe", 1); err != nil {
 		t.Fatalf("seed pickaxe inventory: %v", err)
 	}
 
-	equipment, err := app.equipStudentItem(ctx, 123, equipmentChangeRequest{
-		Slot:    equipmentSlotTool,
+	equipment, err := hqinventory.EquipStudentItem(ctx, app.db, 123, hqinventory.EquipmentChangeRequest{
+		Slot:    hqinventory.EquipmentSlotTool,
 		ItemKey: "pickaxe",
 	})
 	if err != nil {
@@ -662,14 +663,14 @@ func TestStudentHotbarDefaultsAndUpdates(t *testing.T) {
 	defer cleanup()
 
 	ctx := context.Background()
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, "pickaxe", 1); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, "pickaxe", 1); err != nil {
 		t.Fatalf("seed pickaxe inventory: %v", err)
 	}
-	if err := incrementStudentInventoryItem(ctx, app.db, 123, "stone_block", 2); err != nil {
+	if err := hqinventory.IncrementStudentItem(ctx, app.db, 123, "stone_block", 2); err != nil {
 		t.Fatalf("seed stone block inventory: %v", err)
 	}
 
-	hotbar, err := app.loadStudentHotbar(ctx, 123)
+	hotbar, err := hqinventory.LoadStudentHotbar(ctx, app.db, 123)
 	if err != nil {
 		t.Fatalf("load hotbar: %v", err)
 	}
@@ -680,7 +681,7 @@ func TestStudentHotbarDefaultsAndUpdates(t *testing.T) {
 		t.Fatalf("hotbar = %#v, want stone_block in slot 2", hotbar)
 	}
 
-	hotbar, err = app.setStudentHotbarSlot(ctx, 123, hotbarSlotRequest{Slot: 3, ItemKey: "stone_block"})
+	hotbar, err = hqinventory.SetStudentHotbarSlot(ctx, app.db, 123, hqinventory.HotbarSlotRequest{Slot: 3, ItemKey: "stone_block"})
 	if err != nil {
 		t.Fatalf("set hotbar slot: %v", err)
 	}
@@ -688,7 +689,7 @@ func TestStudentHotbarDefaultsAndUpdates(t *testing.T) {
 		t.Fatalf("hotbar = %#v, want stone_block in slot 3", hotbar)
 	}
 
-	hotbar, err = app.setStudentHotbarSlot(ctx, 123, hotbarSlotRequest{Slot: 3})
+	hotbar, err = hqinventory.SetStudentHotbarSlot(ctx, app.db, 123, hqinventory.HotbarSlotRequest{Slot: 3})
 	if err != nil {
 		t.Fatalf("clear hotbar slot: %v", err)
 	}
@@ -701,9 +702,9 @@ func TestStudentHotbarRejectsUnownedItem(t *testing.T) {
 	app, cleanup := testRewardApp(t)
 	defer cleanup()
 
-	_, err := app.setStudentHotbarSlot(context.Background(), 123, hotbarSlotRequest{Slot: 1, ItemKey: "stone_block"})
-	if !errors.Is(err, errHotbarItemNotOwned) {
-		t.Fatalf("set hotbar error = %v, want errHotbarItemNotOwned", err)
+	_, err := hqinventory.SetStudentHotbarSlot(context.Background(), app.db, 123, hqinventory.HotbarSlotRequest{Slot: 1, ItemKey: "stone_block"})
+	if !errors.Is(err, hqinventory.ErrHotbarItemNotOwned) {
+		t.Fatalf("set hotbar error = %v, want ErrHotbarItemNotOwned", err)
 	}
 }
 

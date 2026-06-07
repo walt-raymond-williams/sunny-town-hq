@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	hqassignments "hq/internal/hq/assignments"
+	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
 )
 
@@ -21,14 +22,18 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/teacher/login", app.handleTeacherLogin)
 	apiMux.HandleFunc("/api/teacher/logout", app.handleTeacherLogout)
 	apiMux.HandleFunc("/api/student/profile", app.handleStudentProfile)
-	apiMux.HandleFunc("/api/student/inventory", app.handleStudentInventory)
-	apiMux.HandleFunc("/api/student/hotbar", app.handleStudentHotbar)
-	apiMux.HandleFunc("/api/student/crafting/recipes", app.handleStudentCraftingRecipes)
-	apiMux.HandleFunc("/api/student/crafting/craft", app.handleCraftStudentRecipe)
-	apiMux.HandleFunc("/api/student/equipment", app.handleStudentEquipment)
-	apiMux.HandleFunc("/api/student/equipment/equip", app.handleEquipStudentItem)
-	apiMux.HandleFunc("/api/student/equipment/unequip", app.handleUnequipStudentItem)
-	apiMux.HandleFunc("/api/student/shop/purchase", app.handleStudentShopPurchase)
+	inventoryHandlers := hqinventory.NewHTTPHandler(hqinventory.HTTPHandlerConfig{
+		Store:       app.db,
+		RequireRole: inventoryRequireRole,
+	})
+	apiMux.HandleFunc("/api/student/inventory", inventoryHandlers.HandleStudentInventory)
+	apiMux.HandleFunc("/api/student/hotbar", inventoryHandlers.HandleStudentHotbar)
+	apiMux.HandleFunc("/api/student/crafting/recipes", inventoryHandlers.HandleStudentCraftingRecipes)
+	apiMux.HandleFunc("/api/student/crafting/craft", inventoryHandlers.HandleCraftStudentRecipe)
+	apiMux.HandleFunc("/api/student/equipment", inventoryHandlers.HandleStudentEquipment)
+	apiMux.HandleFunc("/api/student/equipment/equip", inventoryHandlers.HandleEquipStudentItem)
+	apiMux.HandleFunc("/api/student/equipment/unequip", inventoryHandlers.HandleUnequipStudentItem)
+	apiMux.HandleFunc("/api/student/shop/purchase", inventoryHandlers.HandleStudentShopPurchase)
 	apiMux.HandleFunc("/api/student/pet/feed", app.handleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{
