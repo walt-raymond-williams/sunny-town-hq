@@ -191,7 +191,8 @@ Slice plan:
 - [ ] Slice 4.7: Move assignment handlers and assignment service logic into `internal/hq/assignments`.
   - [x] Slice 4.7a: Move assignment request/response types plus load/filter helpers into `internal/hq/assignments`.
   - [x] Slice 4.7b: Move assignment grading command logic into `internal/hq/assignments` while preserving AI integration.
-  - [ ] Slice 4.7c: Move assignment HTTP handlers or route-ready handler factories behind the assignments boundary.
+  - [x] Slice 4.7c: Move assignment create, submit, reset, delete, and load-by-id service operations behind the assignments boundary.
+  - [ ] Slice 4.7d: Move assignment HTTP handlers or route-ready handler factories behind the assignments boundary.
 - [ ] Slice 4.8: Move Sunny Town internal bridge endpoints into `internal/hq/sunnytownbridge`.
 - [ ] Slice 4.9: Move AI grading integration behind `internal/hq/ai`.
 - [ ] Slice 4.10: Prepare schema ownership boundaries for Phase 5 migrations without changing the migration story yet.
@@ -374,3 +375,6 @@ Verification:
 - 2026-06-07: Phase 4 Slice 4.7b moved assignment grading command logic into `internal/hq/assignments` while preserving manual and AI grading call sites.
 - 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.7b.
 - 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.7b.
+- 2026-06-07: Phase 4 Slice 4.7c moved assignment create, submit, reset, delete, and load-by-id service operations into `internal/hq/assignments`, leaving HTTP auth/JSON flow in `cmd/hq` for the next handler-factory slice.
+- 2026-06-07: `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth` passed after Phase 4 Slice 4.7c.
+- 2026-06-07: `go test ./...` passed after Phase 4 Slice 4.7c.

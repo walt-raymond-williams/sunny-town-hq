@@ -312,7 +312,7 @@ func (app *app) handleAssignmentByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := app.db.Exec(r.Context(), "delete from assignment where id = $1", id)
+	deleted, err := app.deleteAssignmentRecord(r.Context(), id)
 	if err != nil {
 		log.Printf("delete assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
@@ -321,7 +321,7 @@ func (app *app) handleAssignmentByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if result.RowsAffected() == 0 {
+	if !deleted {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "assignment not found",
 		})
@@ -1193,34 +1193,17 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var attemptID int64
-	err := app.db.QueryRow(
-		r.Context(),
-		`
-			insert into assignment_attempt (assignment_id, student_user_id, attempt_number, submitted_answer)
-			select a.id,
-				$1,
-				coalesce(max(aa.attempt_number), 0) + 1,
-				$2
-			from assignment a
-			left join assignment_attempt aa on aa.assignment_id = a.id
-				and aa.student_user_id = $1
-			where a.id = $3
-				and not exists (
-					select 1
-					from assignment_attempt active_attempt
-					where active_attempt.assignment_id = a.id
-						and active_attempt.student_user_id = $1
-						and active_attempt.reset_at is null
-				)
-			group by a.id
-			returning id
-		`,
-		user.ID,
-		request.SubmittedAnswer,
-		id,
-	).Scan(&attemptID)
+	assignment, attemptID, err := app.submitAssignmentAttempt(r.Context(), user.ID, id, request)
 	if err != nil {
+		var loadErr *assignmentLoadAfterWriteError
+		if errors.As(err, &loadErr) {
+			log.Printf("load submitted assignment %d after attempt %d: %v", id, attemptID, err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "answer was saved but could not be loaded",
+			})
+			return
+		}
+
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeJSON(w, http.StatusNotFound, map[string]string{
 				"error": "assignment not found or already submitted",
@@ -1234,17 +1217,6 @@ func (app *app) submitAssignment(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	assignment, err := app.loadAssignmentByID(r.Context(), id)
-	if err != nil {
-		log.Printf("load submitted assignment %d after attempt %d: %v", id, attemptID, err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "answer was saved but could not be loaded",
-		})
-		return
-	}
-	assignment.Attempts = attemptsForStudent(assignment.Attempts, user.ID)
-	assignment.CurrentAttempt = currentAttempt(assignment.Attempts)
 
 	app.triggerAIGradingForAttempt(attemptID)
 
@@ -1404,40 +1376,26 @@ func (app *app) resetAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := app.db.Exec(
-		r.Context(),
-		`
-			update assignment_attempt
-			set feedback = nullif($1, ''),
-				reset_at = now()
-			where id = $2
-				and assignment_id = $3
-				and reset_at is null
-		`,
-		request.Feedback,
-		request.AttemptID,
-		id,
-	)
-	if err != nil {
-		log.Printf("reset assignment: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "assignment could not be reset",
-		})
-		return
-	}
-
-	if result.RowsAffected() == 0 {
+	assignment, err := app.resetAssignmentAttempt(r.Context(), id, request)
+	if errors.Is(err, errAnsweredAssignmentNotFound) {
 		writeJSON(w, http.StatusNotFound, map[string]string{
 			"error": "answered assignment not found",
 		})
 		return
 	}
-
-	assignment, err := app.loadAssignmentByID(r.Context(), id)
 	if err != nil {
-		log.Printf("load reset assignment: %v", err)
+		var loadErr *assignmentLoadAfterWriteError
+		if errors.As(err, &loadErr) {
+			log.Printf("load reset assignment: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "assignment was reset but could not be loaded",
+			})
+			return
+		}
+
+		log.Printf("reset assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "assignment was reset but could not be loaded",
+			"error": "assignment could not be reset",
 		})
 		return
 	}
@@ -1512,19 +1470,17 @@ func (app *app) createAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var id int64
-	err := app.db.QueryRow(
-		r.Context(),
-		`
-			insert into assignment (category, prompt, expected_answer)
-			values ($1, $2, $3)
-			returning id
-		`,
-		request.Category,
-		request.Prompt,
-		request.ExpectedAnswer,
-	).Scan(&id)
+	assignment, err := app.createAssignmentRecord(r.Context(), request)
 	if err != nil {
+		var loadErr *assignmentLoadAfterWriteError
+		if errors.As(err, &loadErr) {
+			log.Printf("load created assignment: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "assignment was saved but could not be loaded",
+			})
+			return
+		}
+
 		log.Printf("insert assignment: %v", err)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{
 			"error": "assignment could not be saved",
@@ -1532,29 +1488,7 @@ func (app *app) createAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	assignment, err := app.loadAssignmentByID(r.Context(), id)
-	if err != nil {
-		log.Printf("load created assignment: %v", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{
-			"error": "assignment was saved but could not be loaded",
-		})
-		return
-	}
-
 	writeJSON(w, http.StatusCreated, assignment)
-}
-
-func (app *app) loadAssignmentByID(ctx context.Context, id int64) (assignmentResponse, error) {
-	assignments, err := app.loadAssignments(ctx, "where a.id = $1", id)
-	if err != nil {
-		return assignmentResponse{}, err
-	}
-
-	if len(assignments) == 0 {
-		return assignmentResponse{}, pgx.ErrNoRows
-	}
-
-	return assignments[0], nil
 }
 
 func (app *app) loadStudentProfile(ctx context.Context, userID int64) (studentProfileResponse, error) {
