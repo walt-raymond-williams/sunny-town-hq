@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	hqai "hq/internal/hq/ai"
 	hqassignments "hq/internal/hq/assignments"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
@@ -44,10 +45,17 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/student/pet/feed", petHandlers.HandleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{
-		Store:                      app.db,
-		RequireRole:                assignmentRequireRole,
-		GradeAttempt:               app.gradeAssignmentAttempt,
-		TriggerAIGradingForAttempt: app.triggerAIGradingForAttempt,
+		Store:        app.db,
+		RequireRole:  assignmentRequireRole,
+		GradeAttempt: app.gradeAssignmentAttempt,
+		TriggerAIGradingForAttempt: func(attemptID int64) {
+			hqai.TriggerGradeAsync(hqai.TriggerConfig{
+				Enabled:       app.aiGradingEnabled,
+				ServiceURL:    app.aiServiceURL,
+				ServiceSecret: app.hqToAIServiceSecret,
+				PromptVersion: app.aiPromptVersionGrader,
+			}, attemptID)
+		},
 	})
 	apiMux.HandleFunc("/api/student/assignments/next", assignmentHandlers.HandleNextStudentAssignment)
 	apiMux.HandleFunc("/api/student/assignments/graded", assignmentHandlers.HandleStudentGradedAssignments)
@@ -66,7 +74,12 @@ func (app *app) routes(webRoot string) http.Handler {
 	mux.HandleFunc("/api/internal/sunny-town/map-objects", sunnyTownBridge.HandleMapObjects)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects/place", sunnyTownBridge.HandlePlaceMapObject)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects/remove", sunnyTownBridge.HandleRemoveMapObject)
-	mux.HandleFunc("/api/internal/ai/assignment-attempts/", app.handleInternalAIAssignmentAttempt)
+	aiHandler := hqai.NewHandler(hqai.HandlerConfig{
+		Store:           app.db,
+		ServiceSecret:   app.aiToHQServiceSecret,
+		AutoApplyGrades: app.aiAutoApplyGrades,
+	})
+	mux.HandleFunc("/api/internal/ai/assignment-attempts/", aiHandler.HandleAssignmentAttempt)
 	mux.Handle("/api/", app.authenticated(apiMux))
 
 	petServicePath, petServiceHandler := hqpet.NewServiceHandler(petStore, requireStudentID, errNoCookies)

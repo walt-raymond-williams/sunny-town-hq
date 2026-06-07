@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"hq/internal/aiapi"
+	hqai "hq/internal/hq/ai"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
@@ -757,9 +758,9 @@ func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
 	passed := true
 	confidence := 0.91
 
-	response, err := app.recordAIGradeResult(ctx, attemptID, aiapi.AIGradeResultRequest{
+	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              aiGradeStatusCompleted,
+		Status:              hqai.GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Confidence:          &confidence,
@@ -770,15 +771,15 @@ func TestRecordAIGradeResultStoresRecommendationWithoutAutoApply(t *testing.T) {
 		}},
 		Model:         "fake-grader",
 		PromptVersion: "assignment-grader-v1",
-	})
+	}, app.aiAutoApplyGrades)
 	if err != nil {
 		t.Fatalf("record ai grade result: %v", err)
 	}
 	if response.Applied {
 		t.Fatal("expected AI result to be stored without auto-applying grade")
 	}
-	if response.ApplySkippedReason != aiApplySkippedAutoApplyDisabled {
-		t.Fatalf("apply skipped reason = %q, want %q", response.ApplySkippedReason, aiApplySkippedAutoApplyDisabled)
+	if response.ApplySkippedReason != hqai.ApplySkippedAutoApplyDisabled {
+		t.Fatalf("apply skipped reason = %q, want %q", response.ApplySkippedReason, hqai.ApplySkippedAutoApplyDisabled)
 	}
 
 	var count int
@@ -804,15 +805,15 @@ func TestRecordAIGradeResultAutoAppliesThroughSharedGradeCommand(t *testing.T) {
 	passed := true
 	confidence := 0.97
 
-	response, err := app.recordAIGradeResult(ctx, attemptID, aiapi.AIGradeResultRequest{
+	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              aiGradeStatusCompleted,
+		Status:              hqai.GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Confidence:          &confidence,
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
-	})
+	}, app.aiAutoApplyGrades)
 	if err != nil {
 		t.Fatalf("record ai grade result: %v", err)
 	}
@@ -860,14 +861,14 @@ func TestTeacherOverrideMarksAIAttemptOverridden(t *testing.T) {
 	ctx := context.Background()
 	assignmentID, attemptID := seedAssignmentAttempt(t, app)
 	passed := true
-	if _, err := app.recordAIGradeResult(ctx, attemptID, aiapi.AIGradeResultRequest{
+	if _, err := hqai.RecordGradeResult(ctx, app.db, attemptID, aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              aiGradeStatusCompleted,
+		Status:              hqai.GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
-	}); err != nil {
+	}, app.aiAutoApplyGrades); err != nil {
 		t.Fatalf("record ai grade result: %v", err)
 	}
 
@@ -918,13 +919,13 @@ func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              aiGradeStatusCompleted,
+		Status:              hqai.GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	if _, err := app.recordAIGradeResult(ctx, attemptID, request); err != nil {
+	if _, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades); err != nil {
 		t.Fatalf("record initial ai grade result: %v", err)
 	}
 
@@ -945,11 +946,11 @@ func TestAIGradeRetryDoesNotOverwriteTeacherOverride(t *testing.T) {
 		t.Fatalf("teacher override grade: %v", err)
 	}
 
-	response, err := app.recordAIGradeResult(ctx, attemptID, request)
+	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
 	if err != nil {
 		t.Fatalf("retry ai grade result: %v", err)
 	}
-	if response.Applied || response.ApplySkippedReason != aiApplySkippedTeacherOverride {
+	if response.Applied || response.ApplySkippedReason != hqai.ApplySkippedTeacherOverride {
 		t.Fatalf("retry applied=%v reason=%q, want skipped teacher override", response.Applied, response.ApplySkippedReason)
 	}
 
@@ -983,13 +984,13 @@ func TestAIGradeRetryDoesNotOverwriteReviewedAttempt(t *testing.T) {
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              aiGradeStatusCompleted,
+		Status:              hqai.GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	if _, err := app.recordAIGradeResult(ctx, attemptID, request); err != nil {
+	if _, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades); err != nil {
 		t.Fatalf("record initial ai grade result: %v", err)
 	}
 	if _, err := app.db.Exec(ctx, "update assignment_attempt set ai_review_status = $2 where id = $1", attemptID, aiReviewStatusReviewed); err != nil {
@@ -999,11 +1000,11 @@ func TestAIGradeRetryDoesNotOverwriteReviewedAttempt(t *testing.T) {
 	passed = false
 	request.RecommendedPassed = &passed
 	request.RecommendedFeedback = "Incorrect."
-	response, err := app.recordAIGradeResult(ctx, attemptID, request)
+	response, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
 	if err != nil {
 		t.Fatalf("retry ai grade result: %v", err)
 	}
-	if response.Applied || response.ApplySkippedReason != aiApplySkippedTeacherReviewed {
+	if response.Applied || response.ApplySkippedReason != hqai.ApplySkippedTeacherReviewed {
 		t.Fatalf("retry applied=%v reason=%q, want skipped teacher reviewed", response.Applied, response.ApplySkippedReason)
 	}
 
@@ -1027,18 +1028,18 @@ func TestAIGradeDuplicateRequestIDSameAttemptIsIdempotent(t *testing.T) {
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              aiGradeStatusCompleted,
+		Status:              hqai.GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	first, err := app.recordAIGradeResult(ctx, attemptID, request)
+	first, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
 	if err != nil {
 		t.Fatalf("record first ai grade result: %v", err)
 	}
 	request.RecommendedFeedback = "Still correct."
-	second, err := app.recordAIGradeResult(ctx, attemptID, request)
+	second, err := hqai.RecordGradeResult(ctx, app.db, attemptID, request, app.aiAutoApplyGrades)
 	if err != nil {
 		t.Fatalf("record second ai grade result: %v", err)
 	}
@@ -1078,18 +1079,18 @@ func TestAIGradeDuplicateRequestIDDifferentAttemptIsRejected(t *testing.T) {
 	passed := true
 	request := aiapi.AIGradeResultRequest{
 		RequestID:           "assignment-attempt-1:assignment-grader-v1",
-		Status:              aiGradeStatusCompleted,
+		Status:              hqai.GradeStatusCompleted,
 		RecommendedPassed:   &passed,
 		RecommendedFeedback: "Correct.",
 		Model:               "fake-grader",
 		PromptVersion:       "assignment-grader-v1",
 	}
-	if _, err := app.recordAIGradeResult(ctx, firstAttemptID, request); err != nil {
+	if _, err := hqai.RecordGradeResult(ctx, app.db, firstAttemptID, request, app.aiAutoApplyGrades); err != nil {
 		t.Fatalf("record first ai grade result: %v", err)
 	}
 
-	_, err := app.recordAIGradeResult(ctx, secondAttemptID, request)
-	if !errors.Is(err, errAIGradeRequestAttemptMismatch) {
+	_, err := hqai.RecordGradeResult(ctx, app.db, secondAttemptID, request, app.aiAutoApplyGrades)
+	if !errors.Is(err, hqai.ErrGradeRequestAttemptMismatch) {
 		t.Fatalf("second ai grade error = %v, want request attempt mismatch", err)
 	}
 

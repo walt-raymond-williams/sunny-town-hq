@@ -117,3 +117,9 @@ func TestRequestGradeReportsNonSuccessStatus(t *testing.T) {
 		t.Fatal("RequestGrade() error = nil, want status error")
 	}
 }
+
+func TestTriggerGradeAsyncSkipsIncompleteConfig(t *testing.T) {
+	TriggerGradeAsync(TriggerConfig{Enabled: false}, 42)
+	TriggerGradeAsync(TriggerConfig{Enabled: true}, 42)
+	TriggerGradeAsync(TriggerConfig{Enabled: true, ServiceURL: "http://127.0.0.1:1"}, 42)
+}

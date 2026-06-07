@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"hq/internal/aiapi"
 	hqassignments "hq/internal/hq/assignments"
@@ -54,6 +55,15 @@ type HandlerConfig struct {
 	Store           Store
 	ServiceSecret   string
 	AutoApplyGrades bool
+}
+
+type TriggerConfig struct {
+	Enabled       bool
+	ServiceURL    string
+	ServiceSecret string
+	PromptVersion string
+	Client        *http.Client
+	Timeout       time.Duration
 }
 
 func NewHandler(config HandlerConfig) *Handler {
@@ -419,6 +429,24 @@ func RequestGrade(ctx context.Context, client *http.Client, serviceURL, serviceS
 		return fmt.Errorf("ai service returned status %d", response.StatusCode)
 	}
 	return nil
+}
+
+func TriggerGradeAsync(config TriggerConfig, attemptID int64) {
+	if !config.Enabled || config.ServiceURL == "" || config.ServiceSecret == "" {
+		return
+	}
+	timeout := config.Timeout
+	if timeout == 0 {
+		timeout = 10 * time.Second
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		if err := RequestGrade(ctx, config.Client, config.ServiceURL, config.ServiceSecret, config.PromptVersion, attemptID); err != nil {
+			log.Printf("request ai grade for attempt %d: %v", attemptID, err)
+		}
+	}()
 }
 
 func stringPtrEquals(value *string, expected string) bool {
