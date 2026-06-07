@@ -275,6 +275,38 @@ Verification:
 
 - [ ] CI passes on the restructure branch once pushed.
 
+## Phase 7: HQ Adapter Retirement
+
+Goal: remove temporary `cmd/hq` adapter wrappers now that domain logic lives under `internal/hq/...`.
+
+Do this one domain at a time. The point is not to move files for neatness; the point is to make package boundaries real so future changes do not bounce through package-main compatibility names.
+
+Current adapter clusters:
+
+- [ ] Inventory/equipment/hotbar/crafting/shop adapters in `cmd/hq/inventory.go`, `cmd/hq/equipment.go`, `cmd/hq/hotbar.go`, `cmd/hq/crafting.go`, and `cmd/hq/shop.go`.
+- [ ] Pet profile/service adapters in `cmd/hq/pet_adapter.go` and `cmd/hq/pet_service.go`.
+- [ ] Sunny Town bridge compatibility adapters in `cmd/hq/sunnytown_bridge.go`.
+- [ ] AI grading compatibility adapters in `cmd/hq/ai_grading.go`.
+- [ ] Assignment grading compatibility adapters in `cmd/hq/assignment_grading.go` and `cmd/hq/assignments.go`.
+
+Recommended slice order:
+
+- [ ] Slice 7.1: Move inventory, equipment, hotbar, crafting, and shop HTTP handlers from `cmd/hq/handlers.go` into `internal/hq/inventory` behind a route-ready handler factory.
+- [ ] Slice 7.2: Update `cmd/hq/routes.go` to mount the new inventory handler methods directly.
+- [ ] Slice 7.3: Add focused `internal/hq/inventory` HTTP handler tests for method checks, auth role behavior, bad JSON, known validation errors, and happy paths where practical.
+- [ ] Slice 7.4: Delete inventory/equipment/hotbar/crafting/shop adapter aliases and wrappers once no production code or tests depend on them.
+- [ ] Slice 7.5: Reassess `cmd/hq/handlers.go` line count and remaining adapter clusters before choosing the next domain.
+
+Deferred until enough adapters are retired:
+
+- [ ] Move HQ app construction into `internal/hq/app`.
+- [ ] Move route registration/shared HTTP helpers into `internal/hq/httpapi`.
+
+Verification:
+
+- [ ] `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`
+- [ ] `go test ./...`
+
 ## Current Verification Log
 
 - 2026-06-06: `go test ./...` passed during project review.
@@ -414,3 +446,4 @@ Verification:
 - 2026-06-07: `docker compose -f deploy\docker-compose.yml config` passed after replacing runtime schema patching with the migration runner.
 - 2026-06-07: Phase 5 documented migration creation, applied-version inspection, disposable migration smoke tests, and Docker volume reset workflows in `docs/current/DATABASE.md`.
 - 2026-06-07: Phase 6 added `.github/workflows/verify.yml` with jobs for `go test ./...`, `npm ci && npm run build` from `frontend/`, and `docker compose -f deploy/docker-compose.yml config`.
+- 2026-06-07: Added Phase 7 adapter-retirement plan. First target is moving inventory/equipment/hotbar/crafting/shop HTTP handlers into `internal/hq/inventory`, then deleting the matching `cmd/hq` adapters once unused.
