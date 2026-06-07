@@ -381,3 +381,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 
 - 2026-06-07: Created this plan after closing broad restructure. No code changed.
 - 2026-06-07: Completed Slice 1 by splitting `internal/hq/sunnytownbridge/bridge.go` into types, store, ledger, map-object, HTTP handler, and HTTP helper files. Verified with `go test ./internal/hq/sunnytownbridge`, `go test ./cmd/hq ./internal/hq/... ./internal/serviceauth ./internal/sunnytownauth`, and `go test ./...`.
+- 2026-06-07: Started Slice 2 by extracting Sunny Town world-object conversion helpers from `SunnyTownPage.vue` into `frontend/src/features/sunny-town/worldObjects.ts`, adding Vitest frontend unit tests in `worldObjects.test.ts`, and adding `npm test`. Verified with `npm test` and `npm run build` from `frontend/`.

@@ -36,6 +36,13 @@ import SunnyTownHud from './SunnyTownHud.vue'
 import SunnyTownInventoryPanel from './SunnyTownInventoryPanel.vue'
 import SunnyTownSchoolworkPanel from './SunnyTownSchoolworkPanel.vue'
 import SunnyTownShop from './SunnyTownShop.vue'
+import {
+  legacyWorldObjects,
+  placedObjectToWorldObject,
+  sameWorldObject,
+  worldObjectToPlacedObject,
+  worldObjectToResourceNode,
+} from './worldObjects'
 
 interface ToolUseAnimation {
   toolKey: string
@@ -530,58 +537,6 @@ function applyMapState(message: SunnyTownServerMessage) {
   nearbyNpc.value = null
   syncLocalSelfFromSnapshot()
   draw()
-}
-
-function legacyWorldObjects(
-  nodes: SunnyTownResourceNode[],
-  objects: SunnyTownPlacedObject[],
-): SunnyTownWorldObject[] {
-  return [
-    ...nodes.map(resourceNodeToWorldObject),
-    ...objects.map(placedObjectToWorldObject),
-  ]
-}
-
-function resourceNodeToWorldObject(node: SunnyTownResourceNode): SunnyTownWorldObject {
-  return {
-    id: node.id,
-    kind: 'rock_node',
-    source: 'natural',
-    resourceKind: node.kind,
-    x: node.x,
-    y: node.y,
-    radius: node.radius,
-    active: node.active,
-    collision: true,
-    breakable: true,
-    reservesPlacement: true,
-    hits: node.hits,
-    needed: node.needed,
-  }
-}
-
-function placedObjectToWorldObject(object: SunnyTownPlacedObject): SunnyTownWorldObject {
-  return {
-    id: object.id,
-    kind: 'stone_block',
-    source: 'placed',
-    itemKey: object.itemKey,
-    x: object.x,
-    y: object.y,
-    width: object.width,
-    height: object.height,
-    active: true,
-    collision: true,
-    breakable: true,
-    reservesPlacement: true,
-    gridX: object.gridX,
-    gridY: object.gridY,
-    placedByAppUserId: object.placedByAppUserId,
-  }
-}
-
-function sameWorldObject(first: SunnyTownWorldObject, second: SunnyTownWorldObject): boolean {
-  return first.source === second.source && first.id === second.id
 }
 
 function handlePrimaryInteraction() {
@@ -1147,33 +1102,6 @@ function drawWorldObjects(context: CanvasRenderingContext2D, cameraX: number, ca
     if (object.kind === 'rock_node' && object.resourceKind === 'rock') {
       drawResourceNode(context, worldObjectToResourceNode(object), cameraX, cameraY)
     }
-  }
-}
-
-function worldObjectToPlacedObject(object: SunnyTownWorldObject): SunnyTownPlacedObject {
-  return {
-    id: object.id,
-    itemKey: 'stone_block',
-    gridX: object.gridX || 0,
-    gridY: object.gridY || 0,
-    x: object.x,
-    y: object.y,
-    width: object.width || 0,
-    height: object.height || 0,
-    placedByAppUserId: object.placedByAppUserId,
-  }
-}
-
-function worldObjectToResourceNode(object: SunnyTownWorldObject): SunnyTownResourceNode {
-  return {
-    id: object.id,
-    kind: 'rock',
-    x: object.x,
-    y: object.y,
-    radius: object.radius || 0,
-    active: object.active,
-    hits: object.hits || 0,
-    needed: object.needed || 0,
   }
 }
 
