@@ -18,7 +18,7 @@ Current state:
 - Slice 3 is complete: `cmd/hq/reward_test.go` was removed after moving its regression tests into owning packages.
 - Slice 4 is complete: `internal/sunnytown/server/room_test.go` is down from 974 lines to 166 lines after moving map-loader, room movement, mining/resource, and world/portal tests into focused files.
 - Slice 5 is complete: `internal/hq/assignments/http.go` is down from 517 lines to 58 lines after moving HTTP helpers, student handlers, and teacher handlers into focused files with unit tests.
-- Slice 6 is in progress: `internal/hq/pet/store.go` is down from 488 lines to 198 lines after moving profile loading, pet actions, and game rewards into focused files.
+- Slice 6 is complete: `internal/hq/pet/store.go` is down from 488 lines to 25 lines after moving profile loading, pet actions, game rewards, and decay into focused files.
 - Slice 2 completed sub-slices:
   - `frontend/src/features/sunny-town/worldObjects.ts` plus tests for world-object conversion helpers.
   - `frontend/src/composables/useSunnyTownRemotePlayers.ts` plus tests for remote snapshot history/interpolation.
@@ -49,7 +49,8 @@ Current state:
   - Moved `LoadProfile` and `loadProfileWithoutDecay` into `internal/hq/pet/profile_store.go`.
   - Moved `Feed`, `Play`, `PutToSleep`, and `Wake` into `internal/hq/pet/actions.go`.
   - Moved `ApplyGameResult` and pet star reward integration into `internal/hq/pet/game_rewards.go`.
-- Next recommended step: complete Slice 6 by moving decay ticker/orchestration and decay math into `internal/hq/pet/decay.go`.
+  - Moved decay ticker/orchestration and decay math into `internal/hq/pet/decay.go`.
+- Next recommended step: reassess Slice 7 (`internal/hq/ai/grading.go`) and confirm no active AI refactor is in progress before splitting.
 - AI grading file cleanup should wait if another agent is actively refactoring the AI service.
 
 Verification baseline:
@@ -110,7 +111,7 @@ Snapshot generated on 2026-06-07:
 | `internal/sunnytown/server/room_test.go` | 166 | Complete | Now holds collectible pickup tests and shared Sunny Town server test fixtures. |
 | `internal/hq/sunnytownbridge/bridge.go` | 848 | High | Store operations, ledgers, positions, map objects, service HTTP handlers, auth, parsing, and JSON helpers in one file. |
 | `internal/hq/assignments/http.go` | 58 | Complete | Now holds the assignment HTTP handler type, constructor, and route dispatchers. |
-| `internal/hq/pet/store.go` | 198 | Medium | Decay ticker and decay math remain; profile loading, pet actions, and game rewards have moved. |
+| `internal/hq/pet/store.go` | 25 | Complete | Now holds pet store dependency types and the store struct only. |
 | `internal/hq/ai/grading.go` | 460 | Low for now | Handler, context loading, grade recording, auto-apply policy, outbound request, async trigger, and JSON helper. Defer if AI refactor is active. |
 | `internal/hq/auth/auth.go` | 370 | Low | JWT verification, context helpers, role checks. Large but cohesive enough for now. |
 | `internal/sunnytown/hqclient/client.go` | 346 | Low/Medium | Multiple internal HQ client endpoints in one client file. Split only if endpoint groups grow. |
@@ -125,7 +126,7 @@ Snapshot generated on 2026-06-07:
 - [x] Slice 3: Split `cmd/hq/reward_test.go` by package ownership.
 - [x] Slice 4: Split `internal/sunnytown/server/room_test.go` by behavior area.
 - [x] Slice 5: Split `internal/hq/assignments/http.go`.
-- [ ] Slice 6: Split `internal/hq/pet/store.go`.
+- [x] Slice 6: Split `internal/hq/pet/store.go`.
 - [ ] Slice 7: Reassess `internal/hq/ai/grading.go` after AI refactor status is clear.
 - [ ] Slice 8: Reassess lower-priority files and duplicate helper opportunities.
 
@@ -442,3 +443,4 @@ Do not split these unless there is clear edit pain, repeated conflicts, or an ob
 - 2026-06-07: Started Slice 6 by moving pet profile loading into `internal/hq/pet/profile_store.go`. Verified with `go test ./internal/hq/pet` and `go test ./...`.
 - 2026-06-07: Continued Slice 6 by moving pet feed/play/sleep/wake actions into `internal/hq/pet/actions.go`. Verified with `go test ./internal/hq/pet` and `go test ./...`.
 - 2026-06-07: Continued Slice 6 by moving pet game result and star reward integration into `internal/hq/pet/game_rewards.go`. Verified with `go test ./internal/hq/pet` and `go test ./...`.
+- 2026-06-07: Completed Slice 6 by moving pet decay ticker/orchestration and decay math into `internal/hq/pet/decay.go`. Verified with `go test ./internal/hq/pet` and `go test ./...`.
