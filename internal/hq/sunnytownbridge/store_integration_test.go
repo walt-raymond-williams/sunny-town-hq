@@ -1,0 +1,444 @@
+package sunnytownbridge
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+	"time"
+
+	hqinventory "hq/internal/hq/inventory"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const (
+	testSunnyTownRoomID = "sunny-town-main"
+	testSunnyTownMapID  = "sunny-town-v1"
+)
+
+func TestCommitSunnyTownRewardIdempotent(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	request := RewardEventRequest{
+		EventID:       "sunny-town-main:star-0001:1:123",
+		AppUserID:     123,
+		RoomID:        "sunny-town-main",
+		MapID:         "sunny-town-v1",
+		CollectibleID: "star-0001",
+		RewardKind:    "star",
+		Amount:        1,
+	}
+
+	first, err := store.CommitReward(ctx, request)
+	if err != nil {
+		t.Fatalf("first commit error = %v", err)
+	}
+	if !first.Accepted || first.Duplicate || first.NewStarBalance != 1 {
+		t.Fatalf("first commit = %#v, want accepted non-duplicate balance 1", first)
+	}
+
+	second, err := store.CommitReward(ctx, request)
+	if err != nil {
+		t.Fatalf("second commit error = %v", err)
+	}
+	if !second.Accepted || !second.Duplicate || second.NewStarBalance != 1 {
+		t.Fatalf("second commit = %#v, want accepted duplicate balance 1", second)
+	}
+
+	var ledgerRows int
+	var balance int
+	if err := db.QueryRow(ctx, "select count(*) from student_star_ledger").Scan(&ledgerRows); err != nil {
+		t.Fatalf("count ledger rows: %v", err)
+	}
+	if err := db.QueryRow(ctx, "select star_balance from student_wallet where app_user_id = 123").Scan(&balance); err != nil {
+		t.Fatalf("load wallet balance: %v", err)
+	}
+	if ledgerRows != 1 || balance != 1 {
+		t.Fatalf("ledgerRows=%d balance=%d, want 1 and 1", ledgerRows, balance)
+	}
+}
+
+func TestCommitSunnyTownResourceIdempotent(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	request := ResourceEventRequest{
+		EventID:     "forest-crossing-v1:rock-node-001:1:123",
+		AppUserID:   123,
+		Source:      "sunny_town_mining",
+		RoomID:      "sunny-town-main",
+		MapID:       "forest-crossing-v1",
+		NodeID:      "rock-node-001",
+		ResourceKey: "rock",
+		Amount:      2,
+	}
+
+	first, err := store.CommitResource(ctx, request)
+	if err != nil {
+		t.Fatalf("first resource commit error = %v", err)
+	}
+	if !first.Accepted || first.Duplicate || first.Quantity != 2 || first.ResourceKey != "rock" {
+		t.Fatalf("first resource commit = %#v, want accepted non-duplicate quantity 2", first)
+	}
+
+	second, err := store.CommitResource(ctx, request)
+	if err != nil {
+		t.Fatalf("second resource commit error = %v", err)
+	}
+	if !second.Accepted || !second.Duplicate || second.Quantity != 2 {
+		t.Fatalf("second resource commit = %#v, want accepted duplicate quantity 2", second)
+	}
+
+	var ledgerRows int
+	var rockQuantity int
+	if err := db.QueryRow(ctx, "select count(*) from student_inventory_ledger").Scan(&ledgerRows); err != nil {
+		t.Fatalf("count inventory ledger rows: %v", err)
+	}
+	if err := db.QueryRow(
+		ctx,
+		`
+			select sii.quantity
+			from student_inventory_item sii
+			join inventory_item_type iit on iit.id = sii.item_type_id
+			where sii.app_user_id = 123 and iit.key = 'rock'
+		`,
+	).Scan(&rockQuantity); err != nil {
+		t.Fatalf("load rock quantity: %v", err)
+	}
+	if ledgerRows != 1 || rockQuantity != 2 {
+		t.Fatalf("ledgerRows=%d rockQuantity=%d, want 1 and 2", ledgerRows, rockQuantity)
+	}
+}
+
+func TestCommitSunnyTownResourceRejectsInvalidRequest(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	store := Store{DB: db}
+	requests := []ResourceEventRequest{
+		{},
+		{EventID: "event", AppUserID: 123, Source: "sunny_town_mining", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "star", Amount: 1},
+		{EventID: "event", AppUserID: 123, Source: "sunny_town_mining", RoomID: "forest-crossing-v1", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "rock", Amount: 0},
+		{EventID: "event", AppUserID: 123, Source: "other", RoomID: "sunny-town-main", MapID: "forest-crossing-v1", NodeID: "rock-node-001", ResourceKey: "rock", Amount: 1},
+	}
+	for _, request := range requests {
+		if _, err := store.CommitResource(context.Background(), request); err == nil {
+			t.Fatalf("resource request %#v succeeded, want error", request)
+		}
+	}
+}
+
+func TestSunnyTownResourceEndpointRequiresServiceSecret(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	body, err := json.Marshal(ResourceEventRequest{
+		EventID:     "forest-crossing-v1:rock-node-001:1:123",
+		AppUserID:   123,
+		Source:      "sunny_town_mining",
+		RoomID:      "sunny-town-main",
+		MapID:       "forest-crossing-v1",
+		NodeID:      "rock-node-001",
+		ResourceKey: "rock",
+		Amount:      1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/internal/sunny-town/resource-events", bytes.NewReader(body))
+	response := httptest.NewRecorder()
+
+	NewHTTPHandler(Store{DB: db}, "test-secret").HandleResourceEvent(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	first, err := store.SavePosition(ctx, PositionRequest{
+		AppUserID: 123,
+		RoomID:    "sunny-town-main",
+		MapID:     "sunny-town-v1",
+		X:         120.5,
+		Y:         140.25,
+		Facing:    "right",
+	})
+	if err != nil {
+		t.Fatalf("first save error = %v", err)
+	}
+	if !first.Found || first.MapID != "sunny-town-v1" || first.X != 120.5 || first.Facing != "right" {
+		t.Fatalf("first position = %#v", first)
+	}
+
+	second, err := store.SavePosition(ctx, PositionRequest{
+		AppUserID: 123,
+		RoomID:    "sunny-town-main",
+		MapID:     "sunny-town-classroom",
+		X:         220,
+		Y:         260,
+		Facing:    "up",
+	})
+	if err != nil {
+		t.Fatalf("second save error = %v", err)
+	}
+	loaded, err := store.LoadPosition(ctx, 123)
+	if err != nil {
+		t.Fatalf("load position error: %v", err)
+	}
+	if !loaded.Found || loaded.AppUserID != second.AppUserID || loaded.RoomID != second.RoomID || loaded.MapID != second.MapID || loaded.X != second.X || loaded.Y != second.Y || loaded.Facing != second.Facing {
+		t.Fatalf("loaded position = %#v, want persisted fields from %#v", loaded, second)
+	}
+}
+
+func TestPlaceSunnyTownMapObjectConsumesStoneBlock(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	if err := hqinventory.IncrementStudentItem(ctx, db, 123, StoneBlockItemKey, 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+
+	placed, err := store.PlaceMapObject(ctx, PlaceMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     4,
+		GridY:     5,
+		ItemKey:   StoneBlockItemKey,
+	})
+	if err != nil {
+		t.Fatalf("place map object: %v", err)
+	}
+	if placed.ID == 0 || placed.ItemKey != StoneBlockItemKey || placed.GridX != 4 || placed.GridY != 5 || placed.RemainingItemAmount != 1 {
+		t.Fatalf("placed = %#v, want stone block at 4,5 with one remaining", placed)
+	}
+	quantity, err := LoadStudentInventoryQuantity(ctx, db, 123, StoneBlockItemKey)
+	if err != nil {
+		t.Fatalf("load quantity: %v", err)
+	}
+	if quantity != 1 {
+		t.Fatalf("quantity = %d, want 1", quantity)
+	}
+}
+
+func TestPlaceSunnyTownMapObjectRollsBackInventoryWhenOccupied(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	if err := hqinventory.IncrementStudentItem(ctx, db, 123, StoneBlockItemKey, 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+	request := PlaceMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     4,
+		GridY:     5,
+		ItemKey:   StoneBlockItemKey,
+	}
+	if _, err := store.PlaceMapObject(ctx, request); err != nil {
+		t.Fatalf("place first object: %v", err)
+	}
+	if _, err := store.PlaceMapObject(ctx, request); !errors.Is(err, ErrMapObjectOccupied) {
+		t.Fatalf("second place error = %v, want ErrMapObjectOccupied", err)
+	}
+	quantity, err := LoadStudentInventoryQuantity(ctx, db, 123, StoneBlockItemKey)
+	if err != nil {
+		t.Fatalf("load quantity: %v", err)
+	}
+	if quantity != 1 {
+		t.Fatalf("quantity = %d, want rollback to keep 1", quantity)
+	}
+}
+
+func TestRemoveSunnyTownMapObjectRefundsStoneBlock(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	if err := hqinventory.IncrementStudentItem(ctx, db, 123, StoneBlockItemKey, 1); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+	if _, err := store.PlaceMapObject(ctx, PlaceMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     7,
+		GridY:     8,
+		ItemKey:   StoneBlockItemKey,
+	}); err != nil {
+		t.Fatalf("place object: %v", err)
+	}
+	removed, err := store.RemoveMapObject(ctx, RemoveMapObjectRequest{
+		AppUserID: 123,
+		RoomID:    testSunnyTownRoomID,
+		MapID:     testSunnyTownMapID,
+		GridX:     7,
+		GridY:     8,
+	})
+	if err != nil {
+		t.Fatalf("remove object: %v", err)
+	}
+	if removed.ItemKey != StoneBlockItemKey || removed.RemainingItemAmount != 1 {
+		t.Fatalf("removed = %#v, want refunded stone block with one remaining", removed)
+	}
+}
+
+func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
+	t.Helper()
+
+	databaseURL := os.Getenv("HQ_TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("HQ_TEST_DATABASE_URL is not set")
+	}
+
+	ctx := context.Background()
+	adminPool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("connect admin pool: %v", err)
+	}
+
+	schema := fmt.Sprintf("sunnytownbridge_test_%d", time.Now().UnixNano())
+	if _, err := adminPool.Exec(ctx, "create schema "+schema); err != nil {
+		adminPool.Close()
+		t.Fatalf("create schema: %v", err)
+	}
+
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		adminPool.Close()
+		t.Fatalf("parse pool config: %v", err)
+	}
+	config.ConnConfig.RuntimeParams["search_path"] = schema
+	db, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		adminPool.Close()
+		t.Fatalf("connect test pool: %v", err)
+	}
+
+	statements := []string{
+		`create table app_user (
+			id bigint primary key,
+			display_name text not null
+		)`,
+		`create table student_wallet (
+			app_user_id bigint primary key references app_user(id) on delete cascade,
+			star_balance integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint student_wallet_star_balance_nonnegative check (star_balance >= 0)
+		)`,
+		`create table student_star_ledger (
+			id bigserial primary key,
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			event_id text not null unique,
+			source text not null,
+			delta integer not null,
+			room_id text null,
+			map_id text null,
+			collectible_id text null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now(),
+			constraint student_star_ledger_delta_nonzero check (delta <> 0)
+		)`,
+		`create table inventory_item_type (
+			id bigserial primary key,
+			key text not null unique,
+			name text not null,
+			description text not null default '',
+			equip_slot text null,
+			visual_key text null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now()
+		)`,
+		`insert into inventory_item_type (key, name, description)
+			values
+				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
+				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
+				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
+		`create table student_inventory_item (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			quantity integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, item_type_id),
+			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table student_inventory_ledger (
+			id bigserial primary key,
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			event_id text not null unique,
+			source text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			delta integer not null,
+			room_id text null,
+			map_id text null,
+			node_id text null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now(),
+			constraint student_inventory_ledger_delta_nonzero check (delta <> 0)
+		)`,
+		`create table student_sunny_town_position (
+			app_user_id bigint primary key references app_user(id) on delete cascade,
+			room_id text not null,
+			map_id text not null,
+			x double precision not null,
+			y double precision not null,
+			facing text not null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint student_sunny_town_position_facing_check check (facing in ('up', 'down', 'left', 'right'))
+		)`,
+		`create table sunny_town_map_object (
+			id bigserial primary key,
+			room_id text not null,
+			map_id text not null,
+			grid_x integer not null,
+			grid_y integer not null,
+			item_key text not null references inventory_item_type(key) on delete restrict,
+			placed_by_app_user_id bigint not null references app_user(id) on delete cascade,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint sunny_town_map_object_location_key unique (room_id, map_id, grid_x, grid_y)
+		)`,
+		`insert into app_user (id, display_name) values (123, 'Student')`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(ctx, statement); err != nil {
+			db.Close()
+			_, _ = adminPool.Exec(ctx, "drop schema "+schema+" cascade")
+			adminPool.Close()
+			t.Fatalf("setup statement failed: %v", err)
+		}
+	}
+
+	return db, func() {
+		db.Close()
+		_, _ = adminPool.Exec(ctx, "drop schema "+schema+" cascade")
+		adminPool.Close()
+	}
+}
