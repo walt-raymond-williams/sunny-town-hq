@@ -37,6 +37,16 @@ Current architecture decision:
 - Workstations, such as a future Cookie Shop stove, should be the recipe interaction point. Chests remain storage anchors.
 - Cookie production does not require ingredients yet. Cookie Keeper can produce as long as he is working in the shop.
 
+Next task for a fresh agent:
+
+- Start with `internal/hq/inventory/crafting.go`.
+- Refactor the current hard-coded student crafting implementation into a shared recipe catalog/execution foundation.
+- Keep `/api/student/crafting/...` behavior compatible; the current `stone_block` recipe must still consume rocks from `student_inventory_item` and output a stone block to `student_inventory_item`.
+- Do not add Cookie Shop input storage tables yet.
+- Do not add a cookie recipe yet unless the recipe catalog refactor naturally needs a fixture example; if added, it must not be wired into NPC production in this slice.
+- Do not change `internal/hq/sunnytownbridge.Store.CommitNPCJobProduction` to consume ingredients yet.
+- Verify with `go test ./...`; frontend build should not be needed unless API response shapes change, which this slice should avoid.
+
 ## Slice: Logical Output Chest Capacity
 
 Status: `Implemented`
@@ -89,6 +99,14 @@ Acceptance criteria for this next slice:
 - Recipe definitions can be reused by non-student execution code without depending on a player `app_user_id`.
 - The code shape makes the later Cookie Shop path explicit: consume ingredients from HQ-owned shop input storage and produce cookies into HQ-owned shop output stock.
 - No NPC production behavior changes yet unless the shared executor and storage endpoints are ready.
+
+Suggested implementation shape:
+
+- Keep a recipe definition type that is independent of storage ownership: key, output item key, output quantity, and ingredient item keys/quantities.
+- Add a small executor/helper that receives storage operations for consuming ingredients and producing output.
+- Implement the first storage operations against existing student inventory functions (`ConsumeStudentItem`, `IncrementStudentItem`).
+- Keep recipe metadata loading usable for the current player crafting UI.
+- Add or update tests around `CraftStudentRecipe` and recipe lookup so the behavior is protected before later shop storage is introduced.
 
 ## Slice: Authored Cookie Shop Area
 

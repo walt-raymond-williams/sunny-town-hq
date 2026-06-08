@@ -39,6 +39,7 @@ Current implemented baseline:
 - Players can inspect the nearby output chest with `F`; the read-only panel loads existing `cookie-keeper-shop` stock/capacity from `GET /api/student/shop/stock`.
 - Existing player crafting already lives in HQ inventory/crafting; the next Cookie Shop production work should generalize that recipe execution path rather than adding Cookie Keeper-only recipe logic.
 - Cookie Shop storage planning now lives in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`; it tracks logical output chest capacity, authored shop area, physical chest fixtures, shared recipe execution, and later input ingredients.
+- Fresh continuation should start in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md` under "Immediate Next Slice: Shared Recipe Execution Foundation"; that section is the authoritative tracker for the next coding slice.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -525,6 +526,8 @@ Next ND-10 sub-slice:
   - Preserve existing player crafting API behavior and tests.
   - Make recipe execution reusable for different storage endpoints: student inventory now, shop input storage -> shop output stock later.
   - Do not wire Cookie Keeper production directly to a one-off cookie recipe rule.
+  - Do not add Cookie Shop input storage tables, stove/workstation interaction, or NPC ingredient consumption in this slice.
+  - Verify with `go test ./...`; frontend build is only needed if API response shapes change, which should be avoided.
 - After the shared foundation, implement HQ-owned Cookie Shop input storage and recipe/input consumption:
   - Define durable input storage under HQ ownership, attached to `cookie-keeper-shop`/`cookie-shop-input-chest` identity.
   - Add a Cookie Shop workstation fixture, likely a stove/oven, as the future player/NPC recipe interaction point.
