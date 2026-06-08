@@ -26,6 +26,12 @@ type npcTransfer struct {
 
 var allNPCDrives = []npcDrive{npcDriveHunger, npcDriveEnergy, npcDriveSocial, npcDriveWork}
 
+const (
+	npcLocationCurrentMapBonus = 25.0
+	npcLocationOwnerBonus      = 200.0
+	npcLocationRoleBonus       = 75.0
+)
+
 var npcDriveLocationTags = map[npcDrive]map[string]bool{
 	npcDriveHunger: {
 		"food":        true,
@@ -174,7 +180,14 @@ func (room *room) nextNPCDriveGoalLocked(npc *liveNPC, now time.Time, emergencyO
 }
 
 func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive, now time.Time) (npcGoal, stnavigation.Route, bool) {
+	type scoredDriveLocation struct {
+		goal  npcGoal
+		route stnavigation.Route
+		score float64
+	}
+
 	start := stnavigation.Point{X: npc.x, Y: npc.y}
+	candidates := []scoredDriveLocation{}
 	for _, gameMap := range room.driveTargetMaps() {
 		for _, location := range gameMap.Locations {
 			if !locationMatchesDrive(location, drive) {
@@ -191,10 +204,58 @@ func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive, now t
 			if err != nil || len(route.Steps) == 0 {
 				continue
 			}
-			return goal, route, true
+			candidates = append(candidates, scoredDriveLocation{
+				goal:  goal,
+				route: route,
+				score: room.scoreNPCDriveLocation(npc, drive, gameMap.ID, location, route),
+			})
 		}
 	}
-	return npcGoal{}, stnavigation.Route{}, false
+	if len(candidates) == 0 {
+		return npcGoal{}, stnavigation.Route{}, false
+	}
+	sort.SliceStable(candidates, func(i int, j int) bool {
+		left := candidates[i]
+		right := candidates[j]
+		if left.score != right.score {
+			return left.score > right.score
+		}
+		if left.goal.mapID != right.goal.mapID {
+			return left.goal.mapID < right.goal.mapID
+		}
+		return left.goal.location.ID < right.goal.location.ID
+	})
+	return candidates[0].goal, candidates[0].route, true
+}
+
+func (room *room) scoreNPCDriveLocation(npc *liveNPC, drive npcDrive, mapID string, location stmaps.Location, route stnavigation.Route) float64 {
+	score := 100 - npc.driveValue(drive)
+	score -= routePathCost(route)
+	if mapID == room.gameMap.ID {
+		score += npcLocationCurrentMapBonus
+	}
+	if location.OwnerNPCKey != "" && location.OwnerNPCKey == npc.npcKey {
+		score += npcLocationOwnerBonus
+	}
+	if locationRoleMatchesNPC(npc, location) {
+		score += npcLocationRoleBonus
+	}
+	return score
+}
+
+func routePathCost(route stnavigation.Route) float64 {
+	var cost float64
+	for _, step := range route.Steps {
+		if len(step.Path) < 2 {
+			continue
+		}
+		for index := 1; index < len(step.Path); index++ {
+			from := step.Path[index-1]
+			to := step.Path[index]
+			cost += math.Hypot(to.X-from.X, to.Y-from.Y)
+		}
+	}
+	return cost
 }
 
 func (room *room) driveTargetMaps() []gameMap {
@@ -480,6 +541,26 @@ func locationMatchesDrive(location stmaps.Location, drive npcDrive) bool {
 	for _, tag := range location.Tags {
 		if npcDriveLocationTags[drive][strings.ToLower(strings.TrimSpace(tag))] {
 			return true
+		}
+	}
+	return false
+}
+
+func locationRoleMatchesNPC(npc *liveNPC, location stmaps.Location) bool {
+	if npc == nil {
+		return false
+	}
+	tags := map[string]bool{}
+	for _, tag := range location.Tags {
+		tags[strings.ToLower(strings.TrimSpace(tag))] = true
+	}
+	if npc.shop != nil && (tags["shop"] || tags["merchant"] || tags["work"]) {
+		return true
+	}
+	if npc.activity != nil {
+		switch npc.activity.Type {
+		case "schoolwork":
+			return tags["school"] || tags["work"]
 		}
 	}
 	return false

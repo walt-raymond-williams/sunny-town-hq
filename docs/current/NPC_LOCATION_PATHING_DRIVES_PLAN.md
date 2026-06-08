@@ -73,7 +73,7 @@ Implemented notes:
 
 ### Slice ND-2: Location Scoring And Deterministic Target Choice
 
-Status: `Next`
+Status: `Implemented`
 
 Goal: choose the best matching destination when multiple locations can satisfy the same drive.
 
@@ -90,6 +90,14 @@ Implementation notes:
   - failed target cooldown exclusion, preserving existing behavior
 - Keep selection deterministic with stable tie-breakers: score, map ID, location ID.
 - Do not add durable assignments yet unless needed by tests.
+
+Implemented notes:
+
+- `routeToDriveLocationLocked` now collects all reachable matching locations before selecting a destination.
+- Candidate scores combine drive urgency, route path cost, current-map preference, owned-location bonus, and simple role hints for shop/school-style NPCs.
+- Failed target cooldown exclusion still happens before scoring.
+- Ties are deterministic by score, map ID, then location ID.
+- Tests cover closer matching destinations, owned rest destinations, deterministic tie-breaking, and skipping a failed high-score destination.
 
 Acceptance criteria:
 
@@ -108,7 +116,7 @@ Suggested tests:
 
 ### Slice ND-3: Debug/Inspectability For NPC Drives And Goals
 
-Status: `Planned`
+Status: `Next`
 
 Goal: make current NPC behavior visible enough to tune without attaching a debugger.
 
@@ -698,10 +706,9 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-2: location scoring and deterministic target choice.
-2. Slice ND-3: debug/inspectability for NPC drives and goals.
-3. Slice ND-4: idle/wander/public fallback.
-4. Slice ND-5: dynamic collision awareness for pathing.
-5. Slice ND-6: richer authored locations and ownership.
+1. Slice ND-3: debug/inspectability for NPC drives and goals.
+2. Slice ND-4: idle/wander/public fallback.
+3. Slice ND-5: dynamic collision awareness for pathing.
+4. Slice ND-6: richer authored locations and ownership.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.

@@ -143,6 +143,109 @@ func TestLowestSatisfiableDriveIsSelected(t *testing.T) {
 	}
 }
 
+func TestNPCSelectsCloserDriveLocation(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations,
+		stmaps.Location{
+			ID:     "far-snack-stand",
+			Name:   "Far Snack Stand",
+			X:      224,
+			Y:      64,
+			Radius: 16,
+			Tags:   []string{"food"},
+		},
+		stmaps.Location{
+			ID:     "near-snack-stand",
+			Name:   "Near Snack Stand",
+			X:      128,
+			Y:      64,
+			Radius: 16,
+			Tags:   []string{"food"},
+		},
+	)
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 10
+	npc.drives.Social = 95
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveHunger {
+		t.Fatalf("active drive = %q, want hunger", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != "near-snack-stand" {
+		t.Fatalf("goal = %#v, want closer snack stand", npc.goal)
+	}
+}
+
+func TestNPCSelectsOwnedDriveLocation(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations,
+		stmaps.Location{
+			ID:     "guest-bed",
+			Name:   "Guest Bed",
+			X:      128,
+			Y:      64,
+			Radius: 16,
+			Tags:   []string{"bed", "sleep"},
+		},
+		stmaps.Location{
+			ID:          "mayor-bed",
+			Name:        "Mayor Bed",
+			X:           160,
+			Y:           64,
+			Radius:      16,
+			Tags:        []string{"bed", "sleep", "home"},
+			OwnerNPCKey: driveControlledNPCKey,
+		},
+	)
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Energy = 10
+	npc.drives.Social = 95
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveEnergy {
+		t.Fatalf("active drive = %q, want energy", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != "mayor-bed" {
+		t.Fatalf("goal = %#v, want owned mayor bed", npc.goal)
+	}
+}
+
+func TestNPCDriveLocationTieBreaksByMapAndLocationID(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations,
+		stmaps.Location{
+			ID:     "z-snack-stand",
+			Name:   "Z Snack Stand",
+			X:      128,
+			Y:      64,
+			Radius: 16,
+			Tags:   []string{"food"},
+		},
+		stmaps.Location{
+			ID:     "a-snack-stand",
+			Name:   "A Snack Stand",
+			X:      128,
+			Y:      64,
+			Radius: 16,
+			Tags:   []string{"food"},
+		},
+	)
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 10
+	npc.drives.Social = 95
+
+	room.step(0.1, time.Now())
+
+	if npc.goal == nil || npc.goal.location.ID != "a-snack-stand" {
+		t.Fatalf("goal = %#v, want deterministic location ID tie-break", npc.goal)
+	}
+}
+
 func TestNPCFocusWindowPreventsPrematureSwitching(t *testing.T) {
 	gameMap := driveNPCTestMap()
 	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
@@ -259,6 +362,47 @@ func TestFailedTargetCooldownPreventsImmediateRetry(t *testing.T) {
 	room.step(0.1, now.Add(npcFailedTargetCooldown+time.Second))
 	if npc.activeDrive != npcDriveHunger {
 		t.Fatalf("active drive = %q, want hunger after cooldown expires", npc.activeDrive)
+	}
+}
+
+func TestNPCDriveLocationScoringSkipsFailedTarget(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations,
+		stmaps.Location{
+			ID:     "near-snack-stand",
+			Name:   "Near Snack Stand",
+			X:      128,
+			Y:      64,
+			Radius: 16,
+			Tags:   []string{"food"},
+		},
+		stmaps.Location{
+			ID:     "far-snack-stand",
+			Name:   "Far Snack Stand",
+			X:      224,
+			Y:      64,
+			Radius: 16,
+			Tags:   []string{"food"},
+		},
+	)
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 10
+	npc.drives.Social = 95
+	now := time.Now()
+	npc.markTargetFailed(npcGoal{
+		drive:    npcDriveHunger,
+		mapID:    room.gameMap.ID,
+		location: gameMap.Locations[1],
+	}, now)
+
+	room.step(0.1, now)
+
+	if npc.activeDrive != npcDriveHunger {
+		t.Fatalf("active drive = %q, want hunger", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != "far-snack-stand" {
+		t.Fatalf("goal = %#v, want farther snack stand while nearer target cools down", npc.goal)
 	}
 }
 
