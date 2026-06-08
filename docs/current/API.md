@@ -17,6 +17,7 @@ Current route groups:
 - `/api/student/crafting/...`
 - `/api/student/equipment/...`
 - `/api/student/shop/purchase`
+- `/api/student/shop/stock`
 - `/api/student/pet/feed`
 - `/api/student/sunny-town/session`
 - `/api/student/assignments/...`

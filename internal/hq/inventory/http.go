@@ -272,6 +272,28 @@ func (handler HTTPHandler) HandleStudentShopPurchase(w http.ResponseWriter, r *h
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (handler HTTPHandler) HandleStudentShopStock(w http.ResponseWriter, r *http.Request) {
+	_, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	response, err := LoadShopStock(r.Context(), handler.store, r.URL.Query().Get("shop_id"))
+	if err != nil {
+		log.Printf("load student shop stock: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "shop stock could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func EquipmentErrorMessage(err error) string {
 	switch {
 	case errors.Is(err, ErrInvalidEquipmentSlot):

@@ -95,6 +95,14 @@ func TestHTTPHandlerRejectsWrongMethods(t *testing.T) {
 			},
 		},
 		{
+			name:   "shop stock only allows get",
+			method: http.MethodPost,
+			path:   "/api/student/shop/stock?shop_id=cookie-keeper-shop",
+			handle: func(handler HTTPHandler, w http.ResponseWriter, r *http.Request) {
+				handler.HandleStudentShopStock(w, r)
+			},
+		},
+		{
 			name:   "hotbar rejects delete",
 			method: http.MethodDelete,
 			path:   "/api/student/hotbar",

@@ -32,6 +32,7 @@ Current implemented baseline:
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
 - HQ exposes service-authenticated aggregate NPC job progress over those ledger events for later gameplay consumption decisions.
 - Cookie Keeper `shopkeeper_stock` production now increments durable HQ-owned Cookie Keeper shop cookie stock, and player purchases consume that stock.
+- Cookie Keeper has a small durable starter stock seed, and the shop UI shows current stock before purchase.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -48,6 +49,7 @@ Important current code touchpoints:
 - NPC production loop: `internal/sunnytown/server/npc_production.go`, `internal/sunnytown/server/server_workers.go`
 - HQ production ledger/progress API: `internal/hq/sunnytownbridge`, `deploy/postgres/migrations/0008_sunny_town_npc_job_production.sql`
 - HQ shop stock persistence and purchase consumption: `internal/hq/inventory/shop.go`, `deploy/postgres/migrations/0009_shop_stock.sql`
+- Cookie Keeper starter stock seed: `deploy/postgres/migrations/0010_seed_cookie_keeper_shop_stock.sql`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
 
@@ -485,12 +487,14 @@ Implemented notes:
 - Cookie Keeper `shopkeeper_stock` events now atomically record the NPC production ledger and increment Cookie Keeper cookie stock through `internal/hq/inventory`.
 - Player purchases from `cookie-keeper-shop` now require durable shop stock and consume it in the purchase transaction before granting the cookie.
 - Duplicate NPC production events do not double-increment shop stock.
+- Added `GET /api/student/shop/stock` so the shop UI can display and disable buys based on current durable stock.
+- Added a small idempotent Cookie Keeper starter stock seed so fresh databases are not blocked before NPC production warms up.
+- Ongoing stock replenishment remains NPC production-driven; the seed is only a cold-start floor.
 - This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
 - Choose the next gameplay-facing production surface:
-  - expose Cookie Keeper stock to the player/shop UI so out-of-stock is visible before purchase,
   - convert teacher lesson prep into classroom/assignment readiness,
   - or keep accumulating teacher progress while the stable classroom consumer is designed.
 - Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.

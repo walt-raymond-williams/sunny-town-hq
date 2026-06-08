@@ -145,6 +145,38 @@ func TestPurchaseStudentShopItemRequiresStock(t *testing.T) {
 	}
 }
 
+func TestLoadShopStockReturnsCookieStock(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	stock, err := LoadShopStock(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load empty shop stock: %v", err)
+	}
+	if stock.ShopID != CookieKeeperShopID || len(stock.Items) != 1 || stock.Items[0].ItemKey != CookieKey || stock.Items[0].Quantity != 0 {
+		t.Fatalf("empty shop stock = %#v, want cookie quantity 0", stock)
+	}
+
+	if _, _, err := CommitShopStockDelta(ctx, db, ShopStockEventRequest{
+		EventID: "stock-event",
+		Source:  "test",
+		ShopID:  CookieKeeperShopID,
+		ItemKey: CookieKey,
+		Delta:   3,
+	}); err != nil {
+		t.Fatalf("seed shop stock: %v", err)
+	}
+
+	stock, err = LoadShopStock(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load shop stock: %v", err)
+	}
+	if len(stock.Items) != 1 || stock.Items[0].ItemKey != CookieKey || stock.Items[0].Quantity != 3 {
+		t.Fatalf("shop stock = %#v, want cookie quantity 3", stock)
+	}
+}
+
 func TestPurchaseStudentShopItemRejectsInvalidPurchase(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()

@@ -105,6 +105,7 @@ const {
   shopError,
   shopNotice,
   shopOpen,
+  shopStock,
   startSchoolwork,
   submitSchoolworkAnswer,
 } = useSunnyTownNpcInteractions({
@@ -677,6 +678,7 @@ function backToPet() {
         :open="shopOpen"
         :shop-error="shopError"
         :shop-notice="shopNotice"
+        :shop-stock="shopStock"
         :star-balance="starBalance"
         @buy="buyShopItem"
         @close="closeNpcOverlays"

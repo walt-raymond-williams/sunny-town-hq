@@ -45,6 +45,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/student/equipment/equip", inventoryHandlers.HandleEquipStudentItem)
 	apiMux.HandleFunc("/api/student/equipment/unequip", inventoryHandlers.HandleUnequipStudentItem)
 	apiMux.HandleFunc("/api/student/shop/purchase", inventoryHandlers.HandleStudentShopPurchase)
+	apiMux.HandleFunc("/api/student/shop/stock", inventoryHandlers.HandleStudentShopStock)
 	apiMux.HandleFunc("/api/student/pet/feed", petHandlers.HandleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{

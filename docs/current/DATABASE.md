@@ -61,6 +61,7 @@ deploy/postgres/migrations/
   0007_sunny_town_npc_characters.sql
   0008_sunny_town_npc_job_production.sql
   0009_shop_stock.sql
+  0010_seed_cookie_keeper_shop_stock.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.

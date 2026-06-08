@@ -35,6 +35,16 @@ type ShopPurchaseResponse struct {
 	Inventory   StudentResponse `json:"inventory"`
 }
 
+type ShopStockItemResponse struct {
+	ItemKey  string `json:"itemKey"`
+	Quantity int    `json:"quantity"`
+}
+
+type ShopStockResponse struct {
+	ShopID string                  `json:"shopId"`
+	Items  []ShopStockItemResponse `json:"items"`
+}
+
 func EnsureStudentWallet(ctx context.Context, db *pgxpool.Pool, userID int64) (int, error) {
 	var balance int
 	err := db.QueryRow(
@@ -152,6 +162,47 @@ func PurchaseStudentShopItem(ctx context.Context, db *pgxpool.Pool, userID int64
 		StarBalance: starBalance,
 		Inventory:   inventory,
 	}, nil
+}
+
+func LoadShopStock(ctx context.Context, querier Loader, shopID string) (ShopStockResponse, error) {
+	shopID = strings.TrimSpace(shopID)
+	if shopID == "" {
+		return ShopStockResponse{}, errors.New("shop_id is required")
+	}
+	if shopID != CookieKeeperShopID {
+		return ShopStockResponse{}, errors.New("unsupported shop")
+	}
+
+	rows, err := querier.Query(
+		ctx,
+		`
+			select iit.key, coalesce(ssi.quantity, 0) as quantity
+			from inventory_item_type iit
+			left join shop_stock_item ssi on ssi.item_type_id = iit.id
+				and ssi.shop_id = $1
+			where iit.key = $2
+			order by iit.id
+		`,
+		shopID,
+		CookieKey,
+	)
+	if err != nil {
+		return ShopStockResponse{}, err
+	}
+	defer rows.Close()
+
+	response := ShopStockResponse{ShopID: shopID, Items: []ShopStockItemResponse{}}
+	for rows.Next() {
+		var item ShopStockItemResponse
+		if err := rows.Scan(&item.ItemKey, &item.Quantity); err != nil {
+			return ShopStockResponse{}, err
+		}
+		response.Items = append(response.Items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return ShopStockResponse{}, err
+	}
+	return response, nil
 }
 
 func CommitShopStockDelta(ctx context.Context, querier rowQuerier, request ShopStockEventRequest) (bool, int, error) {

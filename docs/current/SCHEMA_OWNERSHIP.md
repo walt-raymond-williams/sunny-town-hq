@@ -90,7 +90,7 @@ Tables, constraints, and indexes:
 - `shop_stock_ledger_delta_nonzero`
 - `shop_stock_ledger_shop_idx`
 
-Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`
+Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`
 
 ### Pet
 

@@ -19,8 +19,17 @@ interface ShopPurchaseResult {
   inventory: StudentInventory
 }
 
+interface ShopStockResult {
+  shopId: string
+  items: Array<{
+    itemKey: string
+    quantity: number
+  }>
+}
+
 interface SunnyTownNpcInteractionOptions {
   loadInventory?: () => Promise<void>
+  loadShopStock?: (shopId: string) => Promise<ShopStockResult>
   loadNextAssignment?: () => Promise<Assignment | null>
   purchaseShopItem?: (purchase: ShopPurchaseRequest) => Promise<ShopPurchaseResult>
   setInventoryItems?: (items: StudentInventory['items']) => void
@@ -36,6 +45,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
   const shopOpen = ref(false)
   const shopError = ref('')
   const shopNotice = ref('')
+  const shopStock = ref<Record<string, number>>({})
   const isPurchasing = ref(false)
   const activeSchoolworkNpc = ref<SunnyTownNpc | null>(null)
   const schoolworkOpen = ref(false)
@@ -71,12 +81,14 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     shopOpen.value = false
     shopError.value = ''
     shopNotice.value = ''
+    shopStock.value = {}
   }
 
   function openSchoolworkMenu(npc: SunnyTownNpc) {
     closeDialogue()
     activeShopNpc.value = null
     shopOpen.value = false
+    shopStock.value = {}
     activeSchoolworkNpc.value = npc
     schoolworkOpen.value = false
     schoolworkAssignment.value = null
@@ -91,6 +103,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     shopOpen.value = false
     shopError.value = ''
     shopNotice.value = ''
+    shopStock.value = {}
     isPurchasing.value = false
     activeSchoolworkNpc.value = null
     schoolworkOpen.value = false
@@ -166,13 +179,21 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
   }
 
   async function openTrade() {
-    if (!activeShopNpc.value?.shop) {
+    const shop = activeShopNpc.value?.shop
+    if (!shop) {
       return
     }
     shopOpen.value = true
     shopError.value = ''
     shopNotice.value = ''
-    await options.loadInventory?.()
+    try {
+      await Promise.all([
+        options.loadInventory?.(),
+        refreshShopStock(shop.id),
+      ])
+    } catch (caught) {
+      shopError.value = errorMessage(caught)
+    }
   }
 
   async function buyShopItem(itemKey: string) {
@@ -194,6 +215,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
         options.starBalance.value = purchase.starBalance
       }
       options.setInventoryItems?.(purchase.inventory.items)
+      await refreshShopStock(shop.id)
       shopNotice.value = 'Purchased.'
     } catch (caught) {
       shopError.value = errorMessage(caught)
@@ -248,6 +270,19 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     return shopApi.purchaseShopItem(purchase)
   }
 
+  async function refreshShopStock(shopId: string): Promise<void> {
+    const stock = await loadShopStock(shopId)
+    shopStock.value = Object.fromEntries(stock.items.map((item) => [item.itemKey, item.quantity]))
+  }
+
+  async function loadShopStock(shopId: string): Promise<ShopStockResult> {
+    if (options.loadShopStock) {
+      return options.loadShopStock(shopId)
+    }
+    const shopApi = await import('../api/shopApi')
+    return shopApi.getShopStock(shopId)
+  }
+
   return {
     activeDialogueLine,
     activeDialogueLineIndex,
@@ -276,6 +311,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     shopError,
     shopNotice,
     shopOpen,
+    shopStock,
     startSchoolwork,
     submitSchoolworkAnswer,
   }
