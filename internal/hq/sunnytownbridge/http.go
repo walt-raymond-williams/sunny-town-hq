@@ -93,6 +93,30 @@ func (handler HTTPHandler) HandleNPCJobProduction(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (handler HTTPHandler) HandleNPCJobProductionProgress(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !handler.authorized(w, r) {
+		return
+	}
+
+	response, err := handler.store.LoadNPCJobProductionProgress(r.Context(), NPCJobProductionProgressRequest{
+		RoomID:     r.URL.Query().Get("room_id"),
+		JobKey:     r.URL.Query().Get("job_key"),
+		NPCKey:     r.URL.Query().Get("npc_key"),
+		LocationID: r.URL.Query().Get("location_id"),
+	})
+	if err != nil {
+		log.Printf("load sunny town npc job production progress: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "npc job production progress could not be loaded"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (handler HTTPHandler) HandleStudentEquipment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

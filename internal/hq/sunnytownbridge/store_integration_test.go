@@ -177,6 +177,96 @@ func TestCommitNPCJobProductionIdempotent(t *testing.T) {
 	}
 }
 
+func TestLoadNPCJobProductionProgressAggregatesLedger(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	ensured, err := store.EnsureNPCCharacters(ctx, EnsureNPCCharactersRequest{
+		RoomID: "sunny-town-main",
+		NPCs: []EnsureNPCCharacterInput{
+			{NPCKey: "cookie-keeper", DisplayName: "Cookie Keeper", AvatarID: "keeper"},
+			{NPCKey: "teacher", DisplayName: "Teacher", AvatarID: "teacher"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ensure npc error = %v", err)
+	}
+	characterIDs := map[string]int64{}
+	for _, npc := range ensured.NPCs {
+		characterIDs[npc.NPCKey] = npc.CharacterID
+	}
+
+	requests := []NPCJobProductionRequest{
+		{
+			EventID:     "sunny-town-main:cookie-keeper:shopkeeper_stock:cookie-keeper-counter:1",
+			CharacterID: characterIDs["cookie-keeper"],
+			RoomID:      "sunny-town-main",
+			MapID:       "sunny-town-house-1",
+			NPCKey:      "cookie-keeper",
+			JobKey:      "shopkeeper_stock",
+			LocationID:  "cookie-keeper-counter",
+			OutputKey:   "shop_stock_progress",
+			Amount:      1,
+		},
+		{
+			EventID:     "sunny-town-main:cookie-keeper:shopkeeper_stock:cookie-keeper-counter:2",
+			CharacterID: characterIDs["cookie-keeper"],
+			RoomID:      "sunny-town-main",
+			MapID:       "sunny-town-house-1",
+			NPCKey:      "cookie-keeper",
+			JobKey:      "shopkeeper_stock",
+			LocationID:  "cookie-keeper-counter",
+			OutputKey:   "shop_stock_progress",
+			Amount:      2,
+		},
+		{
+			EventID:     "sunny-town-main:teacher:teacher_lesson_prep:teacher-desk-work:1",
+			CharacterID: characterIDs["teacher"],
+			RoomID:      "sunny-town-main",
+			MapID:       "sunny-town-classroom",
+			NPCKey:      "teacher",
+			JobKey:      "teacher_lesson_prep",
+			LocationID:  "teacher-desk-work",
+			OutputKey:   "lesson_prep_progress",
+			Amount:      1,
+		},
+	}
+	for _, request := range requests {
+		if _, err := store.CommitNPCJobProduction(ctx, request); err != nil {
+			t.Fatalf("commit production %#v: %v", request.EventID, err)
+		}
+	}
+
+	progress, err := store.LoadNPCJobProductionProgress(ctx, NPCJobProductionProgressRequest{RoomID: "sunny-town-main"})
+	if err != nil {
+		t.Fatalf("load production progress: %v", err)
+	}
+	if len(progress.Progress) != 2 {
+		t.Fatalf("progress entries = %#v, want two grouped entries", progress.Progress)
+	}
+	shop := progress.Progress[0]
+	if shop.NPCKey != "cookie-keeper" || shop.JobKey != "shopkeeper_stock" || shop.TotalAmount != 3 || shop.EventCount != 2 {
+		t.Fatalf("shop progress = %#v, want cookie keeper total 3 from two events", shop)
+	}
+	lesson := progress.Progress[1]
+	if lesson.NPCKey != "teacher" || lesson.JobKey != "teacher_lesson_prep" || lesson.TotalAmount != 1 || lesson.EventCount != 1 {
+		t.Fatalf("lesson progress = %#v, want teacher total 1 from one event", lesson)
+	}
+
+	filtered, err := store.LoadNPCJobProductionProgress(ctx, NPCJobProductionProgressRequest{
+		RoomID: "sunny-town-main",
+		JobKey: "shopkeeper_stock",
+	})
+	if err != nil {
+		t.Fatalf("load filtered production progress: %v", err)
+	}
+	if len(filtered.Progress) != 1 || filtered.Progress[0].NPCKey != "cookie-keeper" {
+		t.Fatalf("filtered progress = %#v, want only cookie keeper shop progress", filtered.Progress)
+	}
+}
+
 func TestCommitSunnyTownResourceRejectsInvalidRequest(t *testing.T) {
 	db, cleanup := testBridgeDB(t)
 	defer cleanup()
@@ -235,6 +325,17 @@ func TestSunnyTownResourceEndpointRequiresServiceSecret(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	NewHTTPHandler(Store{DB: db}, "test-secret").HandleResourceEvent(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestSunnyTownNPCJobProductionProgressEndpointRequiresServiceSecret(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/internal/sunny-town/npc-job-production/progress?room_id=sunny-town-main", nil)
+	response := httptest.NewRecorder()
+
+	NewHTTPHandler(Store{}, "test-secret").HandleNPCJobProductionProgress(response, request)
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)

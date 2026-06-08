@@ -47,6 +47,7 @@ Current Sunny Town internal groups:
 - `/api/internal/sunny-town/reward-events`
 - `/api/internal/sunny-town/resource-events`
 - `/api/internal/sunny-town/npc-job-production`
+- `/api/internal/sunny-town/npc-job-production/progress`
 - `/api/internal/sunny-town/student-equipment`
 - `/api/internal/sunny-town/inventory-quantity`
 - `/api/internal/sunny-town/player-position`

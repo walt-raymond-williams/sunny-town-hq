@@ -70,6 +70,31 @@ type NPCJobProductionResponse struct {
 	Duplicate bool `json:"duplicate"`
 }
 
+type NPCJobProductionProgressRequest struct {
+	RoomID     string
+	JobKey     string
+	NPCKey     string
+	LocationID string
+}
+
+type NPCJobProductionProgressEntry struct {
+	CharacterID int64     `json:"character_id"`
+	RoomID      string    `json:"room_id"`
+	MapID       string    `json:"map_id"`
+	NPCKey      string    `json:"npc_key"`
+	JobKey      string    `json:"job_key"`
+	LocationID  string    `json:"location_id"`
+	OutputKey   string    `json:"output_key"`
+	TotalAmount int       `json:"total_amount"`
+	EventCount  int       `json:"event_count"`
+	FirstAt     time.Time `json:"first_at"`
+	LastAt      time.Time `json:"last_at"`
+}
+
+type NPCJobProductionProgressResponse struct {
+	Progress []NPCJobProductionProgressEntry `json:"progress"`
+}
+
 type PositionRequest struct {
 	AppUserID int64   `json:"app_user_id"`
 	RoomID    string  `json:"room_id"`

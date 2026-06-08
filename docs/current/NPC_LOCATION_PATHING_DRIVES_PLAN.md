@@ -30,6 +30,7 @@ Current implemented baseline:
 - Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
 - ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
+- HQ exposes service-authenticated aggregate NPC job progress over those ledger events for later gameplay consumption decisions.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -44,7 +45,7 @@ Important current code touchpoints:
 - NPC snapshots: `internal/sunnytown/server/world_snapshots.go`
 - NPC drive debug endpoint: `internal/sunnytown/server/npc_debug.go`, `GET /debug/npcs` with `X-HQ-Service-Secret`
 - NPC production loop: `internal/sunnytown/server/npc_production.go`, `internal/sunnytown/server/server_workers.go`
-- HQ production ledger/API: `internal/hq/sunnytownbridge`, `deploy/postgres/migrations/0008_sunny_town_npc_job_production.sql`
+- HQ production ledger/progress API: `internal/hq/sunnytownbridge`, `deploy/postgres/migrations/0008_sunny_town_npc_job_production.sql`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
 
@@ -463,11 +464,13 @@ Suggested tests:
 - NPC away from a valid work location does not produce. (`Implemented`)
 - No-player/coarse elapsed time is capped or otherwise bounded for production. (`Implemented`)
 - HQ internal API/service client tests cover durable production writes, if a new endpoint is added. (`Implemented for HQ store/API/client path`)
+- HQ aggregate read tests cover durable production progress grouped by NPC/workplace/output. (`Implemented`)
 
 Implemented notes:
 
 - Added HQ-owned `sunny_town_npc_job_production_ledger` in migration `0008_sunny_town_npc_job_production.sql`.
 - Added service-authenticated `POST /api/internal/sunny-town/npc-job-production`.
+- Added service-authenticated `GET /api/internal/sunny-town/npc-job-production/progress` with aggregate progress grouped by room, map, NPC, job, location, output, and character.
 - Added Sunny Town `hqclient.CommitNPCJobProduction` and an NPC job production worker.
 - Added runtime production eligibility in Sunny Town:
   - NPC must have a supported job definition from existing map-authored role data (`shop` -> `shopkeeper_stock`, `schoolwork` activity -> `teacher_lesson_prep`).
@@ -476,15 +479,15 @@ Implemented notes:
   - Enough eligible elapsed time must accumulate before one idempotent event is queued.
 - Added bounded no-player catch-up production using the existing pause/catch-up path, without exact offline path simulation.
 - Added `/debug/npcs` production fields: eligibility, job key, output key, progress seconds, last event, and last production time.
-- This slice intentionally records production/progress events only. It does not add NPC inventory, shop stock consumption, assignments, or raw drive/position persistence.
+- This slice intentionally records and aggregates production/progress events only. It does not add NPC inventory, shop stock consumption, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
-- Decide how `sunny_town_npc_job_production_ledger` should be consumed:
-  - aggregate workplace progress into a read model,
-  - convert progress into shop/workplace stock,
-  - or generalize inventory ownership to character-capable inventory.
-- Prefer a read/aggregate endpoint before changing shop economics, unless the next gameplay requirement is explicit shop stock depletion.
+- Decide how aggregate NPC job progress should become gameplay:
+  - convert shopkeeper progress into shop/workplace stock,
+  - convert teacher lesson prep into classroom/assignment readiness,
+  - or keep accumulating progress while another stable gameplay consumer is designed.
+- Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.
 
 ## Feature Intent
 

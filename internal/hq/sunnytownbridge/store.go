@@ -4,11 +4,17 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"strings"
 
 	hqcharacters "hq/internal/hq/characters"
 
 	"github.com/jackc/pgx/v5"
+)
+
+var (
+	supportedNPCJobKeys    = []string{"shopkeeper_stock", "teacher_lesson_prep"}
+	supportedNPCOutputKeys = []string{"shop_stock_progress", "lesson_prep_progress"}
 )
 
 func (store Store) CommitReward(ctx context.Context, request RewardEventRequest) (RewardEventResponse, error) {
@@ -88,10 +94,10 @@ func (store Store) CommitNPCJobProduction(ctx context.Context, request NPCJobPro
 	if request.EventID == "" || request.CharacterID < 1 || request.RoomID == "" || request.MapID == "" || request.NPCKey == "" || request.JobKey == "" || request.LocationID == "" || request.OutputKey == "" {
 		return NPCJobProductionResponse{}, errors.New("npc job production event is missing required fields")
 	}
-	if request.JobKey != "shopkeeper_stock" && request.JobKey != "teacher_lesson_prep" {
+	if !slices.Contains(supportedNPCJobKeys, request.JobKey) {
 		return NPCJobProductionResponse{}, errors.New("unsupported npc job")
 	}
-	if request.OutputKey != "shop_stock_progress" && request.OutputKey != "lesson_prep_progress" {
+	if !slices.Contains(supportedNPCOutputKeys, request.OutputKey) {
 		return NPCJobProductionResponse{}, errors.New("unsupported npc job output")
 	}
 	if request.Amount < 1 {
@@ -114,6 +120,77 @@ func (store Store) CommitNPCJobProduction(ctx context.Context, request NPCJobPro
 	}
 
 	return NPCJobProductionResponse{Accepted: true, Duplicate: !inserted}, nil
+}
+
+func (store Store) LoadNPCJobProductionProgress(ctx context.Context, request NPCJobProductionProgressRequest) (NPCJobProductionProgressResponse, error) {
+	request.RoomID = strings.TrimSpace(request.RoomID)
+	request.JobKey = strings.TrimSpace(request.JobKey)
+	request.NPCKey = strings.TrimSpace(request.NPCKey)
+	request.LocationID = strings.TrimSpace(request.LocationID)
+	if request.RoomID == "" {
+		return NPCJobProductionProgressResponse{}, errors.New("room_id is required")
+	}
+	if request.JobKey != "" && !slices.Contains(supportedNPCJobKeys, request.JobKey) {
+		return NPCJobProductionProgressResponse{}, errors.New("unsupported npc job")
+	}
+
+	rows, err := store.DB.Query(
+		ctx,
+		`
+			select
+				character_id,
+				room_id,
+				map_id,
+				npc_key,
+				job_key,
+				location_id,
+				output_key,
+				sum(amount)::integer as total_amount,
+				count(*)::integer as event_count,
+				min(created_at) as first_at,
+				max(created_at) as last_at
+			from sunny_town_npc_job_production_ledger
+			where room_id = $1
+				and ($2 = '' or job_key = $2)
+				and ($3 = '' or npc_key = $3)
+				and ($4 = '' or location_id = $4)
+			group by character_id, room_id, map_id, npc_key, job_key, location_id, output_key
+			order by job_key, npc_key, location_id, output_key, character_id
+		`,
+		request.RoomID,
+		request.JobKey,
+		request.NPCKey,
+		request.LocationID,
+	)
+	if err != nil {
+		return NPCJobProductionProgressResponse{}, err
+	}
+	defer rows.Close()
+
+	response := NPCJobProductionProgressResponse{Progress: []NPCJobProductionProgressEntry{}}
+	for rows.Next() {
+		var entry NPCJobProductionProgressEntry
+		if err := rows.Scan(
+			&entry.CharacterID,
+			&entry.RoomID,
+			&entry.MapID,
+			&entry.NPCKey,
+			&entry.JobKey,
+			&entry.LocationID,
+			&entry.OutputKey,
+			&entry.TotalAmount,
+			&entry.EventCount,
+			&entry.FirstAt,
+			&entry.LastAt,
+		); err != nil {
+			return NPCJobProductionProgressResponse{}, err
+		}
+		response.Progress = append(response.Progress, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return NPCJobProductionProgressResponse{}, err
+	}
+	return response, nil
 }
 
 func (store Store) LoadPosition(ctx context.Context, appUserID int64) (PositionResponse, error) {

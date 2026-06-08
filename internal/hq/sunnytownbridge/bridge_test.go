@@ -99,3 +99,16 @@ func TestCommitNPCJobProductionRejectsInvalidRequestBeforeDB(t *testing.T) {
 		t.Fatalf("error = %v, want unsupported npc job", err)
 	}
 }
+
+func TestLoadNPCJobProductionProgressRejectsInvalidRequestBeforeDB(t *testing.T) {
+	_, err := (Store{}).LoadNPCJobProductionProgress(context.Background(), NPCJobProductionProgressRequest{
+		RoomID: "sunny-town-main",
+		JobKey: "other",
+	})
+	if err == nil {
+		t.Fatal("expected invalid npc job production progress request error")
+	}
+	if !strings.Contains(err.Error(), "unsupported npc job") {
+		t.Fatalf("error = %v, want unsupported npc job", err)
+	}
+}
