@@ -8,6 +8,7 @@ import (
 	"time"
 
 	stconfig "hq/internal/sunnytown/config"
+	stmaps "hq/internal/sunnytown/maps"
 )
 
 func TestNPCDebugSnapshotIncludesActiveGoal(t *testing.T) {
@@ -33,6 +34,35 @@ func TestNPCDebugSnapshotIncludesActiveGoal(t *testing.T) {
 	}
 	if debugNPC.FocusUntil == "" || debugNPC.ReevaluateAt == "" || debugNPC.GoalStartedAt == "" {
 		t.Fatalf("goal timestamps focus=%q reevaluate=%q started=%q, want populated", debugNPC.FocusUntil, debugNPC.ReevaluateAt, debugNPC.GoalStartedAt)
+	}
+}
+
+func TestNPCDebugSnapshotIncludesAnchorsAndGoalAnchorKind(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:          "owned-bed",
+		Name:        "Owned Bed",
+		X:           224,
+		Y:           64,
+		Radius:      16,
+		Tags:        []string{"bed", "sleep"},
+		OwnerNPCKey: driveControlledNPCKey,
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Energy = 10
+	npc.drives.Social = 95
+	now := time.Date(2026, 6, 8, 12, 0, 0, 0, time.UTC)
+
+	room.step(0.1, now)
+
+	snapshot := room.world.npcDebugSnapshot(now)
+	debugNPC := requireDebugNPC(t, snapshot, defaultMapID, driveControlledNPCKey)
+	if debugNPC.Anchors.Home == nil || debugNPC.Anchors.Home.LocationID != "owned-bed" || debugNPC.Anchors.Home.Source != npcAnchorSourceOwner {
+		t.Fatalf("debug home anchor = %#v, want owned bed anchor", debugNPC.Anchors.Home)
+	}
+	if debugNPC.Goal == nil || debugNPC.Goal.AnchorKind != npcAnchorHome {
+		t.Fatalf("debug goal = %#v, want home anchor kind", debugNPC.Goal)
 	}
 }
 

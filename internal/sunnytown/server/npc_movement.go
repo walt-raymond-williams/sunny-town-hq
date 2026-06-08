@@ -30,6 +30,7 @@ const (
 	npcLocationCurrentMapBonus = 25.0
 	npcLocationOwnerBonus      = 200.0
 	npcLocationRoleBonus       = 75.0
+	npcLocationAnchorBonus     = 500.0
 )
 
 var npcDriveLocationTags = map[npcDrive]map[string]bool{
@@ -207,6 +208,9 @@ func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive, now t
 				continue
 			}
 			goal := npcGoal{drive: drive, mapID: gameMap.ID, location: location}
+			if anchor := npc.anchors.matchingAnchor(drive, gameMap.ID, location.ID); anchor != nil {
+				goal.anchorKind = anchor.Kind
+			}
 			if npc.targetFailedRecently(goal, now) {
 				continue
 			}
@@ -256,6 +260,9 @@ func (room *room) scoreNPCDriveLocation(npc *liveNPC, drive npcDrive, mapID stri
 	}
 	if locationRoleMatchesNPC(npc, location) {
 		score += npcLocationRoleBonus
+	}
+	if npc.anchors.matchingAnchor(drive, mapID, location.ID) != nil {
+		score += npcLocationAnchorBonus
 	}
 	return score
 }

@@ -30,6 +30,7 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, resourceEvents, created)
 	}
 	created.defaultRoom = created.rooms[defaultMapID]
+	created.configureNPCRoutineAnchors()
 	return created
 }
 

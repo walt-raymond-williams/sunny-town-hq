@@ -28,6 +28,7 @@ type npcDebugNPC struct {
 	Facing        string                 `json:"facing"`
 	Moving        bool                   `json:"moving"`
 	Drives        npcDebugDrives         `json:"drives"`
+	Anchors       npcDebugAnchors        `json:"anchors"`
 	ActiveDrive   string                 `json:"activeDrive,omitempty"`
 	Goal          *npcDebugGoal          `json:"goal,omitempty"`
 	Route         *npcDebugRoute         `json:"route,omitempty"`
@@ -47,11 +48,28 @@ type npcDebugDrives struct {
 	Work   float64 `json:"work"`
 }
 
+type npcDebugAnchors struct {
+	Home   *npcDebugAnchor `json:"home,omitempty"`
+	Work   *npcDebugAnchor `json:"work,omitempty"`
+	Food   *npcDebugAnchor `json:"food,omitempty"`
+	Social *npcDebugAnchor `json:"social,omitempty"`
+}
+
+type npcDebugAnchor struct {
+	Kind         string   `json:"kind"`
+	MapID        string   `json:"mapId"`
+	LocationID   string   `json:"locationId"`
+	LocationName string   `json:"locationName,omitempty"`
+	Source       string   `json:"source"`
+	Tags         []string `json:"tags,omitempty"`
+}
+
 type npcDebugGoal struct {
 	Drive        string   `json:"drive"`
 	MapID        string   `json:"mapId"`
 	LocationID   string   `json:"locationId"`
 	LocationName string   `json:"locationName,omitempty"`
+	AnchorKind   string   `json:"anchorKind,omitempty"`
 	Tags         []string `json:"tags,omitempty"`
 }
 
@@ -142,6 +160,7 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		Facing:        publicSnapshot.Facing,
 		Moving:        publicSnapshot.Moving,
 		Drives:        npcDebugDrives(liveNPC.drives),
+		Anchors:       debugAnchors(liveNPC.anchors),
 		ActiveDrive:   string(liveNPC.activeDrive),
 		FocusUntil:    formatDebugTime(liveNPC.focusUntil),
 		ReevaluateAt:  formatDebugTime(liveNPC.reevaluateAt),
@@ -157,6 +176,7 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 			MapID:        liveNPC.goal.mapID,
 			LocationID:   liveNPC.goal.location.ID,
 			LocationName: liveNPC.goal.location.Name,
+			AnchorKind:   liveNPC.goal.anchorKind,
 			Tags:         append([]string(nil), liveNPC.goal.location.Tags...),
 		}
 	}
@@ -174,6 +194,29 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		}
 	}
 	return debugNPC
+}
+
+func debugAnchors(anchors npcRoutineAnchors) npcDebugAnchors {
+	return npcDebugAnchors{
+		Home:   debugAnchor(anchors.Home),
+		Work:   debugAnchor(anchors.Work),
+		Food:   debugAnchor(anchors.Food),
+		Social: debugAnchor(anchors.Social),
+	}
+}
+
+func debugAnchor(anchor *npcLocationAnchor) *npcDebugAnchor {
+	if anchor == nil {
+		return nil
+	}
+	return &npcDebugAnchor{
+		Kind:         anchor.Kind,
+		MapID:        anchor.MapID,
+		LocationID:   anchor.LocationID,
+		LocationName: anchor.LocationName,
+		Source:       anchor.Source,
+		Tags:         append([]string(nil), anchor.Tags...),
+	}
 }
 
 func (npc *liveNPC) failedTargetsDebugSnapshot() []npcDebugFailedTarget {

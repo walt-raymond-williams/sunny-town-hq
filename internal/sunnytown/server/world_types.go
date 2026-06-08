@@ -94,6 +94,7 @@ type liveNPC struct {
 
 	drives      npcDrives
 	activeDrive npcDrive
+	anchors     npcRoutineAnchors
 	goal        *npcGoal
 	route       *npcRoute
 	routeStep   int
@@ -138,9 +139,26 @@ type npcDrives struct {
 }
 
 type npcGoal struct {
-	drive    npcDrive
-	mapID    string
-	location stmaps.Location
+	drive      npcDrive
+	mapID      string
+	location   stmaps.Location
+	anchorKind string
+}
+
+type npcRoutineAnchors struct {
+	Home   *npcLocationAnchor
+	Work   *npcLocationAnchor
+	Food   *npcLocationAnchor
+	Social *npcLocationAnchor
+}
+
+type npcLocationAnchor struct {
+	Kind         string
+	MapID        string
+	LocationID   string
+	LocationName string
+	Source       string
+	Tags         []string
 }
 
 type npcCharacter struct {

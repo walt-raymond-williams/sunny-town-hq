@@ -24,6 +24,7 @@ Current implemented baseline:
 - NPCs choose the lowest below-threshold satisfiable drive, skip unrouteable drives, and route to matching locations.
 - NPC goals have focus windows, periodic reevaluation, emergency interruption, arrival grace, failure counts, and failed-target cooldowns.
 - NPCs can choose a low-priority `idle` fallback route to public/idle/wander/social locations when no urgent drive goal is available.
+- NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -279,7 +280,7 @@ Rationale:
 
 ### Slice ND-7: Runtime Routine Anchors
 
-Status: `Next`
+Status: `Implemented`
 
 Goal: make home/work/social/food anchors explicit runtime state derived from authored locations, without adding HQ persistence yet.
 
@@ -295,6 +296,17 @@ Implementation notes:
 - Keep anchors runtime-only for this slice; do not add HQ schema or durable assignment tables yet.
 - Use anchors as scoring bonuses or direct preferred candidates, rather than replacing generic drive fallback entirely.
 - Extend `GET /debug/npcs` so each NPC shows its resolved anchors and whether the current goal came from an anchor-preferred target.
+
+Implemented notes:
+
+- Added runtime-only `npcRoutineAnchors` on live NPC state.
+- Anchors are resolved after all rooms/maps are initialized, so cross-map authored locations can be used.
+- Home, work, food, and social anchors are derived from authored map locations.
+- Resolution prefers `ownerNpcKey`, then role matches for work, then generic tagged locations with deterministic tie-breakers.
+- Anchor matches add a strong scoring bonus but do not replace generic candidate routing.
+- If an anchor target is missing or unreachable, route selection can still fall back to another scored matching location.
+- Goals selected from an anchor carry `anchorKind`, and `/debug/npcs` now includes each NPC's resolved anchors plus the active goal's anchor kind.
+- Tests cover checked-in map anchors, owner preference, role work anchors, anchor-preferred goal marking, blocked-anchor fallback, and debug anchor output.
 
 Acceptance criteria:
 
@@ -315,7 +327,7 @@ Suggested tests:
 
 ### Slice ND-8: Simple Schedule And Time-Band Drive Pressure
 
-Status: `Planned`
+Status: `Next`
 
 Goal: make routines visibly change over time without building a full calendar or GOAP planner.
 
@@ -847,9 +859,8 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-7: runtime routine anchors from authored locations.
-2. Slice ND-8: simple schedule and time-band drive pressure.
-3. Slice ND-9: persistence and no-player coarse catch-up.
-4. Later: resource/job production loops and social relationship effects.
+1. Slice ND-8: simple schedule and time-band drive pressure.
+2. Slice ND-9: persistence and no-player coarse catch-up.
+3. Later: resource/job production loops and social relationship effects.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.
