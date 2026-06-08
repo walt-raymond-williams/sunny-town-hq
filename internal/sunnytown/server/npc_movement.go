@@ -213,8 +213,9 @@ func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive, now t
 			if gameMap.ID == room.gameMap.ID && pointWithinLocation(start, location) {
 				return npcGoal{}, stnavigation.Route{}, false
 			}
-			route, err := room.world.navigation.PlanRouteToLocation(room.gameMap.ID, start, gameMap.ID, location.ID)
+			route, err := room.world.navigation.PlanRouteToLocationWithBlockedRects(room.gameMap.ID, start, gameMap.ID, location.ID, room.npcRouteBlockedRectsLocked())
 			if err != nil || len(route.Steps) == 0 {
+				npc.markTargetFailed(goal, now)
 				continue
 			}
 			candidates = append(candidates, scoredDriveLocation{
@@ -272,6 +273,27 @@ func routePathCost(route stnavigation.Route) float64 {
 		}
 	}
 	return cost
+}
+
+func (room *room) npcRouteBlockedRectsLocked() map[string][]stnavigation.Rect {
+	blockedRects := room.activeCollisionRectsLocked()
+	if len(blockedRects) == 0 {
+		return nil
+	}
+	return map[string][]stnavigation.Rect{
+		room.gameMap.ID: blockedRects,
+	}
+}
+
+func (room *room) activeCollisionRectsLocked() []stnavigation.Rect {
+	blockedRects := []stnavigation.Rect{}
+	for _, object := range room.worldObjects {
+		if !object.active || !object.collision {
+			continue
+		}
+		blockedRects = append(blockedRects, object.rect())
+	}
+	return blockedRects
 }
 
 func (room *room) driveTargetMaps() []gameMap {

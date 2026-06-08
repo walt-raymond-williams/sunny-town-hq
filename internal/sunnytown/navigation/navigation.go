@@ -115,14 +115,22 @@ func (graph *Graph) Location(mapID string, locationID string) (stmaps.Location, 
 }
 
 func (graph *Graph) PlanRouteToLocation(startMapID string, start Point, targetMapID string, locationID string) (Route, error) {
+	return graph.PlanRouteToLocationWithBlockedRects(startMapID, start, targetMapID, locationID, nil)
+}
+
+func (graph *Graph) PlanRouteToLocationWithBlockedRects(startMapID string, start Point, targetMapID string, locationID string, blockedRects map[string][]Rect) (Route, error) {
 	location, ok := graph.Location(targetMapID, locationID)
 	if !ok {
 		return Route{}, fmt.Errorf("unknown location %q on map %q", locationID, targetMapID)
 	}
-	return graph.PlanRoute(startMapID, start, targetMapID, Point{X: location.X, Y: location.Y})
+	return graph.PlanRouteWithBlockedRects(startMapID, start, targetMapID, Point{X: location.X, Y: location.Y}, blockedRects)
 }
 
 func (graph *Graph) PlanRoute(startMapID string, start Point, targetMapID string, target Point) (Route, error) {
+	return graph.PlanRouteWithBlockedRects(startMapID, start, targetMapID, target, nil)
+}
+
+func (graph *Graph) PlanRouteWithBlockedRects(startMapID string, start Point, targetMapID string, target Point, blockedRects map[string][]Rect) (Route, error) {
 	if graph == nil {
 		return Route{}, errors.New("navigation graph is nil")
 	}
@@ -133,7 +141,7 @@ func (graph *Graph) PlanRoute(startMapID string, start Point, targetMapID string
 		return Route{}, fmt.Errorf("unknown target map %q", targetMapID)
 	}
 	if startMapID == targetMapID {
-		path, err := graph.PlanPath(startMapID, start, target)
+		path, err := graph.PlanPathWithBlockedRects(startMapID, start, target, blockedRects[startMapID])
 		if err != nil {
 			return Route{}, err
 		}
@@ -153,7 +161,7 @@ func (graph *Graph) PlanRoute(startMapID string, start Point, targetMapID string
 	steps := make([]RouteStep, 0, len(portalPath)+1)
 	currentFrom := start
 	for _, edge := range portalPath {
-		path, err := graph.PlanPath(edge.SourceMapID, currentFrom, edge.SourceCenter)
+		path, err := graph.PlanPathWithBlockedRects(edge.SourceMapID, currentFrom, edge.SourceCenter, blockedRects[edge.SourceMapID])
 		if err != nil {
 			return Route{}, err
 		}
@@ -168,7 +176,7 @@ func (graph *Graph) PlanRoute(startMapID string, start Point, targetMapID string
 		})
 		currentFrom = edge.TargetPoint
 	}
-	path, err := graph.PlanPath(targetMapID, currentFrom, target)
+	path, err := graph.PlanPathWithBlockedRects(targetMapID, currentFrom, target, blockedRects[targetMapID])
 	if err != nil {
 		return Route{}, err
 	}
@@ -182,6 +190,10 @@ func (graph *Graph) PlanRoute(startMapID string, start Point, targetMapID string
 }
 
 func (graph *Graph) PlanPath(mapID string, start Point, target Point) ([]Point, error) {
+	return graph.PlanPathWithBlockedRects(mapID, start, target, nil)
+}
+
+func (graph *Graph) PlanPathWithBlockedRects(mapID string, start Point, target Point, blockedRects []Rect) ([]Point, error) {
 	if graph == nil {
 		return nil, errors.New("navigation graph is nil")
 	}
@@ -189,7 +201,7 @@ func (graph *Graph) PlanPath(mapID string, start Point, target Point) ([]Point, 
 	if !ok {
 		return nil, fmt.Errorf("unknown map %q", mapID)
 	}
-	grid, err := newNavGrid(gameMap, defaultAgentSize)
+	grid, err := newNavGrid(gameMap, defaultAgentSize, blockedRects)
 	if err != nil {
 		return nil, err
 	}
@@ -231,25 +243,27 @@ type gridCell struct {
 }
 
 type navGrid struct {
-	gameMap   stmaps.GameMap
-	cellSize  float64
-	agentSize float64
-	width     int
-	height    int
-	blocked   [][]bool
+	gameMap           stmaps.GameMap
+	extraBlockedRects []Rect
+	cellSize          float64
+	agentSize         float64
+	width             int
+	height            int
+	blocked           [][]bool
 }
 
-func newNavGrid(gameMap stmaps.GameMap, agentSize float64) (navGrid, error) {
+func newNavGrid(gameMap stmaps.GameMap, agentSize float64, extraBlockedRects []Rect) (navGrid, error) {
 	if gameMap.TileSize < 1 || gameMap.Width < 1 || gameMap.Height < 1 {
 		return navGrid{}, fmt.Errorf("map %q has invalid navigation dimensions", gameMap.ID)
 	}
 	grid := navGrid{
-		gameMap:   gameMap,
-		cellSize:  float64(gameMap.TileSize),
-		agentSize: agentSize,
-		width:     gameMap.Width,
-		height:    gameMap.Height,
-		blocked:   make([][]bool, gameMap.Height),
+		gameMap:           gameMap,
+		extraBlockedRects: append([]Rect(nil), extraBlockedRects...),
+		cellSize:          float64(gameMap.TileSize),
+		agentSize:         agentSize,
+		width:             gameMap.Width,
+		height:            gameMap.Height,
+		blocked:           make([][]bool, gameMap.Height),
 	}
 	for y := 0; y < gameMap.Height; y++ {
 		grid.blocked[y] = make([]bool, gameMap.Width)
@@ -400,6 +414,11 @@ func (grid navGrid) cellBlocked(cell gridCell) bool {
 		Height: grid.agentSize,
 	}
 	for _, blocked := range grid.gameMap.BlockedRects {
+		if rectsOverlap(agentRect, blocked) {
+			return true
+		}
+	}
+	for _, blocked := range grid.extraBlockedRects {
 		if rectsOverlap(agentRect, blocked) {
 			return true
 		}

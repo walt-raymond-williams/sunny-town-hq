@@ -16,6 +16,7 @@ Current implemented baseline:
 - Maps support optional `locations` with IDs, coordinates, radius, tags, owner hints, and capacity.
 - Sunny Town builds a server-side portal-aware navigation graph from loaded maps.
 - Same-map route segments use A* over a coarse map grid with static blocked rectangles.
+- NPC route planning can include active collision `worldObjects` from the NPC's current room as dynamic blocked rectangles.
 - Live NPC runtime state is initialized per room and broadcast through server-authoritative NPC snapshots.
 - NPCs have in-memory `hunger`, `energy`, `social`, and `work` drives.
 - Drives deplete over time and replenish at matching tagged locations.
@@ -186,7 +187,7 @@ Suggested tests:
 
 ### Slice ND-5: Dynamic Collision Awareness For Pathing
 
-Status: `Next`
+Status: `Implemented`
 
 Goal: account for blocking world objects when planning NPC routes.
 
@@ -196,6 +197,15 @@ Implementation notes:
 - Extend route planning or grid construction to include active collision `worldObjects` where practical.
 - Keep dynamic replanning bounded; do not replan every tick for every NPC.
 - Start with placed/natural collision objects that are already represented server-side.
+
+Implemented notes:
+
+- Navigation now supports per-plan extra blocked rectangles through `PlanRouteToLocationWithBlockedRects`, `PlanRouteWithBlockedRects`, and `PlanPathWithBlockedRects`.
+- Sunny Town NPC goal planning passes active collision `worldObjects` from the NPC's current room into route planning.
+- Inactive or non-collision world objects are not included, so broken/removed objects can open routes on later planning attempts.
+- Route-planning failures mark the target failed and use the existing failed-target cooldown, preventing repeated per-tick route attempts against the same blocked target.
+- Tests cover extra blocked rect path detours/failures, active dynamic blockers preventing NPC routes, cooldown suppression of repeated blocked retries, and inactive blockers allowing later routes.
+- Scope note: this slice handles current-room dynamic blockers. Cross-map route steps still only include dynamic blockers from the room where the NPC is currently planning.
 
 Acceptance criteria:
 
@@ -211,7 +221,7 @@ Suggested tests:
 
 ### Slice ND-6: Richer Authored Locations And Ownership
 
-Status: `Planned`
+Status: `Next`
 
 Goal: give NPCs more meaningful destinations for home/work/food/social routines.
 
@@ -576,10 +586,11 @@ Implemented notes:
 - Sunny Town owns live NPC position, route following, drive selection, and snapshots.
 - Route planning supports static map blocked rectangles and portal edges between maps.
 - NPCs can transfer between rooms through portal route steps.
+- NPC route planning can include active current-room collision world objects as dynamic blockers.
 
 Remaining notes:
 
-- Pathing does not yet account for dynamic collision world objects during planning.
+- Cross-map route planning does not yet include dynamic blockers from destination/intermediate rooms during the initial plan.
 - Replanning is still intentionally simple and bounded by goal selection/failure behavior.
 
 Acceptance criteria:
@@ -725,7 +736,6 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-5: dynamic collision awareness for pathing.
-2. Slice ND-6: richer authored locations and ownership.
+1. Slice ND-6: richer authored locations and ownership.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.

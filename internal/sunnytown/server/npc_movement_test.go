@@ -401,6 +401,116 @@ func TestUnavailableUrgentDriveFallsBackToIdle(t *testing.T) {
 	}
 }
 
+func TestNPCDriveRouteAvoidsActiveCollisionWorldObject(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 10
+	now := time.Now()
+	room.worldObjects["placed:blocking-wall"] = &worldObject{
+		id:        "blocking-wall",
+		source:    worldObjectSourcePlaced,
+		mapID:     room.gameMap.ID,
+		x:         96,
+		y:         0,
+		width:     32,
+		height:    256,
+		active:    true,
+		collision: true,
+	}
+
+	if goal, route, ok := room.routeToDriveLocationLocked(npc, npcDriveHunger, now); ok {
+		t.Fatalf("goal = %#v route = %#v, want active collision object to block route", goal, route)
+	}
+	if npc.failureCount != 1 {
+		t.Fatalf("failure count = %d, want one failed target after blocked route", npc.failureCount)
+	}
+}
+
+func TestNPCDriveRouteSkipsFailedDynamicBlockTargetUntilCooldown(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	now := time.Now()
+	room.worldObjects["placed:blocking-wall"] = &worldObject{
+		id:        "blocking-wall",
+		source:    worldObjectSourcePlaced,
+		mapID:     room.gameMap.ID,
+		x:         96,
+		y:         0,
+		width:     32,
+		height:    256,
+		active:    true,
+		collision: true,
+	}
+
+	if _, _, ok := room.routeToDriveLocationLocked(npc, npcDriveHunger, now); ok {
+		t.Fatal("expected active collision object to block route")
+	}
+	if _, _, ok := room.routeToDriveLocationLocked(npc, npcDriveHunger, now.Add(time.Second)); ok {
+		t.Fatal("expected failed target cooldown to skip blocked route retry")
+	}
+	if npc.failureCount != 1 {
+		t.Fatalf("failure count = %d, want cooldown to prevent repeated failure marks", npc.failureCount)
+	}
+}
+
+func TestNPCDriveRouteIgnoresInactiveCollisionWorldObjectAfterCooldown(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	now := time.Now()
+	blocker := &worldObject{
+		id:        "blocking-wall",
+		source:    worldObjectSourcePlaced,
+		mapID:     room.gameMap.ID,
+		x:         96,
+		y:         0,
+		width:     32,
+		height:    256,
+		active:    true,
+		collision: true,
+	}
+	room.worldObjects["placed:blocking-wall"] = blocker
+
+	if _, _, ok := room.routeToDriveLocationLocked(npc, npcDriveHunger, now); ok {
+		t.Fatal("expected active collision object to block route")
+	}
+	blocker.active = false
+
+	goal, route, ok := room.routeToDriveLocationLocked(npc, npcDriveHunger, now.Add(npcFailedTargetCooldown+time.Second))
+	if !ok {
+		t.Fatal("expected inactive collision object to stop blocking route after cooldown")
+	}
+	if goal.location.ID != "snack-stand" || len(route.Steps) != 1 {
+		t.Fatalf("goal = %#v route = %#v, want snack stand same-map route", goal, route)
+	}
+}
+
 func TestUrgentDriveInterruptsIdleFallbackAfterReevaluation(t *testing.T) {
 	gameMap := driveNPCTestMap()
 	gameMap.Locations = append(gameMap.Locations, stmaps.Location{

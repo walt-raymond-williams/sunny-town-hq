@@ -181,6 +181,36 @@ func TestPlanPathRoutesAroundBlockedRect(t *testing.T) {
 	}
 }
 
+func TestPlanPathRoutesAroundExtraBlockedRect(t *testing.T) {
+	graph := mustTestGraph(t, map[string]stmaps.GameMap{
+		"one": {
+			ID:       "one",
+			TileSize: 32,
+			Width:    5,
+			Height:   5,
+		},
+	})
+
+	path, err := graph.PlanPathWithBlockedRects("one", Point{X: 48, Y: 80}, Point{X: 112, Y: 80}, []Rect{{
+		X:      64,
+		Y:      64,
+		Width:  32,
+		Height: 32,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(path) <= 2 {
+		t.Fatalf("path = %#v, want detour waypoints", path)
+	}
+	for _, point := range path {
+		if point == (Point{X: 80, Y: 80}) {
+			t.Fatalf("path = %#v, should avoid extra blocked cell center", path)
+		}
+	}
+}
+
 func TestPlanPathFailsWhenTargetUnreachable(t *testing.T) {
 	graph := mustTestGraph(t, map[string]stmaps.GameMap{
 		"one": {
@@ -199,6 +229,26 @@ func TestPlanPathFailsWhenTargetUnreachable(t *testing.T) {
 
 	if _, err := graph.PlanPath("one", Point{X: 16, Y: 16}, Point{X: 80, Y: 16}); err == nil {
 		t.Fatal("expected unreachable target to fail")
+	}
+}
+
+func TestPlanPathFailsWhenExtraBlockedRectCutsOffTarget(t *testing.T) {
+	graph := mustTestGraph(t, map[string]stmaps.GameMap{
+		"one": {
+			ID:       "one",
+			TileSize: 32,
+			Width:    3,
+			Height:   3,
+		},
+	})
+
+	if _, err := graph.PlanPathWithBlockedRects("one", Point{X: 16, Y: 16}, Point{X: 80, Y: 16}, []Rect{{
+		X:      32,
+		Y:      0,
+		Width:  32,
+		Height: 96,
+	}}); err == nil {
+		t.Fatal("expected extra blocked rect to make target unreachable")
 	}
 }
 
