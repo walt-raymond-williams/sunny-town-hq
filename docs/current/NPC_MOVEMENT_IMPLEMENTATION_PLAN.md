@@ -2,7 +2,7 @@
 
 This document is the handoff-ready implementation plan for adding Sunny Town NPC movement using location tags, portal-aware pathing, and a basic drive system.
 
-Status: `Slice 5 implemented; Slice 6 is next`
+Status: `Slice 6 implemented; Slice 7 is next`
 
 Related docs:
 
@@ -315,6 +315,19 @@ Suggested tests:
 ## Slice 6: Basic Drive Runtime
 
 Goal: NPC movement is selected by simple depleting drives.
+
+Status: `Implemented`
+
+Implemented notes:
+
+- Live NPCs now have in-memory hunger, energy, social, and work drives.
+- Drives default near full and deplete every room tick.
+- Drive tags map to authored locations: hunger to food/meal/kitchen, energy to bed/sleep/rest/home, social to social/public/gathering, and work to work.
+- Matching tagged locations replenish the matching drive faster than depletion while an NPC is inside the location radius.
+- Idle NPCs choose the lowest below-threshold satisfiable drive and route to a same-map matching location.
+- Unrouteable or unavailable urgent drives are skipped so another satisfiable drive can be selected.
+- Mayor Sunny is seeded with a low social drive on the town map so the visible movement smoke test remains active through the drive controller.
+- Tests cover drive depletion, matching and non-matching replenishment, lowest-drive selection, movement, blocked paths, arrival, and moved snapshots.
 
 Implementation notes:
 

@@ -12,24 +12,27 @@ import (
 )
 
 const (
-	defaultRoomID           = "sunny-town-main"
-	DefaultMapID            = "sunny-town-v1"
-	defaultMapID            = DefaultMapID
-	equipmentSlotGear       = "gear"
-	equipmentSlotAccessory  = "accessory"
-	equipmentSlotTool       = "tool"
-	playerSize              = 28.0
-	playerSpeed             = 150.0
-	npcSpeed                = 80.0
-	starPickupRadius        = 30.0
-	resourceCommitQueueSize = 32
-	resourceHitsRequired    = 3
-	resourceToolCooldown    = 500 * time.Millisecond
-	simulationInterval      = 50 * time.Millisecond
-	snapshotInterval        = 100 * time.Millisecond
-	movingStateTTL          = 250 * time.Millisecond
-	starRespawnDelay        = 10 * time.Second
-	npcScriptedPause        = 2 * time.Second
+	defaultRoomID              = "sunny-town-main"
+	DefaultMapID               = "sunny-town-v1"
+	defaultMapID               = DefaultMapID
+	equipmentSlotGear          = "gear"
+	equipmentSlotAccessory     = "accessory"
+	equipmentSlotTool          = "tool"
+	playerSize                 = 28.0
+	playerSpeed                = 150.0
+	npcSpeed                   = 80.0
+	npcDriveDefault            = 95.0
+	npcDriveThreshold          = 50.0
+	npcDriveDepletePerSecond   = 0.1
+	npcDriveReplenishPerSecond = 8.0
+	starPickupRadius           = 30.0
+	resourceCommitQueueSize    = 32
+	resourceHitsRequired       = 3
+	resourceToolCooldown       = 500 * time.Millisecond
+	simulationInterval         = 50 * time.Millisecond
+	snapshotInterval           = 100 * time.Millisecond
+	movingStateTTL             = 250 * time.Millisecond
+	starRespawnDelay           = 10 * time.Second
 )
 
 const (
@@ -53,7 +56,7 @@ func (room *room) step(dt float64, now time.Time) {
 		rewards = append(rewards, room.collectStarsLocked(player, now)...)
 	}
 
-	room.stepLiveNPCsLocked(dt, now)
+	room.stepLiveNPCsLocked(dt)
 	room.respawnCollectiblesLocked(now)
 	room.respawnResourceNodesLocked(now)
 	room.mu.Unlock()

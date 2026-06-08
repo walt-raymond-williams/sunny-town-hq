@@ -7,9 +7,9 @@ import (
 	stmaps "hq/internal/sunnytown/maps"
 )
 
-func TestScriptedNPCMovesAlongPath(t *testing.T) {
-	room := testRoom(scriptedNPCTestMap())
-	npc := room.liveNPCs[scriptedSmokeNPCKey]
+func TestDrivenNPCMovesAlongPath(t *testing.T) {
+	room := testRoom(driveNPCTestMap())
+	npc := room.liveNPCs[driveControlledNPCKey]
 	startX := npc.x
 	startY := npc.y
 
@@ -26,9 +26,9 @@ func TestScriptedNPCMovesAlongPath(t *testing.T) {
 	}
 }
 
-func TestScriptedNPCReachesTargetAndStops(t *testing.T) {
-	room := testRoom(scriptedNPCTestMap())
-	npc := room.liveNPCs[scriptedSmokeNPCKey]
+func TestDrivenNPCReachesTargetAndStops(t *testing.T) {
+	room := testRoom(driveNPCTestMap())
+	npc := room.liveNPCs[driveControlledNPCKey]
 
 	now := time.Now()
 	room.step(2, now)
@@ -44,11 +44,11 @@ func TestScriptedNPCReachesTargetAndStops(t *testing.T) {
 	}
 }
 
-func TestScriptedNPCDoesNotMoveWhenNoPathExists(t *testing.T) {
-	gameMap := scriptedNPCTestMap()
+func TestDrivenNPCDoesNotMoveWhenNoPathExists(t *testing.T) {
+	gameMap := driveNPCTestMap()
 	gameMap.BlockedRects = []rect{{X: 96, Y: 0, Width: 32, Height: 256}}
 	room := testRoom(gameMap)
-	npc := room.liveNPCs[scriptedSmokeNPCKey]
+	npc := room.liveNPCs[driveControlledNPCKey]
 
 	room.step(0.5, time.Now())
 
@@ -60,8 +60,8 @@ func TestScriptedNPCDoesNotMoveWhenNoPathExists(t *testing.T) {
 	}
 }
 
-func TestSnapshotIncludesMovedScriptedNPCPosition(t *testing.T) {
-	room := testRoom(scriptedNPCTestMap())
+func TestSnapshotIncludesMovedDrivenNPCPosition(t *testing.T) {
+	room := testRoom(driveNPCTestMap())
 	room.step(0.5, time.Now())
 
 	room.mu.Lock()
@@ -71,21 +71,88 @@ func TestSnapshotIncludesMovedScriptedNPCPosition(t *testing.T) {
 	if len(snapshots) != 1 {
 		t.Fatalf("snapshot count = %d, want 1", len(snapshots))
 	}
-	if snapshots[0].ID != scriptedSmokeNPCKey || snapshots[0].X <= 64 || snapshots[0].Moving != true {
+	if snapshots[0].ID != driveControlledNPCKey || snapshots[0].X <= 64 || snapshots[0].Moving != true {
 		t.Fatalf("npc snapshot = %#v, want moved mayor snapshot", snapshots[0])
 	}
 }
 
-func scriptedNPCTestMap() gameMap {
+func TestNPCDrivesDeplete(t *testing.T) {
+	room := testRoom(testMap())
+	npc := room.liveNPCs["guide"]
+	start := npc.drives.Hunger
+
+	room.step(1, time.Now())
+
+	if npc.drives.Hunger >= start {
+		t.Fatalf("hunger = %v, want less than %v", npc.drives.Hunger, start)
+	}
+}
+
+func TestMatchingLocationReplenishesDrive(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.NPCs[0].X = 160
+	gameMap.NPCs[0].Y = 64
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Social = 40
+
+	room.step(1, time.Now())
+
+	if npc.drives.Social <= 40 {
+		t.Fatalf("social = %v, want replenished above 40", npc.drives.Social)
+	}
+}
+
+func TestNonMatchingLocationDoesNotReplenishDrive(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.NPCs[0].X = 160
+	gameMap.NPCs[0].Y = 64
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 40
+
+	room.step(1, time.Now())
+
+	if npc.drives.Hunger >= 40 {
+		t.Fatalf("hunger = %v, want depletion without social-location replenishment", npc.drives.Hunger)
+	}
+}
+
+func TestLowestSatisfiableDriveIsSelected(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 40
+	npc.drives.Social = 30
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveSocial {
+		t.Fatalf("active drive = %q, want social", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != driveStartLocationID {
+		t.Fatalf("goal = %#v, want town square social location", npc.goal)
+	}
+}
+
+func driveNPCTestMap() gameMap {
 	return gameMap{
 		ID:       defaultMapID,
-		Name:     "Scripted NPC Test Town",
+		Name:     "Drive NPC Test Town",
 		TileSize: 32,
 		Width:    8,
 		Height:   8,
 		Spawns:   []point{{X: 64, Y: 96}},
 		NPCs: []npc{{
-			ID:        scriptedSmokeNPCKey,
+			ID:        driveControlledNPCKey,
 			Name:      "Mayor Sunny",
 			X:         64,
 			Y:         64,
@@ -94,7 +161,7 @@ func scriptedNPCTestMap() gameMap {
 			Dialogue:  []string{"Hello."},
 		}},
 		Locations: []stmaps.Location{{
-			ID:     scriptedSmokeLocationID,
+			ID:     driveStartLocationID,
 			Name:   "Town Square Center",
 			X:      160,
 			Y:      64,

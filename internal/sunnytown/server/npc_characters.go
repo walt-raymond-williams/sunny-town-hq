@@ -42,6 +42,7 @@ func initialLiveNPCs(gameMap gameMap) map[string]*liveNPC {
 			dialogue:    append([]string(nil), mapNPC.Dialogue...),
 			shop:        cloneShop(mapNPC.Shop),
 			activity:    cloneActivity(mapNPC.Activity),
+			drives:      npcDrives{}.withDefaults(),
 		}
 	}
 	return liveNPCs

@@ -92,13 +92,12 @@ type liveNPC struct {
 	shop        *shop
 	activity    *activity
 
-	scriptedTargets   []scriptedNPCTarget
-	scriptedTarget    int
-	scriptedWaitUntil time.Time
-	route             *npcRoute
-	routeStep         int
-	pathIndex         int
-	routeBlocked      bool
+	drives      npcDrives
+	activeDrive npcDrive
+	goal        *npcGoal
+	route       *npcRoute
+	routeStep   int
+	pathIndex   int
 }
 
 type world struct {
@@ -113,11 +112,26 @@ type world struct {
 	transferMu     sync.Mutex
 }
 
-type scriptedNPCTarget struct {
-	mapID      string
-	locationID string
-	x          float64
-	y          float64
+type npcDrive string
+
+const (
+	npcDriveHunger npcDrive = "hunger"
+	npcDriveEnergy npcDrive = "energy"
+	npcDriveSocial npcDrive = "social"
+	npcDriveWork   npcDrive = "work"
+)
+
+type npcDrives struct {
+	Hunger float64
+	Energy float64
+	Social float64
+	Work   float64
+}
+
+type npcGoal struct {
+	drive    npcDrive
+	mapID    string
+	location stmaps.Location
 }
 
 type npcCharacter struct {

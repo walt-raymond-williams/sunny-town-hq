@@ -53,7 +53,7 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resource
 		resourceEvents: resourceEvents,
 		world:          world,
 	}
-	room.configureScriptedNPCsLocked()
+	room.configureNPCBehaviorLocked()
 	return room
 }
 
