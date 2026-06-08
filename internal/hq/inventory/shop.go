@@ -15,6 +15,7 @@ var ErrInsufficientStars = errors.New("not enough stars")
 var ErrInsufficientShopStock = errors.New("not enough shop stock")
 
 const CookieKeeperShopID = "cookie-keeper-shop"
+const CookieKeeperCookieStockCapacity = 64
 
 type ShopStockEventRequest struct {
 	EventID string
@@ -38,6 +39,7 @@ type ShopPurchaseResponse struct {
 type ShopStockItemResponse struct {
 	ItemKey  string `json:"itemKey"`
 	Quantity int    `json:"quantity"`
+	Capacity int    `json:"capacity"`
 }
 
 type ShopStockResponse struct {
@@ -197,6 +199,7 @@ func LoadShopStock(ctx context.Context, querier Loader, shopID string) (ShopStoc
 		if err := rows.Scan(&item.ItemKey, &item.Quantity); err != nil {
 			return ShopStockResponse{}, err
 		}
+		item.Capacity = stockCapacityForItem(shopID, item.ItemKey)
 		response.Items = append(response.Items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -210,12 +213,13 @@ func CommitShopStockDelta(ctx context.Context, querier rowQuerier, request ShopS
 	request.Source = strings.TrimSpace(request.Source)
 	request.ShopID = strings.TrimSpace(request.ShopID)
 	request.ItemKey = strings.TrimSpace(request.ItemKey)
-	if request.EventID == "" || request.Source == "" || request.ShopID == "" || request.ItemKey == "" || request.Delta == 0 {
+	if request.EventID == "" || request.Source == "" || request.ShopID == "" || request.ItemKey == "" || request.Delta < 1 {
 		return false, 0, errors.New("shop stock event is missing required fields")
 	}
 	if request.ShopID != CookieKeeperShopID || request.ItemKey != CookieKey {
 		return false, 0, errors.New("unsupported shop stock item")
 	}
+	capacity := stockCapacityForItem(request.ShopID, request.ItemKey)
 
 	var inserted bool
 	var quantity int
@@ -242,9 +246,9 @@ func CommitShopStockDelta(ctx context.Context, querier rowQuerier, request ShopS
 			),
 			updated_stock as (
 				insert into shop_stock_item (shop_id, item_type_id, quantity)
-				select shop_id, item_type_id, delta from inserted
+				select shop_id, item_type_id, least($6::integer, delta) from inserted
 				on conflict (shop_id, item_type_id) do update
-				set quantity = shop_stock_item.quantity + excluded.quantity,
+				set quantity = least($6::integer, shop_stock_item.quantity + excluded.quantity),
 					updated_at = now()
 				returning quantity
 			)
@@ -265,8 +269,16 @@ func CommitShopStockDelta(ctx context.Context, querier rowQuerier, request ShopS
 		request.ShopID,
 		request.ItemKey,
 		request.Delta,
+		capacity,
 	).Scan(&inserted, &quantity)
 	return inserted, quantity, err
+}
+
+func stockCapacityForItem(shopID string, itemKey string) int {
+	if shopID == CookieKeeperShopID && itemKey == CookieKey {
+		return CookieKeeperCookieStockCapacity
+	}
+	return 0
 }
 
 func ConsumeShopStockItem(ctx context.Context, querier Querier, shopID string, itemKey string, quantity int) (bool, error) {

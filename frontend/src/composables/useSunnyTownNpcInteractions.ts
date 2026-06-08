@@ -24,6 +24,7 @@ interface ShopStockResult {
   items: Array<{
     itemKey: string
     quantity: number
+    capacity: number
   }>
 }
 
@@ -46,6 +47,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
   const shopError = ref('')
   const shopNotice = ref('')
   const shopStock = ref<Record<string, number>>({})
+  const shopStockCapacity = ref<Record<string, number>>({})
   const isPurchasing = ref(false)
   const activeSchoolworkNpc = ref<SunnyTownNpc | null>(null)
   const schoolworkOpen = ref(false)
@@ -82,6 +84,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     shopError.value = ''
     shopNotice.value = ''
     shopStock.value = {}
+    shopStockCapacity.value = {}
   }
 
   function openSchoolworkMenu(npc: SunnyTownNpc) {
@@ -89,6 +92,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     activeShopNpc.value = null
     shopOpen.value = false
     shopStock.value = {}
+    shopStockCapacity.value = {}
     activeSchoolworkNpc.value = npc
     schoolworkOpen.value = false
     schoolworkAssignment.value = null
@@ -104,6 +108,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     shopError.value = ''
     shopNotice.value = ''
     shopStock.value = {}
+    shopStockCapacity.value = {}
     isPurchasing.value = false
     activeSchoolworkNpc.value = null
     schoolworkOpen.value = false
@@ -273,6 +278,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
   async function refreshShopStock(shopId: string): Promise<void> {
     const stock = await loadShopStock(shopId)
     shopStock.value = Object.fromEntries(stock.items.map((item) => [item.itemKey, item.quantity]))
+    shopStockCapacity.value = Object.fromEntries(stock.items.map((item) => [item.itemKey, item.capacity]))
   }
 
   async function loadShopStock(shopId: string): Promise<ShopStockResult> {
@@ -312,6 +318,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     shopNotice,
     shopOpen,
     shopStock,
+    shopStockCapacity,
     startSchoolwork,
     submitSchoolworkAnswer,
   }

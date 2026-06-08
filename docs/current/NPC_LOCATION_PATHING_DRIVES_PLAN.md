@@ -32,7 +32,7 @@ Current implemented baseline:
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
 - HQ exposes service-authenticated aggregate NPC job progress over those ledger events for later gameplay consumption decisions.
 - Cookie Keeper `shopkeeper_stock` production now increments durable HQ-owned Cookie Keeper shop cookie stock, and player purchases consume that stock.
-- Cookie Keeper has a small durable starter stock seed, and the shop UI shows current stock before purchase.
+- Cookie Keeper has a small durable starter stock seed, a logical output storage capacity of `64`, and the shop UI shows `current / 64` stock before purchase.
 - Cookie Shop storage planning now lives in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`; it tracks logical output chest capacity, authored shop area, physical chest fixture, and later input ingredients.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
@@ -494,18 +494,19 @@ Implemented notes:
 - Ongoing stock replenishment remains NPC production-driven; the seed is only a cold-start floor.
 - Decided that Cookie Shop output stock should be modeled as shop-owned storage, not NPC-held inventory.
 - Decided that the current `shop_stock_item` table is the logical Cookie Shop output chest until a physical chest fixture is added.
+- Added a Cookie Keeper cookie stock capacity of `64` in HQ-owned inventory rules.
+- NPC-produced Cookie Keeper cookie stock now clamps at capacity while production and stock ledger events remain idempotent.
+- `GET /api/student/shop/stock` now includes item capacity, and the shop UI displays `current / 64`.
 - Deferred input ingredients: Cookie Keeper can make cookies while working in the shop for now.
 - This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
-- Implement Cookie Shop logical output chest capacity from `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`:
-  - start with capacity `64` for `cookie-keeper-shop` cookies,
-  - clamp NPC-produced stock at capacity in HQ,
-  - keep recording idempotent production events even if storage is full,
-  - show stock as `current / 64` in the shop UI.
+- Choose the next branch from `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`:
+  - default recommendation: implement the authored `Cookie Shop` area next so the storage owner is visible/inspectable in world before adding a physical chest,
+  - alternate branch: make teacher lesson prep consume or expose durable progress if broader NPC job gameplay is the priority.
 - Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.
-- After Cookie Shop storage capacity is stable, choose between physical Cookie Shop/chest authoring or teacher lesson prep readiness.
+- After the authored Cookie Shop area is stable, implement the physical output chest fixture that points at the same HQ-owned stock state.
 
 ## Feature Intent
 

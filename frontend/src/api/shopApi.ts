@@ -15,6 +15,7 @@ interface ShopStockResponse {
 interface ShopStockItemResponse {
   itemKey?: string
   quantity?: number
+  capacity?: number
 }
 
 export interface ShopPurchase {
@@ -36,6 +37,7 @@ export interface ShopStock {
 export interface ShopStockItem {
   itemKey: string
   quantity: number
+  capacity: number
 }
 
 export async function purchaseShopItem(purchase: ShopPurchase): Promise<PurchasedShopItem> {
@@ -60,6 +62,7 @@ export async function getShopStock(shopId: string): Promise<ShopStock> {
     items: (response.items || []).map((item) => ({
       itemKey: item.itemKey || '',
       quantity: item.quantity ?? 0,
+      capacity: item.capacity ?? 0,
     })),
   }
 }

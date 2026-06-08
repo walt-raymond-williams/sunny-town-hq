@@ -101,8 +101,8 @@ describe('useSunnyTownNpcInteractions', () => {
     const starBalance = ref(5)
     const loadInventory = vi.fn()
     const loadShopStock = vi.fn()
-      .mockResolvedValueOnce({ shopId: 'shop-1', items: [{ itemKey: 'star_cap', quantity: 2 }] })
-      .mockResolvedValueOnce({ shopId: 'shop-1', items: [{ itemKey: 'star_cap', quantity: 1 }] })
+      .mockResolvedValueOnce({ shopId: 'shop-1', items: [{ itemKey: 'star_cap', quantity: 2, capacity: 64 }] })
+      .mockResolvedValueOnce({ shopId: 'shop-1', items: [{ itemKey: 'star_cap', quantity: 1, capacity: 64 }] })
     const setInventoryItems = vi.fn()
     const purchaseShopItem = vi.fn().mockResolvedValue({
       starBalance: 2,
@@ -126,6 +126,7 @@ describe('useSunnyTownNpcInteractions', () => {
     expect(loadInventory).toHaveBeenCalledOnce()
     expect(loadShopStock).toHaveBeenCalledWith('shop-1')
     expect(interactions.shopStock.value).toEqual({ star_cap: 1 })
+    expect(interactions.shopStockCapacity.value).toEqual({ star_cap: 64 })
     expect(purchaseShopItem).toHaveBeenCalledWith({
       shopId: 'shop-1',
       itemKey: 'star_cap',

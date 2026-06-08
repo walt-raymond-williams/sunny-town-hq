@@ -14,8 +14,10 @@ Current implemented baseline:
 - HQ records those events in `sunny_town_npc_job_production_ledger`.
 - HQ stores saleable Cookie Keeper cookies in durable `shop_stock_item` / `shop_stock_ledger` tables.
 - Player purchases from `cookie-keeper-shop` consume durable stock before granting a cookie.
-- `GET /api/student/shop/stock` exposes current stock to the frontend.
-- The Sunny Town shop UI displays current stock and disables Buy when stock is `0`.
+- `cookie-keeper-shop` cookie output storage has a logical capacity of `64`.
+- NPC production stock increments are clamped at capacity in HQ, while idempotent production and stock ledger events are still recorded.
+- `GET /api/student/shop/stock` exposes current stock and capacity to the frontend.
+- The Sunny Town shop UI displays current stock as `current / 64` and disables Buy when stock is `0`.
 - `0010_seed_cookie_keeper_shop_stock.sql` gives fresh databases a small starter stock of 5 cookies.
 
 Current architecture decision:
@@ -25,7 +27,9 @@ Current architecture decision:
 - Treat current `shop_stock_item` as the logical Cookie Shop output chest until physical chest fixtures are implemented.
 - Cookie production does not require ingredients yet. Cookie Keeper can produce as long as he is working in the shop.
 
-## Immediate Next Slice: Logical Output Chest Capacity
+## Slice: Logical Output Chest Capacity
+
+Status: `Implemented`
 
 Goal: give Cookie Shop output storage a maximum capacity so NPC production cannot grow stock forever.
 
@@ -39,10 +43,10 @@ Recommended initial rule:
 
 Implementation notes:
 
-- Prefer an HQ-owned capacity rule/table or narrow helper in `internal/hq/inventory`.
-- Avoid putting storage capacity rules in Sunny Town movement or NPC controller code.
-- Keep service-authenticated production writes flowing through HQ.
-- Suggested first schema can be simple and shop/item scoped. A future upgrade system can raise the capacity.
+- Implemented as an HQ-owned narrow rule in `internal/hq/inventory`.
+- Storage capacity rules are not in Sunny Town movement or NPC controller code.
+- Service-authenticated production writes still flow through HQ.
+- The first schema stays simple and shop/item scoped. A future upgrade system can raise the capacity without changing Sunny Town movement state.
 
 Suggested tests:
 
@@ -50,6 +54,17 @@ Suggested tests:
 - Duplicate production event does not increase stock.
 - Purchase after full stock decrements below capacity.
 - UI shows `current / 64` and disables Buy at `0`.
+
+## Immediate Next Slice: Choose Physical Shop Ownership Or Lesson Prep
+
+Recommended next decision:
+
+- If the priority is making Cookie Shop visible and inspectable in-world, implement the authored Cookie Shop area next.
+- If the priority is broader NPC job gameplay, make teacher lesson prep consume or expose durable progress next.
+
+Default recommendation:
+
+- Do the authored Cookie Shop area next. It makes the storage owner concrete before adding a physical output chest, and it avoids building lesson-prep UI/API decisions before the shop production loop is visually grounded.
 
 ## Later Slice: Authored Cookie Shop Area
 

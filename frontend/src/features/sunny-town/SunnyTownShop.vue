@@ -9,6 +9,7 @@ defineProps<{
   shopError: string
   shopNotice: string
   shopStock: Record<string, number>
+  shopStockCapacity: Record<string, number>
   starBalance: number
 }>()
 
@@ -71,7 +72,7 @@ const inventoryStore = useStudentInventoryStore()
             <p>{{ item.name }}</p>
             <small>{{ item.description }}</small>
             <small>{{ item.priceStars }} stars</small>
-            <small>{{ shopStock[item.itemKey] ?? 0 }} in stock</small>
+            <small>{{ shopStock[item.itemKey] ?? 0 }} / {{ shopStockCapacity[item.itemKey] ?? 0 }} in stock</small>
           </div>
           <v-btn
             color="warning"

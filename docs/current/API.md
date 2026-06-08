@@ -39,6 +39,8 @@ Current public API handler ownership:
 - Assignments and grading commands: `internal/hq/assignments`
 - Sunny Town session creation: `cmd/hq/handlers.go`, coordinated with `internal/hq/pet`, `internal/hq/inventory`, `internal/hq/sunnytownbridge`, and `internal/sunnytownauth`
 
+`GET /api/student/shop/stock` returns each saleable stock item with its current `quantity` and shop-owned `capacity`; Cookie Keeper cookies currently use capacity `64`.
+
 ## Internal Service APIs
 
 Sunny Town calls HQ through service-authenticated internal endpoints using `X-HQ-Service-Secret`.

@@ -154,8 +154,12 @@ func TestLoadShopStockReturnsCookieStock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load empty shop stock: %v", err)
 	}
-	if stock.ShopID != CookieKeeperShopID || len(stock.Items) != 1 || stock.Items[0].ItemKey != CookieKey || stock.Items[0].Quantity != 0 {
-		t.Fatalf("empty shop stock = %#v, want cookie quantity 0", stock)
+	if stock.ShopID != CookieKeeperShopID ||
+		len(stock.Items) != 1 ||
+		stock.Items[0].ItemKey != CookieKey ||
+		stock.Items[0].Quantity != 0 ||
+		stock.Items[0].Capacity != CookieKeeperCookieStockCapacity {
+		t.Fatalf("empty shop stock = %#v, want cookie quantity 0 capacity %d", stock, CookieKeeperCookieStockCapacity)
 	}
 
 	if _, _, err := CommitShopStockDelta(ctx, db, ShopStockEventRequest{
@@ -172,8 +176,11 @@ func TestLoadShopStockReturnsCookieStock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load shop stock: %v", err)
 	}
-	if len(stock.Items) != 1 || stock.Items[0].ItemKey != CookieKey || stock.Items[0].Quantity != 3 {
-		t.Fatalf("shop stock = %#v, want cookie quantity 3", stock)
+	if len(stock.Items) != 1 ||
+		stock.Items[0].ItemKey != CookieKey ||
+		stock.Items[0].Quantity != 3 ||
+		stock.Items[0].Capacity != CookieKeeperCookieStockCapacity {
+		t.Fatalf("shop stock = %#v, want cookie quantity 3 capacity %d", stock, CookieKeeperCookieStockCapacity)
 	}
 }
 
@@ -224,6 +231,81 @@ func TestCommitShopStockDeltaIsIdempotent(t *testing.T) {
 	}
 	if inserted || quantity != 2 {
 		t.Fatalf("inserted=%v quantity=%d, want false and 2", inserted, quantity)
+	}
+}
+
+func TestCommitShopStockDeltaClampsAtCapacity(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	inserted, quantity, err := CommitShopStockDelta(ctx, db, ShopStockEventRequest{
+		EventID: "near-capacity",
+		Source:  "npc_job_production",
+		ShopID:  CookieKeeperShopID,
+		ItemKey: CookieKey,
+		Delta:   CookieKeeperCookieStockCapacity - 1,
+	})
+	if err != nil {
+		t.Fatalf("seed near capacity: %v", err)
+	}
+	if !inserted || quantity != CookieKeeperCookieStockCapacity-1 {
+		t.Fatalf("inserted=%v quantity=%d, want true and %d", inserted, quantity, CookieKeeperCookieStockCapacity-1)
+	}
+
+	inserted, quantity, err = CommitShopStockDelta(ctx, db, ShopStockEventRequest{
+		EventID: "over-capacity",
+		Source:  "npc_job_production",
+		ShopID:  CookieKeeperShopID,
+		ItemKey: CookieKey,
+		Delta:   3,
+	})
+	if err != nil {
+		t.Fatalf("commit over capacity: %v", err)
+	}
+	if !inserted || quantity != CookieKeeperCookieStockCapacity {
+		t.Fatalf("inserted=%v quantity=%d, want true and %d", inserted, quantity, CookieKeeperCookieStockCapacity)
+	}
+
+	inserted, quantity, err = CommitShopStockDelta(ctx, db, ShopStockEventRequest{
+		EventID: "over-capacity",
+		Source:  "npc_job_production",
+		ShopID:  CookieKeeperShopID,
+		ItemKey: CookieKey,
+		Delta:   3,
+	})
+	if err != nil {
+		t.Fatalf("commit duplicate over capacity: %v", err)
+	}
+	if inserted || quantity != CookieKeeperCookieStockCapacity {
+		t.Fatalf("inserted=%v quantity=%d, want false and %d", inserted, quantity, CookieKeeperCookieStockCapacity)
+	}
+
+	var ledgerRows int
+	if err := db.QueryRow(ctx, "select count(*) from shop_stock_ledger").Scan(&ledgerRows); err != nil {
+		t.Fatalf("count stock ledger rows: %v", err)
+	}
+	if ledgerRows != 2 {
+		t.Fatalf("stock ledger rows = %d, want 2", ledgerRows)
+	}
+
+	if _, err := db.Exec(ctx, "insert into student_wallet (app_user_id, star_balance) values (123, 50)"); err != nil {
+		t.Fatalf("seed wallet: %v", err)
+	}
+	if _, err := PurchaseStudentShopItem(ctx, db, 123, ShopPurchaseRequest{
+		ShopID:   CookieKeeperShopID,
+		ItemKey:  CookieKey,
+		Quantity: 1,
+	}); err != nil {
+		t.Fatalf("purchase after full stock: %v", err)
+	}
+
+	stock, err := LoadShopStock(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load shop stock after purchase: %v", err)
+	}
+	if len(stock.Items) != 1 || stock.Items[0].Quantity != CookieKeeperCookieStockCapacity-1 {
+		t.Fatalf("shop stock after purchase = %#v, want %d", stock, CookieKeeperCookieStockCapacity-1)
 	}
 }
 
