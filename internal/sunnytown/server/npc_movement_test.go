@@ -143,6 +143,155 @@ func TestLowestSatisfiableDriveIsSelected(t *testing.T) {
 	}
 }
 
+func TestNPCFocusWindowPreventsPrematureSwitching(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	now := time.Now()
+
+	room.step(0.1, now)
+	if npc.activeDrive != npcDriveSocial {
+		t.Fatalf("active drive = %q, want social", npc.activeDrive)
+	}
+
+	npc.drives.Hunger = 10
+	room.step(0.1, now.Add(time.Second))
+
+	if npc.activeDrive != npcDriveSocial {
+		t.Fatalf("active drive = %q, want focus window to keep social", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != driveStartLocationID {
+		t.Fatalf("goal = %#v, want original social goal", npc.goal)
+	}
+}
+
+func TestNPCEmergencyDriveInterruptsAfterReevaluation(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	now := time.Now()
+
+	room.step(0.1, now)
+	npc.drives.Hunger = 10
+	room.step(0.1, now.Add(npcGoalFocusDuration+npcGoalReevaluateInterval))
+
+	if npc.activeDrive != npcDriveHunger {
+		t.Fatalf("active drive = %q, want emergency hunger interrupt", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != "snack-stand" {
+		t.Fatalf("goal = %#v, want snack stand hunger goal", npc.goal)
+	}
+}
+
+func TestUnreachableUrgentDriveFallsBackToNextSatisfiableDrive(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.BlockedRects = []rect{{X: 192, Y: 0, Width: 32, Height: 256}}
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "blocked-snack-stand",
+		Name:   "Blocked Snack Stand",
+		X:      240,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 10
+	npc.drives.Social = 40
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveSocial {
+		t.Fatalf("active drive = %q, want social fallback", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != driveStartLocationID {
+		t.Fatalf("goal = %#v, want social town square goal", npc.goal)
+	}
+}
+
+func TestFailedTargetCooldownPreventsImmediateRetry(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 10
+	npc.drives.Social = 40
+	now := time.Now()
+	npc.markTargetFailed(npcGoal{
+		drive:    npcDriveHunger,
+		mapID:    room.gameMap.ID,
+		location: gameMap.Locations[1],
+	}, now)
+
+	room.step(0.1, now)
+
+	if npc.activeDrive != npcDriveSocial {
+		t.Fatalf("active drive = %q, want social while hunger target is cooling down", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != driveStartLocationID {
+		t.Fatalf("goal = %#v, want social town square goal", npc.goal)
+	}
+
+	room.clearNPCGoal(npc)
+	room.step(0.1, now.Add(npcFailedTargetCooldown+time.Second))
+	if npc.activeDrive != npcDriveHunger {
+		t.Fatalf("active drive = %q, want hunger after cooldown expires", npc.activeDrive)
+	}
+}
+
+func TestUnreplenishingTargetIsMarkedFailed(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	location := gameMap.Locations[0]
+	now := time.Now()
+	npc.drives.Hunger = 10
+	npc.goal = &npcGoal{
+		drive:    npcDriveHunger,
+		mapID:    room.gameMap.ID,
+		location: location,
+	}
+	npc.x = location.X
+	npc.y = location.Y
+	npc.goalArrivedAt = now.Add(-npcGoalGraceDuration)
+	npc.goalArriveDrive = npc.drives.Hunger
+
+	room.step(0.1, now)
+
+	if npc.goal != nil {
+		t.Fatalf("goal = %#v, want failed goal cleared", npc.goal)
+	}
+	if npc.failureCount != 1 {
+		t.Fatalf("failure count = %d, want 1", npc.failureCount)
+	}
+	if !npc.targetFailedRecently(npcGoal{drive: npcDriveHunger, mapID: room.gameMap.ID, location: location}, now) {
+		t.Fatal("target should be on failed cooldown")
+	}
+}
+
 func driveNPCTestMap() gameMap {
 	return gameMap{
 		ID:       defaultMapID,

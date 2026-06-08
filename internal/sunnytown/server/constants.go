@@ -23,8 +23,13 @@ const (
 	npcSpeed                   = 80.0
 	npcDriveDefault            = 95.0
 	npcDriveThreshold          = 50.0
+	npcEmergencyDriveThreshold = 20.0
 	npcDriveDepletePerSecond   = 0.1
 	npcDriveReplenishPerSecond = 8.0
+	npcGoalFocusDuration       = 5 * time.Second
+	npcGoalReevaluateInterval  = 2 * time.Second
+	npcGoalGraceDuration       = 2 * time.Second
+	npcFailedTargetCooldown    = 10 * time.Second
 	starPickupRadius           = 30.0
 	resourceCommitQueueSize    = 32
 	resourceHitsRequired       = 3
@@ -56,7 +61,7 @@ func (room *room) step(dt float64, now time.Time) {
 		rewards = append(rewards, room.collectStarsLocked(player, now)...)
 	}
 
-	room.stepLiveNPCsLocked(dt)
+	room.stepLiveNPCsLocked(dt, now)
 	room.respawnCollectiblesLocked(now)
 	room.respawnResourceNodesLocked(now)
 	room.mu.Unlock()

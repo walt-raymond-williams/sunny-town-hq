@@ -2,7 +2,7 @@
 
 This document is the handoff-ready implementation plan for adding Sunny Town NPC movement using location tags, portal-aware pathing, and a basic drive system.
 
-Status: `Slice 6 implemented; Slice 7 is next`
+Status: `Slice 7 implemented; Slice 8 is next`
 
 Related docs:
 
@@ -363,6 +363,18 @@ Suggested tests:
 ## Slice 7: Goal Commitment, Failure, And Re-evaluation
 
 Goal: prevent jitter and handle unsatisfied drives gracefully.
+
+Status: `Implemented`
+
+Implemented notes:
+
+- Live NPC goals now record start, focus, reevaluation, arrival, and failed-target state.
+- New goals commit for a short focus window before reevaluation can interrupt them.
+- Reevaluation can interrupt an active goal only for emergency-level satisfiable drives.
+- Failed targets are tracked with temporary cooldowns so NPCs avoid immediately retrying stale goals.
+- Drive selection continues to skip unavailable or unrouteable urgent drives and falls back to the next satisfiable drive.
+- If an NPC reaches a goal but the matching drive does not meaningfully replenish during the grace window, the target is marked failed and the NPC can choose again.
+- Tests cover focus-window stability, emergency interruption, unreachable-drive fallback, failed-target cooldown, and stale-target failure.
 
 Implementation notes:
 

@@ -98,6 +98,14 @@ type liveNPC struct {
 	route       *npcRoute
 	routeStep   int
 	pathIndex   int
+
+	goalStartedAt   time.Time
+	focusUntil      time.Time
+	reevaluateAt    time.Time
+	goalArrivedAt   time.Time
+	goalArriveDrive float64
+	failureCount    int
+	failedTargets   map[string]time.Time
 }
 
 type world struct {

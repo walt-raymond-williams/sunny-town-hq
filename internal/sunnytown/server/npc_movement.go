@@ -4,6 +4,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
 	stmaps "hq/internal/sunnytown/maps"
 	stnavigation "hq/internal/sunnytown/navigation"
@@ -50,28 +51,31 @@ func (room *room) configureNPCBehaviorLocked() {
 	npc.drives.Social = 40
 }
 
-func (room *room) stepLiveNPCsLocked(dt float64) {
+func (room *room) stepLiveNPCsLocked(dt float64, now time.Time) {
 	if dt <= 0 || room.world == nil || room.world.navigation == nil {
 		return
 	}
 	for _, npc := range room.liveNPCs {
-		room.stepLiveNPCLocked(npc, dt)
+		room.stepLiveNPCLocked(npc, dt, now)
 	}
 }
 
-func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64) {
+func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) {
 	if npc == nil {
 		return
 	}
 	npc.depleteDrives(dt)
 	room.replenishNPCDrivesLocked(npc, dt)
 	room.completeNPCGoalIfSatisfiedLocked(npc)
+	room.failNPCGoalIfStaleLocked(npc, now)
+	room.reevaluateNPCGoalLocked(npc, now)
 
 	if npc.route == nil && npc.goal == nil {
-		room.chooseNPCDriveGoalLocked(npc)
+		room.chooseNPCDriveGoalLocked(npc, now)
 	}
 	if npc.route == nil {
 		npc.moving = false
+		room.noteNPCGoalArrivalLocked(npc, now)
 		return
 	}
 
@@ -124,30 +128,41 @@ func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64) {
 		npc.moving = true
 		remaining = 0
 	}
+	room.noteNPCGoalArrivalLocked(npc, now)
 }
 
-func (room *room) chooseNPCDriveGoalLocked(npc *liveNPC) {
+func (room *room) chooseNPCDriveGoalLocked(npc *liveNPC, now time.Time) {
+	goal, route, ok := room.nextNPCDriveGoalLocked(npc, now, false)
+	if !ok {
+		return
+	}
+	room.assignNPCGoal(npc, goal, route, now)
+}
+
+func (room *room) nextNPCDriveGoalLocked(npc *liveNPC, now time.Time, emergencyOnly bool) (npcGoal, stnavigation.Route, bool) {
 	for _, drive := range npc.drivesByUrgency() {
 		if npc.driveValue(drive) >= npcDriveThreshold {
 			continue
 		}
-		goal, route, ok := room.routeToDriveLocationLocked(npc, drive)
+		if emergencyOnly && npc.driveValue(drive) >= npcEmergencyDriveThreshold {
+			continue
+		}
+		goal, route, ok := room.routeToDriveLocationLocked(npc, drive, now)
 		if !ok {
 			continue
 		}
-		npc.activeDrive = drive
-		npc.goal = &goal
-		npc.route = &route
-		npc.routeStep = 0
-		npc.pathIndex = firstWaypointIndex(route.Steps[0].Path)
-		return
+		return goal, route, true
 	}
+	return npcGoal{}, stnavigation.Route{}, false
 }
 
-func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive) (npcGoal, stnavigation.Route, bool) {
+func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive, now time.Time) (npcGoal, stnavigation.Route, bool) {
 	start := stnavigation.Point{X: npc.x, Y: npc.y}
 	for _, location := range room.gameMap.Locations {
 		if !locationMatchesDrive(location, drive) {
+			continue
+		}
+		if npc.targetFailedRecently(npcGoal{drive: drive, mapID: room.gameMap.ID, location: location}, now) {
 			continue
 		}
 		if pointWithinLocation(start, location) {
@@ -164,6 +179,18 @@ func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive) (npcG
 		}, route, true
 	}
 	return npcGoal{}, stnavigation.Route{}, false
+}
+
+func (room *room) assignNPCGoal(npc *liveNPC, goal npcGoal, route stnavigation.Route, now time.Time) {
+	npc.activeDrive = goal.drive
+	npc.goal = &goal
+	npc.route = &route
+	npc.routeStep = 0
+	npc.pathIndex = firstWaypointIndex(route.Steps[0].Path)
+	npc.goalStartedAt = now
+	npc.focusUntil = now.Add(npcGoalFocusDuration)
+	npc.reevaluateAt = now.Add(npcGoalFocusDuration + npcGoalReevaluateInterval)
+	npc.goalArrivedAt = time.Time{}
 }
 
 func (room *room) replenishNPCDrivesLocked(npc *liveNPC, dt float64) {
@@ -193,6 +220,51 @@ func (room *room) completeNPCGoalIfSatisfiedLocked(npc *liveNPC) {
 	room.clearNPCGoal(npc)
 }
 
+func (room *room) failNPCGoalIfStaleLocked(npc *liveNPC, now time.Time) {
+	if npc.goal == nil || npc.route != nil {
+		return
+	}
+	if !pointWithinLocation(stnavigation.Point{X: npc.x, Y: npc.y}, npc.goal.location) {
+		return
+	}
+	if npc.goalArrivedAt.IsZero() || now.Sub(npc.goalArrivedAt) < npcGoalGraceDuration {
+		return
+	}
+	if npc.driveValue(npc.goal.drive) >= npcDriveThreshold {
+		return
+	}
+	if npc.driveValue(npc.goal.drive) > npc.goalArriveDrive+0.001 {
+		return
+	}
+	npc.markTargetFailed(*npc.goal, now)
+	room.clearNPCGoal(npc)
+}
+
+func (room *room) reevaluateNPCGoalLocked(npc *liveNPC, now time.Time) {
+	if npc.goal == nil || now.Before(npc.focusUntil) || now.Before(npc.reevaluateAt) {
+		return
+	}
+	npc.reevaluateAt = now.Add(npcGoalReevaluateInterval)
+	goal, route, ok := room.nextNPCDriveGoalLocked(npc, now, true)
+	if !ok {
+		return
+	}
+	if npc.goal != nil && npc.goal.failureKey() == goal.failureKey() {
+		return
+	}
+	room.assignNPCGoal(npc, goal, route, now)
+}
+
+func (room *room) noteNPCGoalArrivalLocked(npc *liveNPC, now time.Time) {
+	if npc.goal == nil || npc.route != nil || !npc.goalArrivedAt.IsZero() {
+		return
+	}
+	if pointWithinLocation(stnavigation.Point{X: npc.x, Y: npc.y}, npc.goal.location) {
+		npc.goalArrivedAt = now
+		npc.goalArriveDrive = npc.driveValue(npc.goal.drive)
+	}
+}
+
 func (room *room) advanceLiveNPCRouteLocked(npc *liveNPC) {
 	npc.routeStep++
 	if npc.route == nil || npc.routeStep >= len(npc.route.Steps) {
@@ -212,6 +284,11 @@ func (room *room) clearNPCGoal(npc *liveNPC) {
 	npc.route = nil
 	npc.routeStep = 0
 	npc.pathIndex = 0
+	npc.goalStartedAt = time.Time{}
+	npc.focusUntil = time.Time{}
+	npc.reevaluateAt = time.Time{}
+	npc.goalArrivedAt = time.Time{}
+	npc.goalArriveDrive = 0
 }
 
 func (drives npcDrives) withDefaults() npcDrives {
@@ -271,6 +348,33 @@ func (npc *liveNPC) setDriveValue(drive npcDrive, value float64) {
 	case npcDriveWork:
 		npc.drives.Work = value
 	}
+}
+
+func (npc *liveNPC) targetFailedRecently(goal npcGoal, now time.Time) bool {
+	if len(npc.failedTargets) == 0 {
+		return false
+	}
+	failedAt, ok := npc.failedTargets[goal.failureKey()]
+	if !ok {
+		return false
+	}
+	if now.Sub(failedAt) < npcFailedTargetCooldown {
+		return true
+	}
+	delete(npc.failedTargets, goal.failureKey())
+	return false
+}
+
+func (npc *liveNPC) markTargetFailed(goal npcGoal, now time.Time) {
+	if npc.failedTargets == nil {
+		npc.failedTargets = map[string]time.Time{}
+	}
+	npc.failedTargets[goal.failureKey()] = now
+	npc.failureCount++
+}
+
+func (goal npcGoal) failureKey() string {
+	return string(goal.drive) + ":" + goal.mapID + ":" + goal.location.ID
 }
 
 func locationMatchesDrive(location stmaps.Location, drive npcDrive) bool {
