@@ -26,7 +26,7 @@ func TestNewRoomInitializesMapFixturesAsWorldObjects(t *testing.T) {
 	}
 
 	snapshot := object.worldObjectSnapshot()
-	if snapshot.Source != worldObjectSourceFixture || snapshot.Name != "Cookie Shop Output Chest" || snapshot.LocationID != "cookie-shop" || snapshot.ShopID != "cookie-keeper-shop" || snapshot.StorageRole != "output" || snapshot.ItemKey != "cookie" {
+	if snapshot.Source != worldObjectSourceFixture || snapshot.Name != "Cookie Shop Output Chest" || snapshot.LocationID != "cookie-shop" || snapshot.ShopID != "cookie-keeper-shop" || snapshot.StorageRole != "output" || snapshot.ItemKey != "cookie" || snapshot.InteractionRadius != 56 {
 		t.Fatalf("fixture snapshot = %#v, want output chest metadata", snapshot)
 	}
 }

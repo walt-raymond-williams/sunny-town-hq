@@ -36,6 +36,7 @@ Current implemented baseline:
 - `sunny-town-house-1` has an authored `Cookie Shop` area (`cookie-shop`) tagged as shop/workplace/storage owner; Cookie Keeper still uses `cookie-keeper-counter` as the owned work anchor.
 - `sunny-town-house-1` has an authored `cookie-shop-output-chest` fixture that snapshots as a source `fixture`, kind `chest` world object tied to `cookie-shop`, `cookie-keeper-shop`, output storage, and `cookie`.
 - The frontend renders chest world objects from the normal `worldObjects` snapshot stream.
+- Players can inspect the nearby output chest with `F`; the read-only panel loads existing `cookie-keeper-shop` stock/capacity from `GET /api/student/shop/stock`.
 - Cookie Shop storage planning now lives in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`; it tracks logical output chest capacity, authored shop area, physical chest fixture, and later input ingredients.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
@@ -56,6 +57,7 @@ Important current code touchpoints:
 - Cookie Keeper starter stock seed: `deploy/postgres/migrations/0010_seed_cookie_keeper_shop_stock.sql`
 - Cookie Shop storage continuation tracker: `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
 - Cookie Shop output fixture: `sunny-town/maps/sunny-town-house-1.json` fixture `cookie-shop-output-chest`
+- Cookie Shop chest inspection UI: `frontend/src/composables/useSunnyTownChestInteractions.ts`, `frontend/src/features/sunny-town/SunnyTownChestPanel.vue`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
 
@@ -506,19 +508,19 @@ Implemented notes:
 - Added optional map `fixtures` and authored `cookie-shop-output-chest` as a physical output chest fixture inside/associated with `cookie-shop`.
 - Sunny Town initializes fixtures into runtime `worldObjects`; the chest snapshots with `shopId: cookie-keeper-shop`, `storageRole: output`, `itemKey: cookie`, and `locationId: cookie-shop`.
 - Frontend world-object rendering draws chest fixtures.
+- Chest snapshots now expose authored `interactionRadius`.
+- Added read-only chest inspection: pressing `F` near `cookie-shop-output-chest` opens a storage panel backed by existing `GET /api/student/shop/stock` stock/capacity.
 - Deferred input ingredients: Cookie Keeper can make cookies while working in the shop for now.
 - This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
-- Implement output chest inspection/interaction:
-  - let players inspect/interact with `cookie-shop-output-chest`,
-  - read existing HQ-owned `cookie-keeper-shop` cookie stock/capacity,
-  - do not create a second inventory/stock source,
-  - keep withdraw/deposit behavior deferred unless explicitly required.
+- Choose and implement the next Cookie Shop storage gameplay step:
+  - input chest plus HQ-owned recipe/input consumption, or
+  - explicit chest actions such as withdraw/deposit after defining how they relate to shop sales.
 - Alternate branch: make teacher lesson prep consume or expose durable progress if broader NPC job gameplay is the priority.
 - Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.
-- Defer input chest and ingredients until output chest/storage ownership is stable.
+- Do not create a second inventory/stock source for the output chest; keep durable quantities HQ-owned.
 
 ## Feature Intent
 

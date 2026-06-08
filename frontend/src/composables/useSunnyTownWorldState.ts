@@ -21,6 +21,7 @@ export function normalizeSunnyTownMap(map: SunnyTownMap): SunnyTownMap {
     portals: map.portals || [],
     npcs: map.npcs || [],
     resourceNodes: map.resourceNodes || [],
+    fixtures: map.fixtures || [],
     blockedRects: map.blockedRects || [],
     starSpawns: map.starSpawns || [],
     spawns: map.spawns || [],

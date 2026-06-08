@@ -120,6 +120,7 @@ type WorldObjectSnapshot struct {
 	Width             float64  `json:"width,omitempty"`
 	Height            float64  `json:"height,omitempty"`
 	Radius            float64  `json:"radius,omitempty"`
+	InteractionRadius float64  `json:"interactionRadius,omitempty"`
 	Active            bool     `json:"active"`
 	Collision         bool     `json:"collision"`
 	Breakable         bool     `json:"breakable"`

@@ -15,6 +15,7 @@ Current implemented baseline:
 - `sunny-town-house-1` has an authored fixture `cookie-shop-output-chest` inside/associated with `cookie-shop`.
 - Sunny Town initializes that fixture as a runtime `worldObject` with source `fixture`, kind `chest`, and metadata `shopId: cookie-keeper-shop`, `storageRole: output`, `itemKey: cookie`, and `locationId: cookie-shop`.
 - The frontend can render chest world objects from the normal `worldObjects` snapshot stream.
+- Players can inspect the nearby output chest with `F`; the read-only panel loads existing `cookie-keeper-shop` stock/capacity from `GET /api/student/shop/stock`.
 - Sunny Town emits service-authenticated `shopkeeper_stock` / `shop_stock_progress` NPC job production events when Cookie Keeper is at the work anchor.
 - HQ records those events in `sunny_town_npc_job_production_ledger`.
 - HQ stores saleable Cookie Keeper cookies in durable `shop_stock_item` / `shop_stock_ledger` tables.
@@ -60,15 +61,15 @@ Suggested tests:
 - Purchase after full stock decrements below capacity.
 - UI shows `current / 64` and disables Buy at `0`.
 
-## Immediate Next Slice: Output Chest Inspection/Interaction
+## Immediate Next Slice: Choose Next Storage Gameplay
 
 Recommended next step:
 
-- Decide and implement how players inspect/interact with `cookie-shop-output-chest`.
-- Inspection should read the same existing HQ-owned `cookie-keeper-shop` cookie stock and capacity already shown in the shop UI.
-- Keep the chest as an interaction surface over the existing stock; do not create separate fixture inventory.
-- A lightweight first version can show current cookie count/capacity near the chest, without adding withdrawals/deposits yet.
-- The alternate branch is still teacher lesson prep durable progress if broader NPC job gameplay becomes the priority, but the Cookie Shop storage path is now ready for the chest.
+- Choose whether the next Cookie Shop step should be input ingredients or chest actions.
+- If choosing input ingredients, add an input chest/storage and HQ-owned recipe/input consumption rules.
+- If choosing chest actions, define whether players can withdraw/deposit cookies or whether the chest remains read-only and shop purchases remain the only sale path.
+- The alternate branch is teacher lesson prep durable progress if broader NPC job gameplay becomes the priority.
+- Do not create a second fixture inventory source; keep durable quantities in HQ-owned stock/inventory tables.
 
 ## Slice: Authored Cookie Shop Area
 
@@ -125,6 +126,22 @@ Implemented notes:
 - Chest snapshots include name, location, shop, storage role, item key, and tags.
 - Frontend Sunny Town types and world-object drawing support `chest` objects.
 - This slice makes the chest visible and metadata-inspectable by the client/debug payloads. Player-facing chest interaction UI is the next slice.
+
+## Slice: Output Chest Inspection/Interaction
+
+Status: `Implemented`
+
+Goal: let players inspect the physical output chest and see the existing durable stock it represents.
+
+Implemented notes:
+
+- Chest snapshots expose `interactionRadius` so the client can use authored interaction range.
+- Added `useSunnyTownChestInteractions` to find nearby active output chest fixtures, open/close the panel, and load stock through the existing shop stock API.
+- Added `SunnyTownChestPanel`, a read-only storage panel showing the chest item quantity and capacity.
+- Sunny Town page now shows an `F` prompt for nearby chests when no NPC prompt is active.
+- Pressing `F` near `cookie-shop-output-chest` loads `cookie-keeper-shop` stock and shows `cookie current / 64`.
+- Walking away, changing maps, or pressing Escape closes the chest panel.
+- This does not add withdraw/deposit behavior and does not create a separate inventory source.
 
 ## Later Slice: Input Chest And Ingredients
 

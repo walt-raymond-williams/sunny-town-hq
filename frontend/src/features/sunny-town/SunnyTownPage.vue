@@ -5,6 +5,10 @@ import {
   hotbarIndexForEvent,
   useSunnyTownInventoryActions,
 } from '../../composables/useSunnyTownInventoryActions'
+import {
+  nearestSunnyTownChest,
+  useSunnyTownChestInteractions,
+} from '../../composables/useSunnyTownChestInteractions'
 import { useSunnyTownMessageEffects } from '../../composables/useSunnyTownMessageEffects'
 import {
   nearestSunnyTownNpc,
@@ -34,8 +38,10 @@ import type {
   SunnyTownPlayer,
   SunnyTownServerMessage,
   SunnyTownToolUseMessage,
+  SunnyTownWorldObject,
 } from '../../types/sunnyTown'
 import SunnyTownCanvas from './SunnyTownCanvas.vue'
+import SunnyTownChestPanel from './SunnyTownChestPanel.vue'
 import SunnyTownDialogue from './SunnyTownDialogue.vue'
 import SunnyTownHud from './SunnyTownHud.vue'
 import SunnyTownInventoryPanel from './SunnyTownInventoryPanel.vue'
@@ -64,6 +70,7 @@ const placement = useSunnyTownPlacement()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
 const worldState = useSunnyTownWorldState()
+const chestInteractions = useSunnyTownChestInteractions()
 const selfId = ref('')
 const starBalance = ref(0)
 const gameToast = ref('')
@@ -114,6 +121,19 @@ const {
   setInventoryItems: (items) => inventoryStore.setItems(items),
   starBalance,
 })
+const {
+  activeChest,
+  activeChestCapacity,
+  activeChestItemKey,
+  activeChestQuantity,
+  chestError,
+  closeChest,
+  hasActiveOverlay: hasActiveChestOverlay,
+  inspectChest,
+  isLoadingChest,
+  nearbyChest,
+  refreshNearby: refreshNearbyChest,
+} = chestInteractions
 const canvas = ref<HTMLCanvasElement | null>(null)
 const {
   activeMap,
@@ -262,9 +282,10 @@ function handleServerMessage(message: SunnyTownServerMessage) {
 
 function handleKeyDown(event: KeyboardEvent) {
   if (event.code === 'Escape') {
-    if (hasActiveOverlay() || inventoryOpen.value) {
+    if (hasActiveOverlay() || hasActiveChestOverlay() || inventoryOpen.value) {
       event.preventDefault()
       closeNpcOverlays()
+      closeChest()
       inventoryOpen.value = false
     }
     return
@@ -346,7 +367,7 @@ function handleCanvasPointerDown(event: PointerEvent) {
     placeStoneBlockAtPointer(event)
     return
   }
-  if (hasActiveOverlay() || inventoryOpen.value) {
+  if (hasActiveOverlay() || hasActiveChestOverlay() || inventoryOpen.value) {
     return
   }
   event.preventDefault()
@@ -431,13 +452,19 @@ function applyMapState(message: SunnyTownServerMessage) {
   placement.clearHover()
   movement.clear()
   closeNpcOverlays()
+  closeChest()
   nearbyNpc.value = null
+  nearbyChest.value = null
   syncLocalSelfFromSnapshot()
   draw()
 }
 
-function handlePrimaryInteraction() {
+async function handlePrimaryInteraction() {
   if (interactWithNearbyNpc()) {
+    return
+  }
+  if (await inspectChest(nearestChestToSelf())) {
+    handleInputCancel()
     return
   }
   useEquippedTool()
@@ -560,6 +587,7 @@ function drawScene(context: CanvasRenderingContext2D, width: number, height: num
 
 function refreshNpcInteractionState() {
   refreshNearbyNpc(nearestNpcToSelf())
+  refreshNearbyChest(nearestChestToSelf())
 }
 
 function nearestNpcToSelf(): SunnyTownNpc | null {
@@ -569,6 +597,11 @@ function nearestNpcToSelf(): SunnyTownNpc | null {
     return null
   }
   return nearestSunnyTownNpc(renderedSunnyTownNpcs(), self, npcInteractionRadius)
+}
+
+function nearestChestToSelf(): SunnyTownWorldObject | null {
+  const self = localPlayerState.current(players.value, selfId.value)
+  return nearestSunnyTownChest(worldObjects.value, self)
 }
 
 function renderedSunnyTownNpcs(): SunnyTownNpc[] {
@@ -661,9 +694,13 @@ function backToPet() {
         @ready="setCanvas"
       />
     </template>
-      <div v-if="nearbyNpc && !activeDialogueNpc && !activeSchoolworkNpc && !inventoryOpen" class="sunny-town-talk-hint">
+      <div v-if="nearbyNpc && !activeDialogueNpc && !activeSchoolworkNpc && !activeChest && !inventoryOpen" class="sunny-town-talk-hint">
         <v-icon icon="mdi-chat" size="small" />
         <span>F {{ nearbyNpc.name }}</span>
+      </div>
+      <div v-else-if="nearbyChest && !activeChest && !activeDialogueNpc && !activeSchoolworkNpc && !activeShopNpc && !inventoryOpen" class="sunny-town-talk-hint">
+        <v-icon icon="mdi-treasure-chest" size="small" />
+        <span>F {{ nearbyChest.name || 'Storage Chest' }}</span>
       </div>
       <SunnyTownDialogue
         v-if="activeDialogueNpc"
@@ -700,6 +737,16 @@ function backToPet() {
         @start="startSchoolwork"
         @submit="submitSchoolworkAnswer"
         @update-answer="schoolworkAnswer = $event"
+      />
+      <SunnyTownChestPanel
+        v-if="activeChest"
+        :capacity="activeChestCapacity"
+        :chest="activeChest"
+        :error="chestError"
+        :is-loading="isLoadingChest"
+        :item-key="activeChestItemKey"
+        :quantity="activeChestQuantity"
+        @close="closeChest"
       />
       <SunnyTownInventoryPanel
         v-if="inventoryOpen"

@@ -179,6 +179,7 @@ export interface SunnyTownWorldObject {
   width?: number
   height?: number
   radius?: number
+  interactionRadius?: number
   active: boolean
   collision: boolean
   breakable: boolean

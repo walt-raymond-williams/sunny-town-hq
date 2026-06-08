@@ -83,6 +83,7 @@ describe('normalizeSunnyTownMap', () => {
     expect(normalizeSunnyTownMap(sparse)).toEqual({
       ...sparse,
       blockedRects: [],
+      fixtures: [],
       npcs: [],
       portals: [],
       resourceNodes: [],

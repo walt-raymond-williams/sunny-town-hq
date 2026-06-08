@@ -198,6 +198,7 @@ func (object *worldObject) worldObjectSnapshot() worldObjectSnapshot {
 		Width:             object.width,
 		Height:            object.height,
 		Radius:            object.radius,
+		InteractionRadius: object.interactionRadius,
 		Active:            object.active,
 		Collision:         object.collision,
 		Breakable:         object.breakable,
