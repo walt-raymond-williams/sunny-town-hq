@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	hqcharacters "hq/internal/hq/characters"
+	hqinventory "hq/internal/hq/inventory"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -104,7 +105,13 @@ func (store Store) CommitNPCJobProduction(ctx context.Context, request NPCJobPro
 		return NPCJobProductionResponse{}, errors.New("npc job production amount must be positive")
 	}
 
-	inserted, err := CommitNPCJobProductionLedger(ctx, store.DB, NPCJobProductionLedgerRequest{
+	tx, err := store.DB.Begin(ctx)
+	if err != nil {
+		return NPCJobProductionResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	inserted, err := CommitNPCJobProductionLedger(ctx, tx, NPCJobProductionLedgerRequest{
 		EventID:     request.EventID,
 		CharacterID: request.CharacterID,
 		RoomID:      request.RoomID,
@@ -116,6 +123,20 @@ func (store Store) CommitNPCJobProduction(ctx context.Context, request NPCJobPro
 		Amount:      request.Amount,
 	})
 	if err != nil {
+		return NPCJobProductionResponse{}, err
+	}
+	if inserted && request.JobKey == "shopkeeper_stock" && request.OutputKey == "shop_stock_progress" {
+		if _, _, err := hqinventory.CommitShopStockDelta(ctx, tx, hqinventory.ShopStockEventRequest{
+			EventID: "npc-job-production:" + request.EventID,
+			Source:  "npc_job_production",
+			ShopID:  hqinventory.CookieKeeperShopID,
+			ItemKey: hqinventory.CookieKey,
+			Delta:   request.Amount,
+		}); err != nil {
+			return NPCJobProductionResponse{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return NPCJobProductionResponse{}, err
 	}
 

@@ -31,6 +31,7 @@ Current implemented baseline:
 - ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
 - HQ exposes service-authenticated aggregate NPC job progress over those ledger events for later gameplay consumption decisions.
+- Cookie Keeper `shopkeeper_stock` production now increments durable HQ-owned Cookie Keeper shop cookie stock, and player purchases consume that stock.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -46,6 +47,7 @@ Important current code touchpoints:
 - NPC drive debug endpoint: `internal/sunnytown/server/npc_debug.go`, `GET /debug/npcs` with `X-HQ-Service-Secret`
 - NPC production loop: `internal/sunnytown/server/npc_production.go`, `internal/sunnytown/server/server_workers.go`
 - HQ production ledger/progress API: `internal/hq/sunnytownbridge`, `deploy/postgres/migrations/0008_sunny_town_npc_job_production.sql`
+- HQ shop stock persistence and purchase consumption: `internal/hq/inventory/shop.go`, `deploy/postgres/migrations/0009_shop_stock.sql`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
 
@@ -479,14 +481,18 @@ Implemented notes:
   - Enough eligible elapsed time must accumulate before one idempotent event is queued.
 - Added bounded no-player catch-up production using the existing pause/catch-up path, without exact offline path simulation.
 - Added `/debug/npcs` production fields: eligibility, job key, output key, progress seconds, last event, and last production time.
-- This slice intentionally records and aggregates production/progress events only. It does not add NPC inventory, shop stock consumption, assignments, or raw drive/position persistence.
+- Added HQ-owned shop stock tables in migration `0009_shop_stock.sql`.
+- Cookie Keeper `shopkeeper_stock` events now atomically record the NPC production ledger and increment Cookie Keeper cookie stock through `internal/hq/inventory`.
+- Player purchases from `cookie-keeper-shop` now require durable shop stock and consume it in the purchase transaction before granting the cookie.
+- Duplicate NPC production events do not double-increment shop stock.
+- This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
-- Decide how aggregate NPC job progress should become gameplay:
-  - convert shopkeeper progress into shop/workplace stock,
+- Choose the next gameplay-facing production surface:
+  - expose Cookie Keeper stock to the player/shop UI so out-of-stock is visible before purchase,
   - convert teacher lesson prep into classroom/assignment readiness,
-  - or keep accumulating progress while another stable gameplay consumer is designed.
+  - or keep accumulating teacher progress while the stable classroom consumer is designed.
 - Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.
 
 ## Feature Intent

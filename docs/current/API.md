@@ -34,7 +34,7 @@ Current public API handler ownership:
 
 - Identity/session helper routes: `cmd/hq/handlers.go`, backed by `internal/hq/auth` and `internal/hq/users`
 - Student profile and pet actions: `internal/hq/pet`
-- Inventory, hotbar, crafting, equipment, wallet, and shop: `internal/hq/inventory`
+- Inventory, hotbar, crafting, equipment, wallet, stock-backed shop purchases, and shop stock persistence: `internal/hq/inventory`
 - Assignments and grading commands: `internal/hq/assignments`
 - Sunny Town session creation: `cmd/hq/handlers.go`, coordinated with `internal/hq/pet`, `internal/hq/inventory`, `internal/hq/sunnytownbridge`, and `internal/sunnytownauth`
 

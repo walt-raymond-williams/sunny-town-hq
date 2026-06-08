@@ -169,11 +169,29 @@ func TestCommitNPCJobProductionIdempotent(t *testing.T) {
 	}
 
 	var rows int
+	var stockQuantity int
+	var stockLedgerRows int
 	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_job_production_ledger where character_id = $1", characterID).Scan(&rows); err != nil {
 		t.Fatalf("count production ledger rows: %v", err)
 	}
-	if rows != 1 {
-		t.Fatalf("production ledger rows = %d, want 1", rows)
+	if err := db.QueryRow(
+		ctx,
+		`
+			select ssi.quantity
+			from shop_stock_item ssi
+			join inventory_item_type iit on iit.id = ssi.item_type_id
+			where ssi.shop_id = $1 and iit.key = $2
+		`,
+		hqinventory.CookieKeeperShopID,
+		hqinventory.CookieKey,
+	).Scan(&stockQuantity); err != nil {
+		t.Fatalf("load shop stock: %v", err)
+	}
+	if err := db.QueryRow(ctx, "select count(*) from shop_stock_ledger").Scan(&stockLedgerRows); err != nil {
+		t.Fatalf("count shop stock ledger rows: %v", err)
+	}
+	if rows != 1 || stockQuantity != 1 || stockLedgerRows != 1 {
+		t.Fatalf("productionRows=%d stockQuantity=%d stockLedgerRows=%d, want 1, 1, 1", rows, stockQuantity, stockLedgerRows)
 	}
 }
 
@@ -708,6 +726,7 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 		)`,
 		`insert into inventory_item_type (key, name, description)
 			values
+				('cookie', 'Cookie', 'A treat for your pet.'),
 				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
 				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
 				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
@@ -733,6 +752,26 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			metadata jsonb not null default '{}'::jsonb,
 			created_at timestamptz not null default now(),
 			constraint student_inventory_ledger_delta_nonzero check (delta <> 0)
+		)`,
+		`create table shop_stock_item (
+			shop_id text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			quantity integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (shop_id, item_type_id),
+			constraint shop_stock_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table shop_stock_ledger (
+			id bigserial primary key,
+			event_id text not null unique,
+			source text not null,
+			shop_id text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			delta integer not null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now(),
+			constraint shop_stock_ledger_delta_nonzero check (delta <> 0)
 		)`,
 		`create table student_sunny_town_position (
 			app_user_id bigint primary key references app_user(id) on delete cascade,

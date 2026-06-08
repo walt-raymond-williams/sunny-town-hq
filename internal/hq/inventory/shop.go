@@ -12,6 +12,17 @@ import (
 )
 
 var ErrInsufficientStars = errors.New("not enough stars")
+var ErrInsufficientShopStock = errors.New("not enough shop stock")
+
+const CookieKeeperShopID = "cookie-keeper-shop"
+
+type ShopStockEventRequest struct {
+	EventID string
+	Source  string
+	ShopID  string
+	ItemKey string
+	Delta   int
+}
 
 type ShopPurchaseRequest struct {
 	ShopID   string `json:"shopId"`
@@ -46,7 +57,7 @@ func PurchaseStudentShopItem(ctx context.Context, db *pgxpool.Pool, userID int64
 	if userID < 1 || request.Quantity < 1 {
 		return ShopPurchaseResponse{}, errors.New("shop purchase is missing required fields")
 	}
-	if request.ShopID != "cookie-keeper-shop" || request.ItemKey != CookieKey {
+	if request.ShopID != CookieKeeperShopID || request.ItemKey != CookieKey {
 		return ShopPurchaseResponse{}, errors.New("unsupported shop purchase")
 	}
 
@@ -84,6 +95,14 @@ func PurchaseStudentShopItem(ctx context.Context, db *pgxpool.Pool, userID int64
 	}
 	if err != nil {
 		return ShopPurchaseResponse{}, err
+	}
+
+	stockConsumed, err := ConsumeShopStockItem(ctx, tx, request.ShopID, request.ItemKey, request.Quantity)
+	if err != nil {
+		return ShopPurchaseResponse{}, err
+	}
+	if !stockConsumed {
+		return ShopPurchaseResponse{}, ErrInsufficientShopStock
 	}
 
 	if _, err := tx.Exec(
@@ -133,4 +152,97 @@ func PurchaseStudentShopItem(ctx context.Context, db *pgxpool.Pool, userID int64
 		StarBalance: starBalance,
 		Inventory:   inventory,
 	}, nil
+}
+
+func CommitShopStockDelta(ctx context.Context, querier rowQuerier, request ShopStockEventRequest) (bool, int, error) {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.Source = strings.TrimSpace(request.Source)
+	request.ShopID = strings.TrimSpace(request.ShopID)
+	request.ItemKey = strings.TrimSpace(request.ItemKey)
+	if request.EventID == "" || request.Source == "" || request.ShopID == "" || request.ItemKey == "" || request.Delta == 0 {
+		return false, 0, errors.New("shop stock event is missing required fields")
+	}
+	if request.ShopID != CookieKeeperShopID || request.ItemKey != CookieKey {
+		return false, 0, errors.New("unsupported shop stock item")
+	}
+
+	var inserted bool
+	var quantity int
+	err := querier.QueryRow(
+		ctx,
+		`
+			with item_type as (
+				select id
+				from inventory_item_type
+				where key = $4
+			),
+			inserted as (
+				insert into shop_stock_ledger (
+					event_id,
+					source,
+					shop_id,
+					item_type_id,
+					delta
+				)
+				select $1, $2, $3, id, $5
+				from item_type
+				on conflict (event_id) do nothing
+				returning shop_id, item_type_id, delta
+			),
+			updated_stock as (
+				insert into shop_stock_item (shop_id, item_type_id, quantity)
+				select shop_id, item_type_id, delta from inserted
+				on conflict (shop_id, item_type_id) do update
+				set quantity = shop_stock_item.quantity + excluded.quantity,
+					updated_at = now()
+				returning quantity
+			)
+			select exists(select 1 from inserted) as inserted,
+				coalesce(
+					(select quantity from updated_stock),
+					(
+						select ssi.quantity
+						from shop_stock_item ssi
+						join item_type on item_type.id = ssi.item_type_id
+						where ssi.shop_id = $3
+					),
+					0
+				) as quantity
+		`,
+		request.EventID,
+		request.Source,
+		request.ShopID,
+		request.ItemKey,
+		request.Delta,
+	).Scan(&inserted, &quantity)
+	return inserted, quantity, err
+}
+
+func ConsumeShopStockItem(ctx context.Context, querier Querier, shopID string, itemKey string, quantity int) (bool, error) {
+	shopID = strings.TrimSpace(shopID)
+	itemKey = strings.TrimSpace(itemKey)
+	if shopID == "" || itemKey == "" || quantity < 1 {
+		return false, errors.New("shop stock consume is missing required fields")
+	}
+
+	result, err := querier.Exec(
+		ctx,
+		`
+			update shop_stock_item ssi
+			set quantity = quantity - $3,
+				updated_at = now()
+			from inventory_item_type iit
+			where ssi.item_type_id = iit.id
+				and ssi.shop_id = $1
+				and iit.key = $2
+				and ssi.quantity >= $3
+		`,
+		shopID,
+		itemKey,
+		quantity,
+	)
+	if err != nil {
+		return false, err
+	}
+	return result.RowsAffected() > 0, nil
 }

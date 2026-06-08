@@ -38,6 +38,8 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_inventory_ledger`: idempotent resource and inventory event records
 - `student_equipped_item`: current gear/accessory/tool equipment
 - `student_hotbar_slot`: current student hotbar slots
+- `shop_stock_item`: current HQ-owned shop item quantities
+- `shop_stock_ledger`: idempotent shop stock production/adjustment records
 - `student_sunny_town_position`: last accepted Sunny Town map position
 - `sunny_town_map_object`: persisted placed map objects
 - `sunny_town_character`: shared Sunny Town character identity for player-controlled and future NPC actors
@@ -58,6 +60,7 @@ deploy/postgres/migrations/
   0006_sunny_town_characters.sql
   0007_sunny_town_npc_characters.sql
   0008_sunny_town_npc_job_production.sql
+  0009_shop_stock.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.

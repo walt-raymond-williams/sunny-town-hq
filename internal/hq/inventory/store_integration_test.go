@@ -19,9 +19,18 @@ func TestPurchaseStudentShopItemBuysCookie(t *testing.T) {
 	if _, err := db.Exec(ctx, "insert into student_wallet (app_user_id, star_balance) values (123, 125)"); err != nil {
 		t.Fatalf("seed wallet: %v", err)
 	}
+	if _, _, err := CommitShopStockDelta(ctx, db, ShopStockEventRequest{
+		EventID: "seed-stock",
+		Source:  "test",
+		ShopID:  CookieKeeperShopID,
+		ItemKey: CookieKey,
+		Delta:   2,
+	}); err != nil {
+		t.Fatalf("seed shop stock: %v", err)
+	}
 
 	response, err := PurchaseStudentShopItem(ctx, db, 123, ShopPurchaseRequest{
-		ShopID:   "cookie-keeper-shop",
+		ShopID:   CookieKeeperShopID,
 		ItemKey:  CookieKey,
 		Quantity: 1,
 	})
@@ -37,6 +46,7 @@ func TestPurchaseStudentShopItemBuysCookie(t *testing.T) {
 
 	var walletBalance int
 	var cookieQuantity int
+	var shopStockQuantity int
 	var ledgerDelta int
 	if err := db.QueryRow(ctx, "select star_balance from student_wallet where app_user_id = 123").Scan(&walletBalance); err != nil {
 		t.Fatalf("load wallet: %v", err)
@@ -55,8 +65,21 @@ func TestPurchaseStudentShopItemBuysCookie(t *testing.T) {
 	if err := db.QueryRow(ctx, "select delta from student_star_ledger where source = 'shop_purchase'").Scan(&ledgerDelta); err != nil {
 		t.Fatalf("load shop ledger: %v", err)
 	}
-	if walletBalance != 75 || cookieQuantity != 1 || ledgerDelta != -50 {
-		t.Fatalf("wallet=%d cookies=%d ledgerDelta=%d, want 75, 1, -50", walletBalance, cookieQuantity, ledgerDelta)
+	if err := db.QueryRow(
+		ctx,
+		`
+			select ssi.quantity
+			from shop_stock_item ssi
+			join inventory_item_type iit on iit.id = ssi.item_type_id
+			where ssi.shop_id = $1 and iit.key = $2
+		`,
+		CookieKeeperShopID,
+		CookieKey,
+	).Scan(&shopStockQuantity); err != nil {
+		t.Fatalf("load shop stock quantity: %v", err)
+	}
+	if walletBalance != 75 || cookieQuantity != 1 || shopStockQuantity != 1 || ledgerDelta != -50 {
+		t.Fatalf("wallet=%d cookies=%d shopStock=%d ledgerDelta=%d, want 75, 1, 1, -50", walletBalance, cookieQuantity, shopStockQuantity, ledgerDelta)
 	}
 }
 
@@ -70,7 +93,7 @@ func TestPurchaseStudentShopItemRequiresStars(t *testing.T) {
 	}
 
 	_, err := PurchaseStudentShopItem(ctx, db, 123, ShopPurchaseRequest{
-		ShopID:   "cookie-keeper-shop",
+		ShopID:   CookieKeeperShopID,
 		ItemKey:  CookieKey,
 		Quantity: 1,
 	})
@@ -91,6 +114,37 @@ func TestPurchaseStudentShopItemRequiresStars(t *testing.T) {
 	}
 }
 
+func TestPurchaseStudentShopItemRequiresStock(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if _, err := db.Exec(ctx, "insert into student_wallet (app_user_id, star_balance) values (123, 125)"); err != nil {
+		t.Fatalf("seed wallet: %v", err)
+	}
+
+	_, err := PurchaseStudentShopItem(ctx, db, 123, ShopPurchaseRequest{
+		ShopID:   CookieKeeperShopID,
+		ItemKey:  CookieKey,
+		Quantity: 1,
+	})
+	if err != ErrInsufficientShopStock {
+		t.Fatalf("purchase error = %v, want ErrInsufficientShopStock", err)
+	}
+
+	var walletBalance int
+	var ledgerRows int
+	if err := db.QueryRow(ctx, "select star_balance from student_wallet where app_user_id = 123").Scan(&walletBalance); err != nil {
+		t.Fatalf("load wallet: %v", err)
+	}
+	if err := db.QueryRow(ctx, "select count(*) from student_star_ledger").Scan(&ledgerRows); err != nil {
+		t.Fatalf("count star ledger rows: %v", err)
+	}
+	if walletBalance != 125 || ledgerRows != 0 {
+		t.Fatalf("wallet=%d ledgerRows=%d, want 125 and 0", walletBalance, ledgerRows)
+	}
+}
+
 func TestPurchaseStudentShopItemRejectsInvalidPurchase(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
@@ -98,12 +152,46 @@ func TestPurchaseStudentShopItemRejectsInvalidPurchase(t *testing.T) {
 	invalidRequests := []ShopPurchaseRequest{
 		{ShopID: "other-shop", ItemKey: CookieKey, Quantity: 1},
 		{ShopID: "cookie-keeper-shop", ItemKey: "star", Quantity: 1},
-		{ShopID: "cookie-keeper-shop", ItemKey: CookieKey, Quantity: 0},
+		{ShopID: CookieKeeperShopID, ItemKey: CookieKey, Quantity: 0},
 	}
 	for _, request := range invalidRequests {
 		if _, err := PurchaseStudentShopItem(context.Background(), db, 123, request); err == nil {
 			t.Fatalf("purchase %#v succeeded, want error", request)
 		}
+	}
+}
+
+func TestCommitShopStockDeltaIsIdempotent(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	inserted, quantity, err := CommitShopStockDelta(ctx, db, ShopStockEventRequest{
+		EventID: "event-1",
+		Source:  "npc_job_production",
+		ShopID:  CookieKeeperShopID,
+		ItemKey: CookieKey,
+		Delta:   2,
+	})
+	if err != nil {
+		t.Fatalf("commit stock delta: %v", err)
+	}
+	if !inserted || quantity != 2 {
+		t.Fatalf("inserted=%v quantity=%d, want true and 2", inserted, quantity)
+	}
+
+	inserted, quantity, err = CommitShopStockDelta(ctx, db, ShopStockEventRequest{
+		EventID: "event-1",
+		Source:  "npc_job_production",
+		ShopID:  CookieKeeperShopID,
+		ItemKey: CookieKey,
+		Delta:   2,
+	})
+	if err != nil {
+		t.Fatalf("commit duplicate stock delta: %v", err)
+	}
+	if inserted || quantity != 2 {
+		t.Fatalf("inserted=%v quantity=%d, want false and 2", inserted, quantity)
 	}
 }
 
@@ -445,6 +533,26 @@ func testInventoryDB(t *testing.T) (*pgxpool.Pool, func()) {
 			metadata jsonb not null default '{}'::jsonb,
 			created_at timestamptz not null default now(),
 			constraint student_inventory_ledger_delta_nonzero check (delta <> 0)
+		)`,
+		`create table shop_stock_item (
+			shop_id text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			quantity integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (shop_id, item_type_id),
+			constraint shop_stock_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table shop_stock_ledger (
+			id bigserial primary key,
+			event_id text not null unique,
+			source text not null,
+			shop_id text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			delta integer not null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now(),
+			constraint shop_stock_ledger_delta_nonzero check (delta <> 0)
 		)`,
 		`create table student_equipped_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,

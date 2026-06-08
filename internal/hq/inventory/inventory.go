@@ -29,6 +29,10 @@ type Querier interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
 
+type rowQuerier interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
 type Loader interface {
 	Query(context.Context, string, ...any) (pgx.Rows, error)
 }

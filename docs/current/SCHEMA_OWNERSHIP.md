@@ -81,8 +81,16 @@ Tables, constraints, and indexes:
 - `student_hotbar_slot`
 - `student_hotbar_slot_index_check`
 - `student_hotbar_slot_app_user_id_idx`
+- `shop_stock_item`
+- `shop_stock_item_shop_id_check`
+- `shop_stock_item_quantity_nonnegative`
+- `shop_stock_ledger`
+- `shop_stock_ledger_source_check`
+- `shop_stock_ledger_shop_id_check`
+- `shop_stock_ledger_delta_nonzero`
+- `shop_stock_ledger_shop_idx`
 
-Migration target: `0003_inventory_equipment.sql`
+Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`
 
 ### Pet
 

@@ -255,6 +255,12 @@ func (handler HTTPHandler) HandleStudentShopPurchase(w http.ResponseWriter, r *h
 		})
 		return
 	}
+	if errors.Is(err, ErrInsufficientShopStock) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "shop item is out of stock",
+		})
+		return
+	}
 	if err != nil {
 		log.Printf("purchase student shop item: %v", err)
 		writeJSON(w, http.StatusBadRequest, map[string]string{
