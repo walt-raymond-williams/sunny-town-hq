@@ -43,6 +43,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok"))
 	})
+	mux.HandleFunc("/debug/npcs", srv.HandleNPCDebug)
 	mux.HandleFunc("/sunny-town/ws", srv.HandleWebSocket)
 
 	httpServer := &http.Server{

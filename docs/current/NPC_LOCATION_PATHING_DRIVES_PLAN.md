@@ -33,6 +33,7 @@ Important current code touchpoints:
 - NPC movement/drives/controller: `internal/sunnytown/server/npc_movement.go`
 - NPC runtime initialization: `internal/sunnytown/server/npc_characters.go`
 - NPC snapshots: `internal/sunnytown/server/world_snapshots.go`
+- NPC drive debug endpoint: `internal/sunnytown/server/npc_debug.go`, `GET /debug/npcs` with `X-HQ-Service-Secret`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
 
@@ -116,7 +117,7 @@ Suggested tests:
 
 ### Slice ND-3: Debug/Inspectability For NPC Drives And Goals
 
-Status: `Next`
+Status: `Implemented`
 
 Goal: make current NPC behavior visible enough to tune without attaching a debugger.
 
@@ -126,6 +127,14 @@ Implementation notes:
 - Prefer an internal/admin HTTP endpoint or structured log helper that does not change public gameplay snapshots unless there is an existing debug protocol pattern.
 - Keep private/transient state out of normal client snapshots by default.
 - Include enough data to answer: "why is this NPC going there?"
+
+Implemented notes:
+
+- Sunny Town exposes `GET /debug/npcs` for NPC movement/debug state.
+- The endpoint requires `X-HQ-Service-Secret` when `SUNNY_TOWN_SERVICE_SECRET` is configured.
+- Debug output is deterministic: maps, NPCs, and failed targets are sorted.
+- Each NPC debug entry includes public identity/position, drives, active drive, goal location/tags, route step/path indexes, focus and reevaluation timestamps, arrival/failure state, and failed target retry times.
+- Normal websocket `hello`, `snapshot`, and `map_changed` payloads remain unchanged.
 
 Acceptance criteria:
 
@@ -142,7 +151,7 @@ Suggested tests:
 
 ### Slice ND-4: Idle/Wander/Public Fallback
 
-Status: `Planned`
+Status: `Next`
 
 Goal: avoid lifeless idle behavior when no urgent drive is satisfiable.
 
@@ -706,9 +715,8 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-3: debug/inspectability for NPC drives and goals.
-2. Slice ND-4: idle/wander/public fallback.
-3. Slice ND-5: dynamic collision awareness for pathing.
-4. Slice ND-6: richer authored locations and ownership.
+1. Slice ND-4: idle/wander/public fallback.
+2. Slice ND-5: dynamic collision awareness for pathing.
+3. Slice ND-6: richer authored locations and ownership.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.
