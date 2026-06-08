@@ -6,7 +6,7 @@ const { showStudent, showTeacherLogin } = useRouteAccess()
 </script>
 
 <template>
-  <v-card class="panel" elevation="8">
+  <v-card class="panel" data-testid="app-shell" elevation="8">
     <v-card-text>
       <p class="eyebrow">HQ</p>
       <h1>Headquarters</h1>
@@ -15,6 +15,7 @@ const { showStudent, showTeacherLogin } = useRouteAccess()
         <v-btn
           v-if="!keycloak.authenticated || hasRole('student')"
           color="primary"
+          data-testid="student-entry-button"
           variant="tonal"
           size="large"
           @click="showStudent"
@@ -24,6 +25,7 @@ const { showStudent, showTeacherLogin } = useRouteAccess()
         <v-btn
           v-if="!keycloak.authenticated || hasRole('teacher')"
           color="secondary"
+          data-testid="teacher-entry-button"
           size="large"
           @click="showTeacherLogin"
         >

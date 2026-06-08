@@ -23,7 +23,20 @@
       "protocol": "openid-connect",
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "hq-web audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hq-web",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ],
       "redirectUris": [
         "http://localhost:5173/*",
         "http://127.0.0.1:5173/*",
@@ -35,6 +48,44 @@
         "http://127.0.0.1:5173",
         "http://localhost:18080",
         "http://127.0.0.1:18080"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "playwright-student",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Playwright",
+      "lastName": "Student",
+      "email": "playwright-student@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "playwright",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "student"
+      ]
+    },
+    {
+      "username": "playwright-teacher",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Playwright",
+      "lastName": "Teacher",
+      "email": "playwright-teacher@example.test",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "playwright",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "teacher"
       ]
     }
   ]

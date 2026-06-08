@@ -45,7 +45,7 @@ const reviewBoxes = computed<AttemptReviewBox[]>(() => {
 </script>
 
 <template>
-  <v-expansion-panel-title>
+  <v-expansion-panel-title data-testid="teacher-assignment-title">
     <div class="grading-title">
       <div class="question-title">
         <v-chip color="primary" size="small" variant="tonal">
@@ -73,6 +73,7 @@ const reviewBoxes = computed<AttemptReviewBox[]>(() => {
     <v-form v-if="activeAttempt && gradingForm" class="form-grid" @submit.prevent>
       <v-textarea
         v-model="gradingForm.feedback"
+        data-testid="assignment-feedback-input"
         label="Feedback"
         placeholder="Good explanation."
         rows="3"
@@ -90,6 +91,7 @@ const reviewBoxes = computed<AttemptReviewBox[]>(() => {
             v-for="option in passFailOptions"
             :key="option.label"
             :color="option.value ? 'success' : 'error'"
+            :data-testid="option.value ? 'assignment-pass-button' : 'assignment-fail-button'"
             :loading="isSavingGrade && gradingForm.passed === option.value"
             :value="option.value"
             size="large"
@@ -101,6 +103,7 @@ const reviewBoxes = computed<AttemptReviewBox[]>(() => {
         <v-btn
           :loading="isResettingAssignment"
           color="warning"
+          data-testid="assignment-reset-button"
           prepend-icon="mdi-restore"
           size="large"
           variant="flat"
@@ -121,6 +124,7 @@ const reviewBoxes = computed<AttemptReviewBox[]>(() => {
     <v-btn
       class="mt-4"
       color="error"
+      data-testid="assignment-delete-button"
       prepend-icon="mdi-delete"
       variant="flat"
       @click="$emit('delete')"

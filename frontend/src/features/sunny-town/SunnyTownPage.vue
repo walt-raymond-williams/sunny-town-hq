@@ -23,6 +23,7 @@ import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useSunnyTownToolUseAnimation } from '../../composables/useSunnyTownToolUseAnimation'
 import { useSunnyTownWorldState } from '../../composables/useSunnyTownWorldState'
+import { useRouteAccess } from '../../composables/useRouteAccess'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type {
   SunnyTownEquipmentChangedMessage,
@@ -55,6 +56,7 @@ const npcInteractionRadius = 54
 const toolUseDurationMs = 360
 
 const router = useRouter()
+const { ensureStudentAccess } = useRouteAccess()
 const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
 const localPlayerState = useSunnyTownLocalPlayer()
@@ -178,6 +180,11 @@ const draw = renderer.draw
 const playerCount = computed(() => players.value.length)
 
 onMounted(async () => {
+  const canAccess = await ensureStudentAccess()
+  if (!canAccess) {
+    return
+  }
+
   window.addEventListener('keydown', handleKeyDown, movementInputEventOptions)
   window.addEventListener('keyup', handleKeyUp, movementInputEventOptions)
   window.addEventListener('blur', handleInputCancel)

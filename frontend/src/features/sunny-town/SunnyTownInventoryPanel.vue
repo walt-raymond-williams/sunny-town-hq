@@ -28,7 +28,7 @@ const visibleCraftingRecipes = computed(() => (
 </script>
 
 <template>
-  <div class="sunny-town-inventory-tray" role="dialog" aria-label="Inventory">
+  <div class="sunny-town-inventory-tray" data-testid="sunny-town-inventory-panel" role="dialog" aria-label="Inventory">
     <section v-if="craftingPanelOpen" class="sunny-town-crafting" aria-label="Crafting">
       <div class="sunny-town-crafting__header">
         <strong>Crafting</strong>

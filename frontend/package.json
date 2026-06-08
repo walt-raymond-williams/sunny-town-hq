@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "typecheck": "vue-tsc --noEmit",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview"
@@ -23,6 +25,7 @@
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.70.0",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/tsconfig": "^0.9.1",

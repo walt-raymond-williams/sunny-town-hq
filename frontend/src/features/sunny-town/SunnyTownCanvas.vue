@@ -21,6 +21,7 @@ onMounted(() => {
   <canvas
     ref="canvas"
     aria-label="Sunny Town map"
+    data-testid="sunny-town-canvas"
     @pointerdown="emit('pointerDown', $event)"
     @pointermove="emit('pointerMove', $event)"
     @pointerleave="emit('pointerLeave')"

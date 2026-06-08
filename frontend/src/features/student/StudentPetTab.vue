@@ -45,6 +45,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
     <div class="actions">
       <v-btn
         color="success"
+        data-testid="enter-sunny-town-button"
         prepend-icon="mdi-map"
         variant="flat"
         @click="$emit('enterSunnyTown')"
@@ -54,6 +55,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
       <v-btn
         :loading="inventoryStore.isLoading"
         color="secondary"
+        data-testid="pet-inventory-button"
         prepend-icon="mdi-bag-personal"
         variant="tonal"
         @click="openInventory"
@@ -76,7 +78,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
     {{ studentPetStore.error }}
   </v-alert>
 
-  <section class="pet-dashboard">
+  <section class="pet-dashboard" data-testid="pet-profile">
     <div class="cookie-display">
       <span class="cookie-display__icon" aria-hidden="true" />
       <div>
@@ -177,7 +179,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
   </section>
 
   <v-dialog v-model="inventoryOpen" max-width="420">
-    <v-card>
+    <v-card data-testid="pet-inventory-dialog">
       <v-card-title class="d-flex align-center justify-space-between">
         <span>Inventory</span>
         <v-btn icon="mdi-close" size="small" variant="text" @click="inventoryOpen = false" />

@@ -111,7 +111,7 @@ function enterSunnyTown() {
 </script>
 
 <template>
-  <v-card class="panel student-panel" elevation="8">
+  <v-card class="panel student-panel" data-testid="student-dashboard" elevation="8">
     <v-card-text>
       <div class="desk-header">
         <div>

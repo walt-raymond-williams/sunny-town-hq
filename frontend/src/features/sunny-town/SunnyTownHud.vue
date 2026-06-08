@@ -19,7 +19,7 @@ defineEmits<{
 </script>
 
 <template>
-  <section class="sunny-town-page">
+  <section class="sunny-town-page" data-testid="sunny-town-page">
     <div class="sunny-town-toolbar">
       <div>
         <p class="eyebrow">Pet</p>

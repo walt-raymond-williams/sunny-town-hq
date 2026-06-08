@@ -73,7 +73,7 @@ function errorMessage(error: unknown): string {
 </script>
 
 <template>
-  <v-card class="panel teacher-panel" elevation="8">
+  <v-card class="panel teacher-panel" data-testid="teacher-dashboard" elevation="8">
     <v-card-text>
       <div class="desk-header">
         <div>
@@ -95,6 +95,7 @@ function errorMessage(error: unknown): string {
         <v-btn
           :prepend-icon="isCreatingQuestion ? 'mdi-chevron-up' : 'mdi-plus'"
           color="secondary"
+          data-testid="new-question-button"
           variant="flat"
           @click="isCreatingQuestion = !isCreatingQuestion"
         >

@@ -33,6 +33,7 @@ defineEmits({
   <v-select
     v-model="studentCategoryFilter"
     class="student-category-filter"
+    data-testid="student-category-filter"
     density="comfortable"
     hide-details
     item-title="title"
@@ -59,17 +60,34 @@ defineEmits({
     You have finished all assignments
   </v-alert>
 
-  <v-form v-else-if="studentAssignment" class="form-grid" @submit.prevent="$emit('submitAnswer')">
-    <div class="student-question">
+  <v-form
+    v-else-if="studentAssignment"
+    class="form-grid"
+    data-testid="student-answer-form"
+    @submit.prevent="$emit('submitAnswer')"
+  >
+    <div class="student-question" data-testid="student-assignment-prompt">
       <v-chip color="primary" size="small" variant="tonal">
         {{ studentAssignment.category }}
       </v-chip>
       <p>{{ studentAssignment.prompt }}</p>
     </div>
 
-    <v-textarea v-model="studentAnswer" label="Your answer" rows="5" variant="outlined" />
+    <v-textarea
+      v-model="studentAnswer"
+      data-testid="student-answer-input"
+      label="Your answer"
+      rows="5"
+      variant="outlined"
+    />
 
-    <v-btn :loading="isSubmittingStudentAnswer" color="secondary" size="large" type="submit">
+    <v-btn
+      :loading="isSubmittingStudentAnswer"
+      color="secondary"
+      data-testid="assignment-submit-button"
+      size="large"
+      type="submit"
+    >
       Submit Answer
     </v-btn>
   </v-form>
