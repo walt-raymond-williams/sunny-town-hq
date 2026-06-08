@@ -25,6 +25,8 @@ Current implemented baseline:
 - NPC goals have focus windows, periodic reevaluation, emergency interruption, arrival grace, failure counts, and failed-target cooldowns.
 - NPCs can choose a low-priority `idle` fallback route to public/idle/wander/social locations when no urgent drive goal is available.
 - NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
+- NPCs use deterministic UTC schedule phases (`morning`, `day`, `evening`, `night`) to apply selection-time drive pressure for strong routine anchors.
+- Schedule pressure is visible in `/debug/npcs`, and urgent raw needs still override scheduled behavior.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -257,24 +259,21 @@ Suggested tests:
 - Owned location is selected by scoring for the matching NPC.
 - Work-tagged location can satisfy the work drive.
 
-### Later Work: Durability, Coarse Catch-Up, And Schedules
+### Later Work: Durability, Coarse Catch-Up, And Production
 
 Status: `Planned`
 
-The first movement/drives implementation and tuning slices are complete. The next work should move from "NPCs can satisfy drives at tagged locations" toward "NPCs have readable routines." Do this incrementally: first make routine anchors explicit, then add simple time/schedule pressure, then decide what needs persistence or offline catch-up.
+The first movement/drives implementation, tuning slices, runtime routine anchors, and simple schedule pressure are complete. The next work should decide what routine state must persist and how far NPC simulation should advance when no players are connected.
 
 Recommended next order:
 
-1. ND-7: Runtime routine anchors from authored locations.
-2. ND-8: Simple schedule and time-band drive pressure.
-3. ND-9: Persistence and no-player coarse catch-up.
-4. ND-10: Resource/job production loops.
-5. ND-11: Social relationship effects.
+1. ND-9: Persistence and no-player coarse catch-up.
+2. ND-10: Resource/job production loops.
+3. ND-11: Social relationship effects.
 
 Rationale:
 
-- Routine anchors should come before schedules because schedules need stable answers to "where is this NPC's home?" and "where does this NPC work?"
-- Schedules should come before persistence because it is easier to decide what to save after the runtime behavior is clear.
+- Runtime anchors and simple schedule pressure now make it clearer which state is worth saving.
 - Persistence and coarse catch-up should come before production loops so no-player behavior does not diverge wildly from online behavior.
 - Resource/job production and social systems should wait until the basic routine loop is readable and debuggable.
 
@@ -327,7 +326,7 @@ Suggested tests:
 
 ### Slice ND-8: Simple Schedule And Time-Band Drive Pressure
 
-Status: `Next`
+Status: `Implemented`
 
 Goal: make routines visibly change over time without building a full calendar or GOAP planner.
 
@@ -342,6 +341,23 @@ Implementation notes:
 - Keep urgent biological drives, especially hunger/energy, able to override schedules.
 - Surface current phase and schedule pressure in `GET /debug/npcs` or adjacent debug output.
 - Avoid client-facing protocol changes unless there is a clear UI/debug need.
+
+Implemented notes:
+
+- Added a deterministic runtime schedule phase helper with UTC-based bands:
+  - `morning`: 06:00-09:59
+  - `day`: 10:00-16:59
+  - `evening`: 17:00-20:59
+  - `night`: 21:00-05:59
+- Schedule pressure is applied only during drive selection; raw drive values still deplete/replenish normally.
+- Day applies work pressure for NPCs with a strong work anchor.
+- Night applies energy/home pressure for NPCs with a strong home/rest anchor.
+- Evening applies social pressure for NPCs with a strong social anchor.
+- Morning applies lighter hunger pressure for NPCs with a strong food anchor.
+- "Strong" schedule anchors are owner- or role-derived anchors, not generic fallback anchors, so generic public/idle locations do not make unrelated tests or NPCs time-sensitive.
+- Emergency raw drive values still override schedule pressure. For example, urgent hunger can beat a daytime work schedule.
+- `GET /debug/npcs` now includes the current schedule phase and active schedule pressure entries with raw and selection-adjusted drive values.
+- Tests cover phase boundaries, daytime work pressure, nighttime home/rest pressure, urgent hunger override, and debug schedule output.
 
 Acceptance criteria:
 
@@ -360,7 +376,7 @@ Suggested tests:
 
 ### Slice ND-9: Persistence And No-Player Coarse Catch-Up
 
-Status: `Future`
+Status: `Next`
 
 Goal: decide which NPC routine state should survive process restarts and how much simulation should advance when no players are connected.
 
@@ -377,7 +393,6 @@ Implementation notes:
 - Persist durable home/work anchors or assignments in HQ.
 - Decide whether drive snapshots should survive Sunny Town restart.
 - Add coarse catch-up when no players are connected.
-- Add day-night or schedule effects.
 - Add resource/job production loops.
 - Add social relationship effects.
 
@@ -859,8 +874,7 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-8: simple schedule and time-band drive pressure.
-2. Slice ND-9: persistence and no-player coarse catch-up.
-3. Later: resource/job production loops and social relationship effects.
+1. Slice ND-9: persistence and no-player coarse catch-up.
+2. Later: resource/job production loops and social relationship effects.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.

@@ -173,11 +173,11 @@ func (room *room) chooseNPCDriveGoalLocked(npc *liveNPC, now time.Time) {
 }
 
 func (room *room) nextNPCDriveGoalLocked(npc *liveNPC, now time.Time, emergencyOnly bool) (npcGoal, stnavigation.Route, bool) {
-	for _, drive := range npc.drivesByUrgency() {
-		if npc.driveValue(drive) >= npcDriveThreshold {
+	for _, drive := range npc.drivesByUrgency(now) {
+		if emergencyOnly && npc.driveValue(drive) >= npcEmergencyDriveThreshold {
 			continue
 		}
-		if emergencyOnly && npc.driveValue(drive) >= npcEmergencyDriveThreshold {
+		if !emergencyOnly && npc.driveSelectionValue(drive, now) >= npcDriveThreshold {
 			continue
 		}
 		goal, route, ok := room.routeToDriveLocationLocked(npc, drive, now)
@@ -523,14 +523,6 @@ func (npc *liveNPC) depleteDrives(dt float64) {
 	for _, drive := range allNPCDrives {
 		npc.setDriveValue(drive, npc.driveValue(drive)-npcDriveDepletePerSecond*dt)
 	}
-}
-
-func (npc *liveNPC) drivesByUrgency() []npcDrive {
-	drives := append([]npcDrive(nil), allNPCDrives...)
-	sort.SliceStable(drives, func(i int, j int) bool {
-		return npc.driveValue(drives[i]) < npc.driveValue(drives[j])
-	})
-	return drives
 }
 
 func (npc *liveNPC) driveValue(drive npcDrive) float64 {

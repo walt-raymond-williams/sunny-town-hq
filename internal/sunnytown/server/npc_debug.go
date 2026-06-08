@@ -29,6 +29,7 @@ type npcDebugNPC struct {
 	Moving        bool                   `json:"moving"`
 	Drives        npcDebugDrives         `json:"drives"`
 	Anchors       npcDebugAnchors        `json:"anchors"`
+	Schedule      npcDebugSchedule       `json:"schedule"`
 	ActiveDrive   string                 `json:"activeDrive,omitempty"`
 	Goal          *npcDebugGoal          `json:"goal,omitempty"`
 	Route         *npcDebugRoute         `json:"route,omitempty"`
@@ -53,6 +54,18 @@ type npcDebugAnchors struct {
 	Work   *npcDebugAnchor `json:"work,omitempty"`
 	Food   *npcDebugAnchor `json:"food,omitempty"`
 	Social *npcDebugAnchor `json:"social,omitempty"`
+}
+
+type npcDebugSchedule struct {
+	Phase     string                  `json:"phase"`
+	Pressures []npcDebugDrivePressure `json:"pressures,omitempty"`
+}
+
+type npcDebugDrivePressure struct {
+	Drive          string  `json:"drive"`
+	Pressure       float64 `json:"pressure"`
+	Value          float64 `json:"value"`
+	SelectionValue float64 `json:"selectionValue"`
 }
 
 type npcDebugAnchor struct {
@@ -161,6 +174,7 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		Moving:        publicSnapshot.Moving,
 		Drives:        npcDebugDrives(liveNPC.drives),
 		Anchors:       debugAnchors(liveNPC.anchors),
+		Schedule:      liveNPC.debugSchedule(now),
 		ActiveDrive:   string(liveNPC.activeDrive),
 		FocusUntil:    formatDebugTime(liveNPC.focusUntil),
 		ReevaluateAt:  formatDebugTime(liveNPC.reevaluateAt),
@@ -194,6 +208,25 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		}
 	}
 	return debugNPC
+}
+
+func (npc *liveNPC) debugSchedule(now time.Time) npcDebugSchedule {
+	debugSchedule := npcDebugSchedule{
+		Phase: string(npcSchedulePhaseAt(now)),
+	}
+	for _, drive := range allNPCDrives {
+		pressure := npc.scheduleDrivePressure(drive, now)
+		if pressure <= 0 {
+			continue
+		}
+		debugSchedule.Pressures = append(debugSchedule.Pressures, npcDebugDrivePressure{
+			Drive:          string(drive),
+			Pressure:       pressure,
+			Value:          npc.driveValue(drive),
+			SelectionValue: npc.driveSelectionValue(drive, now),
+		})
+	}
+	return debugSchedule
 }
 
 func debugAnchors(anchors npcRoutineAnchors) npcDebugAnchors {
