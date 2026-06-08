@@ -33,6 +33,10 @@ const (
 	npcNoPlayerCatchUpMax      = 5 * time.Minute
 	starPickupRadius           = 30.0
 	resourceCommitQueueSize    = 32
+	npcJobProductionQueueSize  = 32
+	npcJobProductionInterval   = 20 * time.Second
+	npcJobProductionCatchUpMax = 5 * time.Minute
+	npcJobProductionUnit       = 1
 	resourceHitsRequired       = 3
 	resourceToolCooldown       = 500 * time.Millisecond
 	simulationInterval         = 50 * time.Millisecond
@@ -63,8 +67,10 @@ func (room *room) step(dt float64, now time.Time) {
 	}
 
 	var npcTransfers []npcTransfer
+	var npcJobEvents []npcJobProductionEvent
 	if len(room.players) > 0 || room.npcPausedAt.IsZero() {
 		npcTransfers = room.stepLiveNPCsLocked(dt, now)
+		npcJobEvents = room.collectNPCJobProductionLocked(dt, now)
 	}
 	room.respawnCollectiblesLocked(now)
 	room.respawnResourceNodesLocked(now)
@@ -84,6 +90,7 @@ func (room *room) step(dt float64, now time.Time) {
 			})
 		}
 	}
+	queueNPCJobProductionEvents(room.npcJobEvents, npcJobEvents)
 }
 
 func newRewardRunID() string {

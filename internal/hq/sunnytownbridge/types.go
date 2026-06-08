@@ -53,6 +53,23 @@ type ResourceEventResponse struct {
 	Quantity    int    `json:"quantity"`
 }
 
+type NPCJobProductionRequest struct {
+	EventID     string `json:"event_id"`
+	CharacterID int64  `json:"character_id"`
+	RoomID      string `json:"room_id"`
+	MapID       string `json:"map_id"`
+	NPCKey      string `json:"npc_key"`
+	JobKey      string `json:"job_key"`
+	LocationID  string `json:"location_id"`
+	OutputKey   string `json:"output_key"`
+	Amount      int    `json:"amount"`
+}
+
+type NPCJobProductionResponse struct {
+	Accepted  bool `json:"accepted"`
+	Duplicate bool `json:"duplicate"`
+}
+
 type PositionRequest struct {
 	AppUserID int64   `json:"app_user_id"`
 	RoomID    string  `json:"room_id"`
@@ -147,6 +164,18 @@ type InventoryLedgerRequest struct {
 	RoomID    string
 	MapID     string
 	NodeID    string
+}
+
+type NPCJobProductionLedgerRequest struct {
+	EventID     string
+	CharacterID int64
+	RoomID      string
+	MapID       string
+	NPCKey      string
+	JobKey      string
+	LocationID  string
+	OutputKey   string
+	Amount      int
 }
 
 type Store struct {

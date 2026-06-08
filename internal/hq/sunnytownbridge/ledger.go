@@ -145,3 +145,50 @@ func CommitStudentInventoryLedgerDelta(ctx context.Context, querier rowQuerier, 
 	).Scan(&inserted, &quantity)
 	return inserted, quantity, err
 }
+
+func CommitNPCJobProductionLedger(ctx context.Context, querier rowQuerier, request NPCJobProductionLedgerRequest) (bool, error) {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.RoomID = strings.TrimSpace(request.RoomID)
+	request.MapID = strings.TrimSpace(request.MapID)
+	request.NPCKey = strings.TrimSpace(request.NPCKey)
+	request.JobKey = strings.TrimSpace(request.JobKey)
+	request.LocationID = strings.TrimSpace(request.LocationID)
+	request.OutputKey = strings.TrimSpace(request.OutputKey)
+	if request.EventID == "" || request.CharacterID < 1 || request.RoomID == "" || request.MapID == "" || request.NPCKey == "" || request.JobKey == "" || request.LocationID == "" || request.OutputKey == "" || request.Amount < 1 {
+		return false, errors.New("npc job production event is missing required fields")
+	}
+
+	var inserted bool
+	err := querier.QueryRow(
+		ctx,
+		`
+			insert into sunny_town_npc_job_production_ledger (
+				event_id,
+				character_id,
+				room_id,
+				map_id,
+				npc_key,
+				job_key,
+				location_id,
+				output_key,
+				amount
+			)
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			on conflict (event_id) do nothing
+			returning true
+		`,
+		request.EventID,
+		request.CharacterID,
+		request.RoomID,
+		request.MapID,
+		request.NPCKey,
+		request.JobKey,
+		request.LocationID,
+		request.OutputKey,
+		request.Amount,
+	).Scan(&inserted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return inserted, err
+}

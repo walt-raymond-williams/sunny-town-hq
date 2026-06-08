@@ -68,6 +68,31 @@ func (handler HTTPHandler) HandleResourceEvent(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (handler HTTPHandler) HandleNPCJobProduction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !handler.authorized(w, r) {
+		return
+	}
+
+	var request NPCJobProductionRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "request body must be valid JSON"})
+		return
+	}
+
+	response, err := handler.store.CommitNPCJobProduction(r.Context(), request)
+	if err != nil {
+		log.Printf("commit sunny town npc job production: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "npc job production event could not be accepted"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (handler HTTPHandler) HandleStudentEquipment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

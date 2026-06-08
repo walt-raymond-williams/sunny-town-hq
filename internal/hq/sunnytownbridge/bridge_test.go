@@ -79,3 +79,23 @@ func TestCommitResourceRejectsInvalidRequestBeforeDB(t *testing.T) {
 		t.Fatalf("error = %v, want unsupported source", err)
 	}
 }
+
+func TestCommitNPCJobProductionRejectsInvalidRequestBeforeDB(t *testing.T) {
+	_, err := (Store{}).CommitNPCJobProduction(context.Background(), NPCJobProductionRequest{
+		EventID:     "event-1",
+		CharacterID: 123,
+		RoomID:      "sunny-town-main",
+		MapID:       "sunny-town-house-1",
+		NPCKey:      "cookie-keeper",
+		JobKey:      "other",
+		LocationID:  "cookie-keeper-counter",
+		OutputKey:   "shop_stock_progress",
+		Amount:      1,
+	})
+	if err == nil {
+		t.Fatal("expected invalid npc job production request error")
+	}
+	if !strings.Contains(err.Error(), "unsupported npc job") {
+		t.Fatalf("error = %v, want unsupported npc job", err)
+	}
+}

@@ -14,6 +14,7 @@ import (
 func newWorld(roomID string, maps map[string]gameMap) *world {
 	rewardEvents := make(chan rewardEvent, 32)
 	resourceEvents := make(chan resourceEvent, resourceCommitQueueSize)
+	npcJobEvents := make(chan npcJobProductionEvent, npcJobProductionQueueSize)
 	navigationGraph, err := stnavigation.NewGraph(maps)
 	if err != nil {
 		log.Printf("build sunny town navigation graph: %v", err)
@@ -25,16 +26,17 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 		npcCharacters:  map[string]npcCharacter{},
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
+		npcJobEvents:   npcJobEvents,
 	}
 	for _, gameMap := range maps {
-		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, resourceEvents, created)
+		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, resourceEvents, npcJobEvents, created)
 	}
 	created.defaultRoom = created.rooms[defaultMapID]
 	created.configureNPCRoutineAnchors()
 	return created
 }
 
-func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resourceEvents chan resourceEvent, world *world) *room {
+func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resourceEvents chan resourceEvent, npcJobEvents chan npcJobProductionEvent, world *world) *room {
 	resourceNodes := initialResourceNodes(gameMap)
 	worldObjects := map[string]*worldObject{}
 	for _, node := range resourceNodes {
@@ -52,6 +54,7 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resource
 		rewardRunID:    newRewardRunID(),
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
+		npcJobEvents:   npcJobEvents,
 		world:          world,
 	}
 	room.configureNPCBehaviorLocked()

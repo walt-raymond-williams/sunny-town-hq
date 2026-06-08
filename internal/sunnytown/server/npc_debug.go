@@ -30,6 +30,7 @@ type npcDebugNPC struct {
 	Drives        npcDebugDrives         `json:"drives"`
 	Anchors       npcDebugAnchors        `json:"anchors"`
 	Schedule      npcDebugSchedule       `json:"schedule"`
+	Production    npcDebugProduction     `json:"production"`
 	ActiveDrive   string                 `json:"activeDrive,omitempty"`
 	Goal          *npcDebugGoal          `json:"goal,omitempty"`
 	Route         *npcDebugRoute         `json:"route,omitempty"`
@@ -59,6 +60,15 @@ type npcDebugAnchors struct {
 type npcDebugSchedule struct {
 	Phase     string                  `json:"phase"`
 	Pressures []npcDebugDrivePressure `json:"pressures,omitempty"`
+}
+
+type npcDebugProduction struct {
+	Eligible        bool    `json:"eligible"`
+	JobKey          string  `json:"jobKey,omitempty"`
+	OutputKey       string  `json:"outputKey,omitempty"`
+	ProgressSeconds float64 `json:"progressSeconds,omitempty"`
+	LastAt          string  `json:"lastAt,omitempty"`
+	LastEvent       string  `json:"lastEvent,omitempty"`
 }
 
 type npcDebugDrivePressure struct {
@@ -175,6 +185,7 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		Drives:        npcDebugDrives(liveNPC.drives),
 		Anchors:       debugAnchors(liveNPC.anchors),
 		Schedule:      liveNPC.debugSchedule(now),
+		Production:    room.npcProductionDebugSnapshotLocked(liveNPC),
 		ActiveDrive:   string(liveNPC.activeDrive),
 		FocusUntil:    formatDebugTime(liveNPC.focusUntil),
 		ReevaluateAt:  formatDebugTime(liveNPC.reevaluateAt),
@@ -208,6 +219,21 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		}
 	}
 	return debugNPC
+}
+
+func (room *room) npcProductionDebugSnapshotLocked(liveNPC *liveNPC) npcDebugProduction {
+	job, ok := liveNPC.jobDefinition()
+	if !ok {
+		return npcDebugProduction{}
+	}
+	return npcDebugProduction{
+		Eligible:        room.npcAtWorkAnchorLocked(liveNPC),
+		JobKey:          job.JobKey,
+		OutputKey:       job.OutputKey,
+		ProgressSeconds: liveNPC.jobProduction.Progress,
+		LastAt:          formatDebugTime(liveNPC.jobProduction.LastAt),
+		LastEvent:       liveNPC.jobProduction.LastEvent,
+	}
 }
 
 func (npc *liveNPC) debugSchedule(now time.Time) npcDebugSchedule {

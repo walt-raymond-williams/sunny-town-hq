@@ -21,7 +21,7 @@ Do not move `cmd/hq` app construction or route registration just to reduce line 
 - `internal/hq/assignments`: assignment DTOs, typed assignment queries, submission, grading commands, teacher/student HTTP handlers, and AI grading coordination points.
 - `internal/hq/inventory`: student inventory, equipment, hotbar, crafting, wallet, shop, and related HTTP handlers.
 - `internal/hq/pet`: pet rules, profile persistence, pet actions, decay, game-result rewards, REST handlers, and Connect RPC handler.
-- `internal/hq/sunnytownbridge`: service-authenticated Sunny Town internal endpoints, durable Sunny Town position/map-object persistence, star and inventory ledgers for Sunny Town events.
+- `internal/hq/sunnytownbridge`: service-authenticated Sunny Town internal endpoints, durable Sunny Town position/map-object persistence, star/resource ledgers for player events, and NPC job production ledgers.
 - `internal/hq/ai`: HQ-side AI grading context, result persistence, auto-apply policy, internal AI endpoints, and outbound grade triggering.
 - `internal/hq/schema`: startup migration runner for ordered SQL migrations.
 - `internal/hq/httpapi`: domain-neutral HTTP helpers such as JSON responses, static SPA serving, request logging, and local IPv4 discovery.
@@ -34,7 +34,7 @@ HQ owns durable state. Sunny Town and AI services interact with HQ through servi
 - `internal/sunnytown/hqclient`: service-authenticated internal HTTP client for HQ calls.
 - `internal/sunnytown/maps`: map JSON types, loading, and validation.
 - `internal/sunnytown/protocol`: WebSocket protocol message types.
-- `internal/sunnytown/server`: realtime rooms, players, movement validation, portals, collectibles, resources, placement, snapshots, workers, and WebSocket handling.
+- `internal/sunnytown/server`: realtime rooms, players, movement validation, portals, collectibles, resources, NPC movement/job production, placement, snapshots, workers, and WebSocket handling.
 - `internal/sunnytownauth`: signed join-token claims for HQ-to-Sunny-Town browser sessions.
 
 Sunny Town owns live realtime state. Browser messages are requests; gameplay effects must be validated against server-accepted state before HQ receives durable reward/resource events.

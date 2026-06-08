@@ -41,6 +41,8 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_sunny_town_position`: last accepted Sunny Town map position
 - `sunny_town_map_object`: persisted placed map objects
 - `sunny_town_character`: shared Sunny Town character identity for player-controlled and future NPC actors
+- `sunny_town_npc_character`: durable NPC character mapping by room and NPC key
+- `sunny_town_npc_job_production_ledger`: idempotent durable NPC job production events
 
 ## Migration Layout
 
@@ -54,6 +56,8 @@ deploy/postgres/migrations/
   0004_sunny_town_state.sql
   0005_ai_grading.sql
   0006_sunny_town_characters.sql
+  0007_sunny_town_npc_characters.sql
+  0008_sunny_town_npc_job_production.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.
@@ -72,7 +76,7 @@ Use the next numeric prefix and a short domain name, for example:
 0006_add_assignment_due_dates.sql
 ```
 
-Keep migrations idempotent where practical because the first five files also support legacy local databases. HQ applies unapplied files at startup and records each version in `schema_migration`.
+Keep migrations idempotent where practical because the ordered files also support legacy local databases. HQ applies unapplied files at startup and records each version in `schema_migration`.
 
 Check applied versions:
 

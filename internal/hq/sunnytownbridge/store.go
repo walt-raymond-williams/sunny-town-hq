@@ -77,6 +77,45 @@ func (store Store) CommitResource(ctx context.Context, request ResourceEventRequ
 	return ResourceEventResponse{Accepted: true, Duplicate: !inserted, ResourceKey: request.ResourceKey, Quantity: quantity}, nil
 }
 
+func (store Store) CommitNPCJobProduction(ctx context.Context, request NPCJobProductionRequest) (NPCJobProductionResponse, error) {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.RoomID = strings.TrimSpace(request.RoomID)
+	request.MapID = strings.TrimSpace(request.MapID)
+	request.NPCKey = strings.TrimSpace(request.NPCKey)
+	request.JobKey = strings.TrimSpace(request.JobKey)
+	request.LocationID = strings.TrimSpace(request.LocationID)
+	request.OutputKey = strings.TrimSpace(request.OutputKey)
+	if request.EventID == "" || request.CharacterID < 1 || request.RoomID == "" || request.MapID == "" || request.NPCKey == "" || request.JobKey == "" || request.LocationID == "" || request.OutputKey == "" {
+		return NPCJobProductionResponse{}, errors.New("npc job production event is missing required fields")
+	}
+	if request.JobKey != "shopkeeper_stock" && request.JobKey != "teacher_lesson_prep" {
+		return NPCJobProductionResponse{}, errors.New("unsupported npc job")
+	}
+	if request.OutputKey != "shop_stock_progress" && request.OutputKey != "lesson_prep_progress" {
+		return NPCJobProductionResponse{}, errors.New("unsupported npc job output")
+	}
+	if request.Amount < 1 {
+		return NPCJobProductionResponse{}, errors.New("npc job production amount must be positive")
+	}
+
+	inserted, err := CommitNPCJobProductionLedger(ctx, store.DB, NPCJobProductionLedgerRequest{
+		EventID:     request.EventID,
+		CharacterID: request.CharacterID,
+		RoomID:      request.RoomID,
+		MapID:       request.MapID,
+		NPCKey:      request.NPCKey,
+		JobKey:      request.JobKey,
+		LocationID:  request.LocationID,
+		OutputKey:   request.OutputKey,
+		Amount:      request.Amount,
+	})
+	if err != nil {
+		return NPCJobProductionResponse{}, err
+	}
+
+	return NPCJobProductionResponse{Accepted: true, Duplicate: !inserted}, nil
+}
+
 func (store Store) LoadPosition(ctx context.Context, appUserID int64) (PositionResponse, error) {
 	if appUserID < 1 {
 		return PositionResponse{}, errors.New("app_user_id is required")

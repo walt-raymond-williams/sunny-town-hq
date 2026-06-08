@@ -122,6 +122,61 @@ func TestCommitSunnyTownResourceIdempotent(t *testing.T) {
 	}
 }
 
+func TestCommitNPCJobProductionIdempotent(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	ensured, err := store.EnsureNPCCharacters(ctx, EnsureNPCCharactersRequest{
+		RoomID: "sunny-town-main",
+		NPCs: []EnsureNPCCharacterInput{{
+			NPCKey:      "cookie-keeper",
+			DisplayName: "Cookie Keeper",
+			AvatarID:    "keeper",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ensure npc error = %v", err)
+	}
+	characterID := ensured.NPCs[0].CharacterID
+	request := NPCJobProductionRequest{
+		EventID:     "sunny-town-main:cookie-keeper:shopkeeper_stock:cookie-keeper-counter:1",
+		CharacterID: characterID,
+		RoomID:      "sunny-town-main",
+		MapID:       "sunny-town-house-1",
+		NPCKey:      "cookie-keeper",
+		JobKey:      "shopkeeper_stock",
+		LocationID:  "cookie-keeper-counter",
+		OutputKey:   "shop_stock_progress",
+		Amount:      1,
+	}
+
+	first, err := store.CommitNPCJobProduction(ctx, request)
+	if err != nil {
+		t.Fatalf("first production commit error = %v", err)
+	}
+	if !first.Accepted || first.Duplicate {
+		t.Fatalf("first production commit = %#v, want accepted non-duplicate", first)
+	}
+
+	second, err := store.CommitNPCJobProduction(ctx, request)
+	if err != nil {
+		t.Fatalf("second production commit error = %v", err)
+	}
+	if !second.Accepted || !second.Duplicate {
+		t.Fatalf("second production commit = %#v, want accepted duplicate", second)
+	}
+
+	var rows int
+	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_job_production_ledger where character_id = $1", characterID).Scan(&rows); err != nil {
+		t.Fatalf("count production ledger rows: %v", err)
+	}
+	if rows != 1 {
+		t.Fatalf("production ledger rows = %d, want 1", rows)
+	}
+}
+
 func TestCommitSunnyTownResourceRejectsInvalidRequest(t *testing.T) {
 	db, cleanup := testBridgeDB(t)
 	defer cleanup()
@@ -136,6 +191,24 @@ func TestCommitSunnyTownResourceRejectsInvalidRequest(t *testing.T) {
 	for _, request := range requests {
 		if _, err := store.CommitResource(context.Background(), request); err == nil {
 			t.Fatalf("resource request %#v succeeded, want error", request)
+		}
+	}
+}
+
+func TestCommitNPCJobProductionRejectsInvalidRequest(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	store := Store{DB: db}
+	requests := []NPCJobProductionRequest{
+		{},
+		{EventID: "event", CharacterID: 1, RoomID: "sunny-town-main", MapID: "sunny-town-house-1", NPCKey: "cookie-keeper", JobKey: "other", LocationID: "cookie-keeper-counter", OutputKey: "shop_stock_progress", Amount: 1},
+		{EventID: "event", CharacterID: 1, RoomID: "sunny-town-main", MapID: "sunny-town-house-1", NPCKey: "cookie-keeper", JobKey: "shopkeeper_stock", LocationID: "cookie-keeper-counter", OutputKey: "other", Amount: 1},
+		{EventID: "event", CharacterID: 1, RoomID: "sunny-town-main", MapID: "sunny-town-house-1", NPCKey: "cookie-keeper", JobKey: "shopkeeper_stock", LocationID: "cookie-keeper-counter", OutputKey: "shop_stock_progress", Amount: 0},
+	}
+	for _, request := range requests {
+		if _, err := store.CommitNPCJobProduction(context.Background(), request); err == nil {
+			t.Fatalf("production request %#v succeeded, want error", request)
 		}
 	}
 }
@@ -487,6 +560,20 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			created_at timestamptz not null default now(),
 			updated_at timestamptz not null default now(),
 			constraint sunny_town_npc_character_room_key unique (room_id, npc_key)
+		)`,
+		`create table sunny_town_npc_job_production_ledger (
+			id bigserial primary key,
+			event_id text not null unique,
+			character_id bigint not null references sunny_town_character(id) on delete cascade,
+			room_id text not null,
+			map_id text not null,
+			npc_key text not null,
+			job_key text not null,
+			location_id text not null,
+			output_key text not null,
+			amount integer not null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now()
 		)`,
 		`create table student_wallet (
 			app_user_id bigint primary key references app_user(id) on delete cascade,

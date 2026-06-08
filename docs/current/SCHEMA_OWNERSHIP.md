@@ -108,8 +108,18 @@ Tables, constraints, and indexes:
 - `sunny_town_map_object_item_key_check`
 - `sunny_town_map_object_location_key`
 - `sunny_town_map_object_map_idx`
+- `sunny_town_npc_job_production_ledger`
+- `sunny_town_npc_job_production_room_id_check`
+- `sunny_town_npc_job_production_map_id_check`
+- `sunny_town_npc_job_production_npc_key_check`
+- `sunny_town_npc_job_production_job_key_check`
+- `sunny_town_npc_job_production_location_id_check`
+- `sunny_town_npc_job_production_output_key_check`
+- `sunny_town_npc_job_production_amount_positive`
+- `sunny_town_npc_job_production_character_idx`
+- `sunny_town_npc_job_production_job_idx`
 
-Migration target: `0004_sunny_town_state.sql`
+Migration targets: `0004_sunny_town_state.sql`, `0008_sunny_town_npc_job_production.sql`
 
 ### Sunny Town Characters
 
@@ -125,8 +135,13 @@ Tables, constraints, and indexes:
 - `sunny_town_character_avatar_id_check`
 - `sunny_town_character_app_user_id_key`
 - `sunny_town_character_room_idx`
+- `sunny_town_npc_character`
+- `sunny_town_npc_character_room_id_check`
+- `sunny_town_npc_character_npc_key_check`
+- `sunny_town_npc_character_room_key`
+- `sunny_town_npc_character_room_idx`
 
-Migration target: `0006_sunny_town_characters.sql`
+Migration targets: `0006_sunny_town_characters.sql`, `0007_sunny_town_npc_characters.sql`
 
 ## Migration Notes
 

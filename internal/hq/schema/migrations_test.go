@@ -61,8 +61,8 @@ func TestRunMigrationsIntegration(t *testing.T) {
 	if err := db.QueryRow(ctx, "select count(*) from schema_migration").Scan(&migrationCount); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrationCount != 7 {
-		t.Fatalf("migration count = %d, want 7", migrationCount)
+	if migrationCount != 8 {
+		t.Fatalf("migration count = %d, want 8", migrationCount)
 	}
 
 	var tableCount int
@@ -89,13 +89,14 @@ func TestRunMigrationsIntegration(t *testing.T) {
 					'student_sunny_town_position',
 					'sunny_town_map_object',
 					'sunny_town_character',
-					'sunny_town_npc_character'
+					'sunny_town_npc_character',
+					'sunny_town_npc_job_production_ledger'
 				)
 		`,
 	).Scan(&tableCount); err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if tableCount != 17 {
-		t.Fatalf("table count = %d, want 17", tableCount)
+	if tableCount != 18 {
+		t.Fatalf("table count = %d, want 18", tableCount)
 	}
 }

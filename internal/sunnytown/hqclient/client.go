@@ -65,6 +65,23 @@ type ResourceCommitResponse struct {
 	Quantity    int    `json:"quantity"`
 }
 
+type NPCJobProductionRequest struct {
+	EventID     string `json:"event_id"`
+	CharacterID int64  `json:"character_id"`
+	RoomID      string `json:"room_id"`
+	MapID       string `json:"map_id"`
+	NPCKey      string `json:"npc_key"`
+	JobKey      string `json:"job_key"`
+	LocationID  string `json:"location_id"`
+	OutputKey   string `json:"output_key"`
+	Amount      int    `json:"amount"`
+}
+
+type NPCJobProductionResponse struct {
+	Accepted  bool `json:"accepted"`
+	Duplicate bool `json:"duplicate"`
+}
+
 type MapObjectsResponse struct {
 	Objects []MapObjectResponse `json:"objects"`
 }
@@ -356,6 +373,26 @@ func (client *Client) CommitResource(ctx context.Context, request ResourceCommit
 	}
 	if !committed.Accepted {
 		return ResourceCommitResponse{}, errors.New("hq rejected resource")
+	}
+	return committed, nil
+}
+
+func (client *Client) CommitNPCJobProduction(ctx context.Context, request NPCJobProductionRequest) (NPCJobProductionResponse, error) {
+	response, err := client.jsonRequest(ctx, http.MethodPost, "/api/internal/sunny-town/npc-job-production", request)
+	if err != nil {
+		return NPCJobProductionResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return NPCJobProductionResponse{}, fmt.Errorf("hq npc job production status %d", response.StatusCode)
+	}
+
+	var committed NPCJobProductionResponse
+	if err := json.NewDecoder(response.Body).Decode(&committed); err != nil {
+		return NPCJobProductionResponse{}, err
+	}
+	if !committed.Accepted {
+		return NPCJobProductionResponse{}, errors.New("hq rejected npc job production")
 	}
 	return committed, nil
 }

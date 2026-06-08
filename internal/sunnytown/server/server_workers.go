@@ -96,6 +96,57 @@ func (srv *Server) RunResourceWorker(ctx context.Context) {
 	}
 }
 
+func (srv *Server) RunNPCJobProductionWorker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event := <-srv.world.npcJobEvents:
+			response, err := srv.commitNPCJobProductionWithRetry(ctx, event)
+			if err != nil {
+				log.Printf("npc job production commit failed event=%s npc=%s character=%d: %v", event.eventID, event.npcKey, event.characterID, err)
+				continue
+			}
+			log.Printf("npc job production commit success event=%s npc=%s character=%d duplicate=%v", event.eventID, event.npcKey, event.characterID, response.Duplicate)
+		}
+	}
+}
+
+func (srv *Server) commitNPCJobProductionWithRetry(ctx context.Context, event npcJobProductionEvent) (npcJobProductionResponse, error) {
+	backoffs := []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond}
+	var lastErr error
+	for attempt := 0; attempt <= len(backoffs); attempt++ {
+		response, err := srv.commitNPCJobProduction(ctx, event)
+		if err == nil {
+			return response, nil
+		}
+		lastErr = err
+		if attempt == len(backoffs) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return npcJobProductionResponse{}, ctx.Err()
+		case <-time.After(backoffs[attempt]):
+		}
+	}
+	return npcJobProductionResponse{}, lastErr
+}
+
+func (srv *Server) commitNPCJobProduction(ctx context.Context, event npcJobProductionEvent) (npcJobProductionResponse, error) {
+	return srv.hq.CommitNPCJobProduction(ctx, npcJobProductionRequest{
+		EventID:     event.eventID,
+		CharacterID: event.characterID,
+		RoomID:      event.roomID,
+		MapID:       event.mapID,
+		NPCKey:      event.npcKey,
+		JobKey:      event.jobKey,
+		LocationID:  event.locationID,
+		OutputKey:   event.outputKey,
+		Amount:      event.amount,
+	})
+}
+
 func (srv *Server) commitResourceWithRetry(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
 	backoffs := []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond}
 	var lastErr error

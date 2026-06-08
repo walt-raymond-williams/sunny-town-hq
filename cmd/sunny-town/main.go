@@ -38,6 +38,7 @@ func main() {
 	}
 	go srv.RunRewardWorker(ctx)
 	go srv.RunResourceWorker(ctx)
+	go srv.RunNPCJobProductionWorker(ctx)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

@@ -76,6 +76,7 @@ type room struct {
 	rewardRunID    string
 	rewardEvents   chan rewardEvent
 	resourceEvents chan resourceEvent
+	npcJobEvents   chan npcJobProductionEvent
 	world          *world
 }
 
@@ -108,6 +109,7 @@ type liveNPC struct {
 	goalArriveDrive float64
 	failureCount    int
 	failedTargets   map[string]time.Time
+	jobProduction   npcJobProductionState
 }
 
 type world struct {
@@ -119,6 +121,7 @@ type world struct {
 	npcCharacters  map[string]npcCharacter
 	rewardEvents   chan rewardEvent
 	resourceEvents chan resourceEvent
+	npcJobEvents   chan npcJobProductionEvent
 	transferMu     sync.Mutex
 }
 
@@ -236,10 +239,31 @@ type resourceEvent struct {
 	client      *client
 }
 
+type npcJobProductionState struct {
+	Progress  float64
+	Sequence  int64
+	LastAt    time.Time
+	LastEvent string
+}
+
+type npcJobProductionEvent struct {
+	eventID     string
+	characterID int64
+	roomID      string
+	mapID       string
+	npcKey      string
+	jobKey      string
+	locationID  string
+	outputKey   string
+	amount      int
+}
+
 type rewardCommitRequest = hqclient.RewardCommitRequest
 type rewardCommitResponse = hqclient.RewardCommitResponse
 type resourceCommitRequest = hqclient.ResourceCommitRequest
 type resourceCommitResponse = hqclient.ResourceCommitResponse
+type npcJobProductionRequest = hqclient.NPCJobProductionRequest
+type npcJobProductionResponse = hqclient.NPCJobProductionResponse
 type mapObjectResponse = hqclient.MapObjectResponse
 type placeMapObjectRequest = hqclient.PlaceMapObjectRequest
 type removeMapObjectRequest = hqclient.RemoveMapObjectRequest

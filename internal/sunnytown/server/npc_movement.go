@@ -99,15 +99,24 @@ func (room *room) catchUpNPCsAfterNoPlayersLocked(now time.Time) {
 		return
 	}
 	dt := elapsed.Seconds()
+	productionDT := dt
+	if productionDT > npcJobProductionCatchUpMax.Seconds() {
+		productionDT = npcJobProductionCatchUpMax.Seconds()
+	}
+	var productionEvents []npcJobProductionEvent
 	for _, npc := range room.liveNPCs {
 		if npc == nil {
 			continue
 		}
 		npc.depleteDrives(dt)
 		room.replenishNPCDrivesLocked(npc, dt)
+		if event, ok := room.advanceNPCJobProductionLocked(npc, productionDT, now); ok {
+			productionEvents = append(productionEvents, event)
+		}
 		room.clearNPCGoal(npc)
 	}
 	room.npcPausedAt = time.Time{}
+	queueNPCJobProductionEvents(room.npcJobEvents, productionEvents)
 }
 
 func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) *npcTransfer {
