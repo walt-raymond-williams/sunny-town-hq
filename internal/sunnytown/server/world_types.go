@@ -6,6 +6,7 @@ import (
 
 	"hq/internal/sunnytown/hqclient"
 	stmaps "hq/internal/sunnytown/maps"
+	stnavigation "hq/internal/sunnytown/navigation"
 	stprotocol "hq/internal/sunnytown/protocol"
 
 	"github.com/gorilla/websocket"
@@ -20,6 +21,7 @@ type activity = stmaps.Activity
 type shop = stmaps.Shop
 type shopItem = stmaps.ShopItem
 type resourceNodeDefinition = stmaps.ResourceNodeDefinition
+type npcRoute = stnavigation.Route
 
 type clientMessage = stprotocol.ClientMessage
 type equipmentSnapshot = stprotocol.EquipmentSnapshot
@@ -89,17 +91,33 @@ type liveNPC struct {
 	dialogue    []string
 	shop        *shop
 	activity    *activity
+
+	scriptedTargets   []scriptedNPCTarget
+	scriptedTarget    int
+	scriptedWaitUntil time.Time
+	route             *npcRoute
+	routeStep         int
+	pathIndex         int
+	routeBlocked      bool
 }
 
 type world struct {
 	roomID         string
 	rooms          map[string]*room
 	defaultRoom    *room
+	navigation     *stnavigation.Graph
 	npcMu          sync.RWMutex
 	npcCharacters  map[string]npcCharacter
 	rewardEvents   chan rewardEvent
 	resourceEvents chan resourceEvent
 	transferMu     sync.Mutex
+}
+
+type scriptedNPCTarget struct {
+	mapID      string
+	locationID string
+	x          float64
+	y          float64
 }
 
 type npcCharacter struct {

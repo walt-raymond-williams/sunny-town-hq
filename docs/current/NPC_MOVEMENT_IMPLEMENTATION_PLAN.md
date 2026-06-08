@@ -2,7 +2,7 @@
 
 This document is the handoff-ready implementation plan for adding Sunny Town NPC movement using location tags, portal-aware pathing, and a basic drive system.
 
-Status: `Slice 4 implemented; Slice 5 is next`
+Status: `Slice 5 implemented; Slice 6 is next`
 
 Related docs:
 
@@ -272,6 +272,18 @@ Suggested tests:
 ## Slice 5: Scripted Movement Smoke Test
 
 Goal: one NPC visibly moves between tagged locations without drives yet.
+
+Status: `Implemented`
+
+Implemented notes:
+
+- Sunny Town worlds now build a server-side navigation graph for loaded maps.
+- `mayor-sunny` receives a scoped scripted route on maps with `town-square-center`.
+- Room ticks advance live NPCs along route-planned same-map path waypoints at a modest server speed.
+- Scripted NPCs pause briefly at endpoints, then route back to their starting point.
+- NPC movement stays server-owned and continues broadcasting through existing live NPC snapshots.
+- Route planning failures or unsupported portal steps leave the NPC idle instead of teleporting or crossing maps.
+- Tests cover movement advancement, arrival/stop behavior, blocked routes, and moved NPC snapshot output.
 
 Implementation notes:
 

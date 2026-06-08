@@ -7,15 +7,21 @@ import (
 	"time"
 
 	stmaps "hq/internal/sunnytown/maps"
+	stnavigation "hq/internal/sunnytown/navigation"
 	"hq/internal/sunnytownauth"
 )
 
 func newWorld(roomID string, maps map[string]gameMap) *world {
 	rewardEvents := make(chan rewardEvent, 32)
 	resourceEvents := make(chan resourceEvent, resourceCommitQueueSize)
+	navigationGraph, err := stnavigation.NewGraph(maps)
+	if err != nil {
+		log.Printf("build sunny town navigation graph: %v", err)
+	}
 	created := &world{
 		roomID:         roomID,
 		rooms:          map[string]*room{},
+		navigation:     navigationGraph,
 		npcCharacters:  map[string]npcCharacter{},
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
@@ -33,7 +39,7 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resource
 	for _, node := range resourceNodes {
 		worldObjects[worldObjectKey(node.source, node.id)] = node
 	}
-	return &room{
+	room := &room{
 		id:             id,
 		gameMap:        gameMap,
 		players:        map[string]*player{},
@@ -47,6 +53,8 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resource
 		resourceEvents: resourceEvents,
 		world:          world,
 	}
+	room.configureScriptedNPCsLocked()
+	return room
 }
 
 func (world *world) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {

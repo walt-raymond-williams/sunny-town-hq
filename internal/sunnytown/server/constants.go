@@ -20,6 +20,7 @@ const (
 	equipmentSlotTool       = "tool"
 	playerSize              = 28.0
 	playerSpeed             = 150.0
+	npcSpeed                = 80.0
 	starPickupRadius        = 30.0
 	resourceCommitQueueSize = 32
 	resourceHitsRequired    = 3
@@ -28,6 +29,7 @@ const (
 	snapshotInterval        = 100 * time.Millisecond
 	movingStateTTL          = 250 * time.Millisecond
 	starRespawnDelay        = 10 * time.Second
+	npcScriptedPause        = 2 * time.Second
 )
 
 const (
@@ -51,6 +53,7 @@ func (room *room) step(dt float64, now time.Time) {
 		rewards = append(rewards, room.collectStarsLocked(player, now)...)
 	}
 
+	room.stepLiveNPCsLocked(dt, now)
 	room.respawnCollectiblesLocked(now)
 	room.respawnResourceNodesLocked(now)
 	room.mu.Unlock()
