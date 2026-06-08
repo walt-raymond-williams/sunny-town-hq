@@ -258,9 +258,109 @@ Suggested tests:
 
 ### Later Work: Durability, Coarse Catch-Up, And Schedules
 
-Status: `Next/Future`
+Status: `Planned`
 
-Do not start this until the runtime behavior above is tunable and stable.
+The first movement/drives implementation and tuning slices are complete. The next work should move from "NPCs can satisfy drives at tagged locations" toward "NPCs have readable routines." Do this incrementally: first make routine anchors explicit, then add simple time/schedule pressure, then decide what needs persistence or offline catch-up.
+
+Recommended next order:
+
+1. ND-7: Runtime routine anchors from authored locations.
+2. ND-8: Simple schedule and time-band drive pressure.
+3. ND-9: Persistence and no-player coarse catch-up.
+4. ND-10: Resource/job production loops.
+5. ND-11: Social relationship effects.
+
+Rationale:
+
+- Routine anchors should come before schedules because schedules need stable answers to "where is this NPC's home?" and "where does this NPC work?"
+- Schedules should come before persistence because it is easier to decide what to save after the runtime behavior is clear.
+- Persistence and coarse catch-up should come before production loops so no-player behavior does not diverge wildly from online behavior.
+- Resource/job production and social systems should wait until the basic routine loop is readable and debuggable.
+
+### Slice ND-7: Runtime Routine Anchors
+
+Status: `Next`
+
+Goal: make home/work/social/food anchors explicit runtime state derived from authored locations, without adding HQ persistence yet.
+
+Implementation notes:
+
+- Build a per-NPC runtime anchor summary during room/world initialization or first NPC behavior configuration.
+- Start with authored map locations:
+  - home/rest anchor: owned `home`, `bed`, `sleep`, or `rest` location.
+  - work anchor: owned or role-matching `work`, `school`, `shop`, `merchant`, `farm`, or similar location.
+  - food anchor: nearest or scored `food`, `kitchen`, or `meal` location.
+  - public/social anchor: nearest or scored `public`, `social`, `idle`, or `gathering` location.
+- Prefer `ownerNpcKey` matches over role matches, and role matches over generic tags.
+- Keep anchors runtime-only for this slice; do not add HQ schema or durable assignment tables yet.
+- Use anchors as scoring bonuses or direct preferred candidates, rather than replacing generic drive fallback entirely.
+- Extend `GET /debug/npcs` so each NPC shows its resolved anchors and whether the current goal came from an anchor-preferred target.
+
+Acceptance criteria:
+
+- Mayor Sunny resolves an owned home/rest anchor from `mayor-sunny-bed`.
+- Teacher resolves a work anchor from `teacher-desk-work`.
+- Cookie Keeper resolves a merchant/shop work anchor from `cookie-keeper-counter`.
+- If an anchor target is missing or unreachable, the NPC can still use generic scored locations.
+- Debug output includes resolved anchors in a deterministic form.
+- Current movement, scoring, fallback, cross-map, and dynamic blocker tests still pass.
+
+Suggested tests:
+
+- Runtime anchor resolution prefers `ownerNpcKey` over generic matching locations.
+- Role anchor resolution finds teacher school work and shopkeeper merchant work.
+- Drive selection prefers an anchor target when routeable.
+- Missing/unrouteable anchor falls back to generic scored target.
+- NPC debug snapshot includes anchors.
+
+### Slice ND-8: Simple Schedule And Time-Band Drive Pressure
+
+Status: `Planned`
+
+Goal: make routines visibly change over time without building a full calendar or GOAP planner.
+
+Implementation notes:
+
+- Add a small deterministic Sunny Town clock or phase helper, such as `morning`, `day`, `evening`, and `night`.
+- Start runtime-only; do not persist schedule state yet.
+- Use time bands to bias drive depletion or selection:
+  - day: work becomes more important for NPCs with work anchors.
+  - evening: social/public becomes more likely.
+  - night: energy/home/rest becomes more important.
+- Keep urgent biological drives, especially hunger/energy, able to override schedules.
+- Surface current phase and schedule pressure in `GET /debug/npcs` or adjacent debug output.
+- Avoid client-facing protocol changes unless there is a clear UI/debug need.
+
+Acceptance criteria:
+
+- NPC with a work anchor tends toward work during the day when no stronger urgent need exists.
+- NPC with a home/rest anchor tends toward home/rest at night.
+- Hunger or another urgent drive can interrupt scheduled behavior using existing focus/reevaluation rules.
+- Schedule behavior is deterministic in tests by injecting or passing explicit time.
+- Debug output explains the current schedule phase or pressure.
+
+Suggested tests:
+
+- Day phase chooses or biases work for Teacher/Cookie Keeper.
+- Night phase chooses or biases Mayor Sunny toward owned rest/home.
+- Emergency hunger interrupts a scheduled work/rest goal after reevaluation.
+- Debug output includes current phase/schedule state.
+
+### Slice ND-9: Persistence And No-Player Coarse Catch-Up
+
+Status: `Future`
+
+Goal: decide which NPC routine state should survive process restarts and how much simulation should advance when no players are connected.
+
+Implementation notes:
+
+- Do this after ND-7 and ND-8 clarify what runtime state is worth saving.
+- Likely durable candidates:
+  - home/work anchor assignments if they stop being purely map-authored.
+  - coarse drive snapshots.
+  - last known map/position if NPC continuity matters across restart.
+- Keep transient controller state, such as exact route path, focus windows, and path indexes, in memory unless a strong reason appears.
+- Coarse catch-up should be bounded and approximate, not full per-tick simulation while nobody is connected.
 
 - Persist durable home/work anchors or assignments in HQ.
 - Decide whether drive snapshots should survive Sunny Town restart.
@@ -747,6 +847,9 @@ Completed order:
 
 Current continuation order:
 
-1. Later work: decide the next movement/drives direction before implementation. Options include durable assignments, drive persistence, coarse catch-up while no players are connected, schedules/day-night effects, resource/job loops, or social relationship effects.
+1. Slice ND-7: runtime routine anchors from authored locations.
+2. Slice ND-8: simple schedule and time-band drive pressure.
+3. Slice ND-9: persistence and no-player coarse catch-up.
+4. Later: resource/job production loops and social relationship effects.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.
