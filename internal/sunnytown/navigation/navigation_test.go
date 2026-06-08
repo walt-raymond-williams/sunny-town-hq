@@ -32,6 +32,9 @@ func TestPlanRouteToSameMapLocation(t *testing.T) {
 	if step.To != (Point{X: 640, Y: 512}) {
 		t.Fatalf("same-map destination = %#v, want town-square-center", step.To)
 	}
+	if len(step.Path) < 2 || step.Path[0] != step.From || step.Path[len(step.Path)-1] != step.To {
+		t.Fatalf("same-map path = %#v, want endpoints from route step", step.Path)
+	}
 }
 
 func TestPlanRouteUsesExistingForestPortal(t *testing.T) {
@@ -68,6 +71,12 @@ func TestPlanRouteUsesExistingForestPortal(t *testing.T) {
 	}
 	if finalStep.From != (Point{X: 96, Y: 480}) || finalStep.To != (Point{X: 704, Y: 352}) {
 		t.Fatalf("final step endpoints = %#v, want portal landing to target", finalStep)
+	}
+	if len(portalStep.Path) < 2 || portalStep.Path[len(portalStep.Path)-1] != portalStep.To {
+		t.Fatalf("portal step path = %#v, want path ending at portal", portalStep.Path)
+	}
+	if len(finalStep.Path) < 2 || finalStep.Path[0] != finalStep.From || finalStep.Path[len(finalStep.Path)-1] != finalStep.To {
+		t.Fatalf("final step path = %#v, want endpoints from route step", finalStep.Path)
 	}
 }
 
@@ -121,4 +130,119 @@ func TestNewGraphRejectsUnknownPortalTarget(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected unknown portal target to fail")
 	}
+}
+
+func TestPlanPathStraightReachable(t *testing.T) {
+	graph := mustTestGraph(t, map[string]stmaps.GameMap{
+		"one": {ID: "one", TileSize: 32, Width: 4, Height: 4},
+	})
+
+	path, err := graph.PlanPath("one", Point{X: 16, Y: 48}, Point{X: 112, Y: 48})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(path) < 2 {
+		t.Fatalf("path = %#v, want at least start and target", path)
+	}
+	if path[0] != (Point{X: 16, Y: 48}) || path[len(path)-1] != (Point{X: 112, Y: 48}) {
+		t.Fatalf("path endpoints = %#v, want requested start and target", path)
+	}
+}
+
+func TestPlanPathRoutesAroundBlockedRect(t *testing.T) {
+	graph := mustTestGraph(t, map[string]stmaps.GameMap{
+		"one": {
+			ID:       "one",
+			TileSize: 32,
+			Width:    5,
+			Height:   5,
+			BlockedRects: []stmaps.Rect{{
+				X:      64,
+				Y:      64,
+				Width:  32,
+				Height: 32,
+			}},
+		},
+	})
+
+	path, err := graph.PlanPath("one", Point{X: 48, Y: 80}, Point{X: 112, Y: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(path) <= 2 {
+		t.Fatalf("path = %#v, want detour waypoints", path)
+	}
+	for _, point := range path {
+		if point == (Point{X: 80, Y: 80}) {
+			t.Fatalf("path = %#v, should avoid blocked cell center", path)
+		}
+	}
+}
+
+func TestPlanPathFailsWhenTargetUnreachable(t *testing.T) {
+	graph := mustTestGraph(t, map[string]stmaps.GameMap{
+		"one": {
+			ID:       "one",
+			TileSize: 32,
+			Width:    3,
+			Height:   3,
+			BlockedRects: []stmaps.Rect{{
+				X:      32,
+				Y:      0,
+				Width:  32,
+				Height: 96,
+			}},
+		},
+	})
+
+	if _, err := graph.PlanPath("one", Point{X: 16, Y: 16}, Point{X: 80, Y: 16}); err == nil {
+		t.Fatal("expected unreachable target to fail")
+	}
+}
+
+func TestPlanRoutePathToPortalEntryPoint(t *testing.T) {
+	graph := mustTestGraph(t, map[string]stmaps.GameMap{
+		"one": {
+			ID:       "one",
+			TileSize: 32,
+			Width:    6,
+			Height:   5,
+			Portals: []stmaps.Portal{{
+				ID:           "door",
+				X:            128,
+				Y:            64,
+				Width:        32,
+				Height:       32,
+				TargetMapID:  "two",
+				TargetX:      16,
+				TargetY:      16,
+				TargetFacing: "down",
+			}},
+		},
+		"two": {ID: "two", TileSize: 32, Width: 4, Height: 4},
+	})
+
+	route, err := graph.PlanRoute("one", Point{X: 16, Y: 80}, "two", Point{X: 80, Y: 16})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(route.Steps) != 2 {
+		t.Fatalf("route = %#v, want portal step plus final step", route.Steps)
+	}
+	portalPath := route.Steps[0].Path
+	if len(portalPath) < 2 || portalPath[len(portalPath)-1] != (Point{X: 144, Y: 80}) {
+		t.Fatalf("portal path = %#v, want path to portal center", portalPath)
+	}
+}
+
+func mustTestGraph(t *testing.T, maps map[string]stmaps.GameMap) *Graph {
+	t.Helper()
+	graph, err := NewGraph(maps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return graph
 }

@@ -2,7 +2,7 @@
 
 This document is the handoff-ready implementation plan for adding Sunny Town NPC movement using location tags, portal-aware pathing, and a basic drive system.
 
-Status: `Slice 2 implemented; Slice 3 is next`
+Status: `Slice 3 implemented; Slice 4 is next`
 
 Related docs:
 
@@ -190,6 +190,16 @@ Suggested tests:
 ## Slice 3: Same-Map A* Segment Pathing
 
 Goal: compute walkable local path segments.
+
+Status: `Implemented`
+
+Implemented notes:
+
+- Added static same-map A* path planning to `internal/sunnytown/navigation`.
+- Built coarse navigation cells from each map's tile size and dimensions.
+- Marked blocked cells from map `BlockedRects` using the server-compatible 28px agent footprint.
+- `RouteStep` now carries path waypoints, and route planning fills same-map, portal approach, and final target-map segment paths.
+- Tests cover straight paths, obstacle detours, unreachable targets, and pathing to a portal entry point.
 
 Implementation notes:
 
