@@ -9,7 +9,9 @@ Read this section first after compaction.
 Current implemented baseline:
 
 - Cookie Keeper is an authored shop NPC in `sunny-town/maps/sunny-town-house-1.json`.
+- `sunny-town-house-1` has an authored `Cookie Shop` area with stable ID `cookie-shop` and tags `shop`, `workplace`, `cookie_shop`, and `storage_owner`.
 - Cookie Keeper has a reachable work anchor at `cookie-keeper-counter`.
+- `cookie-keeper-counter` remains the owned Cookie Keeper work anchor; the broader `cookie-shop` area is not NPC-owned.
 - Sunny Town emits service-authenticated `shopkeeper_stock` / `shop_stock_progress` NPC job production events when Cookie Keeper is at the work anchor.
 - HQ records those events in `sunny_town_npc_job_production_ledger`.
 - HQ stores saleable Cookie Keeper cookies in durable `shop_stock_item` / `shop_stock_ledger` tables.
@@ -55,18 +57,18 @@ Suggested tests:
 - Purchase after full stock decrements below capacity.
 - UI shows `current / 64` and disables Buy at `0`.
 
-## Immediate Next Slice: Choose Physical Shop Ownership Or Lesson Prep
+## Immediate Next Slice: Physical Output Chest Fixture
 
-Recommended next decision:
+Recommended next step:
 
-- If the priority is making Cookie Shop visible and inspectable in-world, implement the authored Cookie Shop area next.
-- If the priority is broader NPC job gameplay, make teacher lesson prep consume or expose durable progress next.
+- Implement the physical Cookie Shop output chest fixture next.
+- The chest should be authored inside or associated with `cookie-shop`.
+- The chest should point at existing HQ-owned `cookie-keeper-shop` cookie stock, not create a second stock/inventory source.
+- The alternate branch is still teacher lesson prep durable progress if broader NPC job gameplay becomes the priority, but the Cookie Shop storage path is now ready for the chest.
 
-Default recommendation:
+## Slice: Authored Cookie Shop Area
 
-- Do the authored Cookie Shop area next. It makes the storage owner concrete before adding a physical output chest, and it avoids building lesson-prep UI/API decisions before the shop production loop is visually grounded.
-
-## Later Slice: Authored Cookie Shop Area
+Status: `Implemented`
 
 Goal: make "Cookie Shop" a visible/authored world concept instead of only a shop ID and counter location.
 
@@ -83,6 +85,13 @@ Acceptance criteria:
 - Designers and debug tools can identify the Cookie Shop area.
 - Cookie Keeper work/storage behavior can refer to a shop-owned area rather than only an NPC counter.
 - Existing pathing/anchor behavior remains stable.
+
+Implemented notes:
+
+- Added `cookie-shop` to `sunny-town-house-1` using the current point/radius map-location primitive.
+- Tagged it with `shop`, `workplace`, `cookie_shop`, and `storage_owner`.
+- Kept `cookie-keeper-counter` as the owned work point for Cookie Keeper so routine anchor resolution still prefers the counter.
+- Checked-in map validation covers the new location metadata.
 
 ## Later Slice: Physical Output Chest Fixture
 

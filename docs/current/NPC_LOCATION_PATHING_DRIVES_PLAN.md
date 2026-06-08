@@ -33,6 +33,7 @@ Current implemented baseline:
 - HQ exposes service-authenticated aggregate NPC job progress over those ledger events for later gameplay consumption decisions.
 - Cookie Keeper `shopkeeper_stock` production now increments durable HQ-owned Cookie Keeper shop cookie stock, and player purchases consume that stock.
 - Cookie Keeper has a small durable starter stock seed, a logical output storage capacity of `64`, and the shop UI shows `current / 64` stock before purchase.
+- `sunny-town-house-1` has an authored `Cookie Shop` area (`cookie-shop`) tagged as shop/workplace/storage owner; Cookie Keeper still uses `cookie-keeper-counter` as the owned work anchor.
 - Cookie Shop storage planning now lives in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`; it tracks logical output chest capacity, authored shop area, physical chest fixture, and later input ingredients.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
@@ -497,16 +498,20 @@ Implemented notes:
 - Added a Cookie Keeper cookie stock capacity of `64` in HQ-owned inventory rules.
 - NPC-produced Cookie Keeper cookie stock now clamps at capacity while production and stock ledger events remain idempotent.
 - `GET /api/student/shop/stock` now includes item capacity, and the shop UI displays `current / 64`.
+- Added an authored `cookie-shop` map location named `Cookie Shop` in `sunny-town-house-1`, tagged `shop`, `workplace`, `cookie_shop`, and `storage_owner`.
+- Kept `cookie-keeper-counter` as the owned work anchor so routine/pathing behavior remains stable while storage ownership becomes visible/inspectable.
 - Deferred input ingredients: Cookie Keeper can make cookies while working in the shop for now.
 - This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
-- Choose the next branch from `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`:
-  - default recommendation: implement the authored `Cookie Shop` area next so the storage owner is visible/inspectable in world before adding a physical chest,
-  - alternate branch: make teacher lesson prep consume or expose durable progress if broader NPC job gameplay is the priority.
+- Implement the physical Cookie Shop output chest fixture:
+  - author a static fixture/object inside or associated with `cookie-shop`,
+  - associate it with existing HQ-owned `cookie-keeper-shop` cookie stock,
+  - do not create a second inventory/stock source.
+- Alternate branch: make teacher lesson prep consume or expose durable progress if broader NPC job gameplay is the priority.
 - Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.
-- After the authored Cookie Shop area is stable, implement the physical output chest fixture that points at the same HQ-owned stock state.
+- Defer input chest and ingredients until output chest/storage ownership is stable.
 
 ## Feature Intent
 

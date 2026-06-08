@@ -66,6 +66,14 @@
       "tags": ["food", "kitchen", "meal"]
     },
     {
+      "id": "cookie-shop",
+      "name": "Cookie Shop",
+      "x": 288,
+      "y": 256,
+      "radius": 128,
+      "tags": ["shop", "workplace", "cookie_shop", "storage_owner"]
+    },
+    {
       "id": "cookie-keeper-counter",
       "name": "Cookie Keeper Counter",
       "x": 224,

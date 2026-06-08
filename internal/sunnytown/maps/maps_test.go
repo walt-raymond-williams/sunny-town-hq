@@ -136,6 +136,10 @@ func TestCheckedInMapsIncludeAuthoredNPCLocations(t *testing.T) {
 	if counter == nil || counter.OwnerNPCKey != "cookie-keeper" || !hasLocationTags(*counter, "work", "shop", "merchant") {
 		t.Fatalf("cookie counter = %#v, want owned work/shop/merchant location", counter)
 	}
+	cookieShop := findLocation(houseLocations, "cookie-shop")
+	if cookieShop == nil || cookieShop.OwnerNPCKey != "" || !hasLocationTags(*cookieShop, "shop", "workplace", "cookie_shop", "storage_owner") {
+		t.Fatalf("cookie shop = %#v, want unowned shop/workplace/storage owner location", cookieShop)
+	}
 
 	classroomLocations := maps["sunny-town-classroom"].Locations
 	teacherDesk := findLocation(classroomLocations, "teacher-desk-work")
