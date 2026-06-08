@@ -127,6 +127,7 @@ const (
 	npcDriveEnergy npcDrive = "energy"
 	npcDriveSocial npcDrive = "social"
 	npcDriveWork   npcDrive = "work"
+	npcDriveIdle   npcDrive = "idle"
 )
 
 type npcDrives struct {

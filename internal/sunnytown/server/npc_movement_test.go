@@ -246,6 +246,51 @@ func TestNPCDriveLocationTieBreaksByMapAndLocationID(t *testing.T) {
 	}
 }
 
+func TestNPCChoosesIdleFallbackWhenNoDriveIsUrgent(t *testing.T) {
+	room := testRoom(driveNPCTestMap())
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 95
+	npc.drives.Energy = 95
+	npc.drives.Social = 95
+	npc.drives.Work = 95
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveIdle {
+		t.Fatalf("active drive = %q, want idle fallback", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != driveStartLocationID {
+		t.Fatalf("goal = %#v, want town square idle fallback", npc.goal)
+	}
+}
+
+func TestNPCIdleFallbackPersistsAfterArrival(t *testing.T) {
+	room := testRoom(driveNPCTestMap())
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 95
+	npc.drives.Energy = 95
+	npc.drives.Social = 95
+	npc.drives.Work = 95
+	now := time.Now()
+
+	room.step(2, now)
+	if npc.route != nil {
+		t.Fatalf("route = %#v, want cleared after arriving at idle fallback", npc.route)
+	}
+	if npc.goal == nil || npc.goal.drive != npcDriveIdle {
+		t.Fatalf("goal = %#v, want idle goal to remain after arrival", npc.goal)
+	}
+
+	goalStartedAt := npc.goalStartedAt
+	room.step(0.1, now.Add(time.Second))
+	if npc.goal == nil || npc.goal.drive != npcDriveIdle {
+		t.Fatalf("goal = %#v, want idle fallback to persist", npc.goal)
+	}
+	if !npc.goalStartedAt.Equal(goalStartedAt) {
+		t.Fatalf("goal started at = %v, want unchanged %v", npc.goalStartedAt, goalStartedAt)
+	}
+}
+
 func TestNPCFocusWindowPreventsPrematureSwitching(t *testing.T) {
 	gameMap := driveNPCTestMap()
 	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
@@ -325,6 +370,72 @@ func TestUnreachableUrgentDriveFallsBackToNextSatisfiableDrive(t *testing.T) {
 	}
 	if npc.goal == nil || npc.goal.location.ID != driveStartLocationID {
 		t.Fatalf("goal = %#v, want social town square goal", npc.goal)
+	}
+}
+
+func TestUnavailableUrgentDriveFallsBackToIdle(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.BlockedRects = []rect{{X: 192, Y: 0, Width: 32, Height: 256}}
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "blocked-snack-stand",
+		Name:   "Blocked Snack Stand",
+		X:      240,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 10
+	npc.drives.Energy = 95
+	npc.drives.Social = 95
+	npc.drives.Work = 95
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveIdle {
+		t.Fatalf("active drive = %q, want idle fallback", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != driveStartLocationID {
+		t.Fatalf("goal = %#v, want town square idle fallback", npc.goal)
+	}
+}
+
+func TestUrgentDriveInterruptsIdleFallbackAfterReevaluation(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.Locations = append(gameMap.Locations, stmaps.Location{
+		ID:     "snack-stand",
+		Name:   "Snack Stand",
+		X:      224,
+		Y:      64,
+		Radius: 32,
+		Tags:   []string{"food"},
+	})
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 95
+	npc.drives.Energy = 95
+	npc.drives.Social = 95
+	npc.drives.Work = 95
+	now := time.Now()
+
+	room.step(0.1, now)
+	if npc.activeDrive != npcDriveIdle {
+		t.Fatalf("active drive = %q, want idle fallback", npc.activeDrive)
+	}
+
+	npc.drives.Hunger = 30
+	room.step(0.1, now.Add(time.Second))
+	if npc.activeDrive != npcDriveIdle {
+		t.Fatalf("active drive = %q, want focus window to keep idle fallback", npc.activeDrive)
+	}
+
+	room.step(0.1, now.Add(npcGoalFocusDuration+npcGoalReevaluateInterval))
+	if npc.activeDrive != npcDriveHunger {
+		t.Fatalf("active drive = %q, want hunger to interrupt idle fallback", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.location.ID != "snack-stand" {
+		t.Fatalf("goal = %#v, want snack stand hunger goal", npc.goal)
 	}
 }
 

@@ -21,6 +21,7 @@ Current implemented baseline:
 - Drives deplete over time and replenish at matching tagged locations.
 - NPCs choose the lowest below-threshold satisfiable drive, skip unrouteable drives, and route to matching locations.
 - NPC goals have focus windows, periodic reevaluation, emergency interruption, arrival grace, failure counts, and failed-target cooldowns.
+- NPCs can choose a low-priority `idle` fallback route to public/idle/wander/social locations when no urgent drive goal is available.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -151,7 +152,7 @@ Suggested tests:
 
 ### Slice ND-4: Idle/Wander/Public Fallback
 
-Status: `Next`
+Status: `Implemented`
 
 Goal: avoid lifeless idle behavior when no urgent drive is satisfiable.
 
@@ -161,6 +162,15 @@ Implementation notes:
 - Keep fallback lower priority than urgent drives.
 - Use a cooldown/focus window so fallback movement does not thrash.
 - Do not build schedules or a full behavior tree.
+
+Implemented notes:
+
+- Added `idle` as a non-depleting pseudo-drive used only for fallback routing.
+- Fallback targets use `idle`, `wander`, `public`, and `social` tags.
+- NPCs choose fallback only after normal urgent drive selection finds no satisfiable goal.
+- Idle fallback goals use the normal focus and reevaluation timestamps, but do not replenish, complete, or stale-fail like normal drives.
+- Below-threshold drive goals can interrupt idle fallback after the focus and reevaluation window.
+- Tests cover no-urgent fallback, fallback persistence after arrival, unavailable urgent-drive fallback, and drive interruption after reevaluation.
 
 Acceptance criteria:
 
@@ -176,7 +186,7 @@ Suggested tests:
 
 ### Slice ND-5: Dynamic Collision Awareness For Pathing
 
-Status: `Planned`
+Status: `Next`
 
 Goal: account for blocking world objects when planning NPC routes.
 
@@ -715,8 +725,7 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-4: idle/wander/public fallback.
-2. Slice ND-5: dynamic collision awareness for pathing.
-3. Slice ND-6: richer authored locations and ownership.
+1. Slice ND-5: dynamic collision awareness for pathing.
+2. Slice ND-6: richer authored locations and ownership.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.
