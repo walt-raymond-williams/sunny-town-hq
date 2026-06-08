@@ -38,6 +38,25 @@
       }
     }
   ],
+  "locations": [
+    {
+      "id": "teacher-desk-work",
+      "name": "Teacher Desk",
+      "x": 320,
+      "y": 160,
+      "radius": 48,
+      "tags": ["work", "school"],
+      "ownerNpcKey": "teacher"
+    },
+    {
+      "id": "classroom-study-circle",
+      "name": "Classroom Study Circle",
+      "x": 320,
+      "y": 384,
+      "radius": 64,
+      "tags": ["public", "social", "idle", "school"]
+    }
+  ],
   "blockedRects": [
     { "x": 0, "y": 0, "width": 640, "height": 32 },
     { "x": 0, "y": 448, "width": 304, "height": 32 },

@@ -121,6 +121,33 @@ func TestLoadMapsAcceptsLocationDefinitions(t *testing.T) {
 	}
 }
 
+func TestCheckedInMapsIncludeAuthoredNPCLocations(t *testing.T) {
+	maps, err := LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	houseLocations := maps["sunny-town-house-1"].Locations
+	mayorBed := findLocation(houseLocations, "mayor-sunny-bed")
+	if mayorBed == nil || mayorBed.OwnerNPCKey != "mayor-sunny" || !hasLocationTags(*mayorBed, "home", "bed", "sleep") {
+		t.Fatalf("mayor bed = %#v, want owned home/bed/sleep location", mayorBed)
+	}
+	counter := findLocation(houseLocations, "cookie-keeper-counter")
+	if counter == nil || counter.OwnerNPCKey != "cookie-keeper" || !hasLocationTags(*counter, "work", "shop", "merchant") {
+		t.Fatalf("cookie counter = %#v, want owned work/shop/merchant location", counter)
+	}
+
+	classroomLocations := maps["sunny-town-classroom"].Locations
+	teacherDesk := findLocation(classroomLocations, "teacher-desk-work")
+	if teacherDesk == nil || teacherDesk.OwnerNPCKey != "teacher" || !hasLocationTags(*teacherDesk, "work", "school") {
+		t.Fatalf("teacher desk = %#v, want owned work/school location", teacherDesk)
+	}
+	studyCircle := findLocation(classroomLocations, "classroom-study-circle")
+	if studyCircle == nil || !hasLocationTags(*studyCircle, "public", "social", "idle") {
+		t.Fatalf("study circle = %#v, want public/social/idle location", studyCircle)
+	}
+}
+
 func TestLoadMapsRejectsDuplicateLocationIDs(t *testing.T) {
 	dir := t.TempDir()
 	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"locations":[{"id":"square","name":"Square","x":64,"y":64,"radius":48,"tags":["public"]},{"id":"square","name":"Square Again","x":96,"y":64,"radius":48,"tags":["public"]}]}`
@@ -131,6 +158,28 @@ func TestLoadMapsRejectsDuplicateLocationIDs(t *testing.T) {
 	if _, err := LoadMaps(dir); err == nil {
 		t.Fatal("expected duplicate location ID to be rejected")
 	}
+}
+
+func findLocation(locations []Location, id string) *Location {
+	for index := range locations {
+		if locations[index].ID == id {
+			return &locations[index]
+		}
+	}
+	return nil
+}
+
+func hasLocationTags(location Location, tags ...string) bool {
+	seen := map[string]bool{}
+	for _, tag := range location.Tags {
+		seen[tag] = true
+	}
+	for _, tag := range tags {
+		if !seen[tag] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestLoadMapsRejectsInvalidLocations(t *testing.T) {

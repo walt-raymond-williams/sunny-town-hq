@@ -14,6 +14,7 @@ Current implemented baseline:
 
 - Durable NPC identity exists for static map NPCs through `sunny_town_character` and `sunny_town_npc_character`.
 - Maps support optional `locations` with IDs, coordinates, radius, tags, owner hints, and capacity.
+- Checked-in maps include owned home/rest, kitchen/food, merchant work, school work, and public/social/idle locations.
 - Sunny Town builds a server-side portal-aware navigation graph from loaded maps.
 - Same-map route segments use A* over a coarse map grid with static blocked rectangles.
 - NPC route planning can include active collision `worldObjects` from the NPC's current room as dynamic blocked rectangles.
@@ -221,7 +222,7 @@ Suggested tests:
 
 ### Slice ND-6: Richer Authored Locations And Ownership
 
-Status: `Next`
+Status: `Implemented`
 
 Goal: give NPCs more meaningful destinations for home/work/food/social routines.
 
@@ -231,6 +232,16 @@ Implementation notes:
 - Use `ownerNpcKey` for first-pass owned home/bed behavior.
 - Add role-oriented tags such as `merchant`, `school`, `farm`, or `shop` where they match existing NPCs.
 - Keep authored map changes small and validated.
+
+Implemented notes:
+
+- `sunny-town-house-1` now has `mayor-sunny-bed`, an owned `home`/`bed`/`sleep` rest target for `mayor-sunny`.
+- `sunny-town-house-1` keeps `shared-house-kitchen` as a `food`/`kitchen`/`meal` target.
+- `sunny-town-house-1` now has `cookie-keeper-counter`, an owned `work`/`shop`/`merchant` target for `cookie-keeper`.
+- `sunny-town-classroom` now has `teacher-desk-work`, an owned `work`/`school` target for `teacher`.
+- `sunny-town-classroom` now has `classroom-study-circle`, a `public`/`social`/`idle` school fallback location.
+- `sunny-town-v1` doorway blockers were trimmed slightly so the house and classroom portal centers are reachable by server-side A*.
+- Tests cover checked-in map location metadata, Mayor Sunny selecting the authored owned bed, and the teacher selecting the authored school work location.
 
 Acceptance criteria:
 
@@ -247,7 +258,7 @@ Suggested tests:
 
 ### Later Work: Durability, Coarse Catch-Up, And Schedules
 
-Status: `Future`
+Status: `Next/Future`
 
 Do not start this until the runtime behavior above is tunable and stable.
 
@@ -736,6 +747,6 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-6: richer authored locations and ownership.
+1. Later work: decide the next movement/drives direction before implementation. Options include durable assignments, drive persistence, coarse catch-up while no players are connected, schedules/day-night effects, resource/job loops, or social relationship effects.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.

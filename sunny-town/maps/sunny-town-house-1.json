@@ -49,12 +49,13 @@
   ],
   "locations": [
     {
-      "id": "shared-house-rest",
-      "name": "Shared House Rest Spot",
+      "id": "mayor-sunny-bed",
+      "name": "Mayor Sunny's Bed",
       "x": 160,
       "y": 224,
       "radius": 64,
-      "tags": ["rest", "home", "bed"]
+      "tags": ["rest", "home", "bed", "sleep", "personal"],
+      "ownerNpcKey": "mayor-sunny"
     },
     {
       "id": "shared-house-kitchen",
@@ -63,6 +64,15 @@
       "y": 224,
       "radius": 64,
       "tags": ["food", "kitchen", "meal"]
+    },
+    {
+      "id": "cookie-keeper-counter",
+      "name": "Cookie Keeper Counter",
+      "x": 224,
+      "y": 256,
+      "radius": 48,
+      "tags": ["work", "shop", "merchant"],
+      "ownerNpcKey": "cookie-keeper"
     }
   ],
   "blockedRects": [

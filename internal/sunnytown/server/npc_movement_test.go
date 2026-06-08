@@ -1,6 +1,7 @@
 package server
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -675,6 +676,56 @@ func TestNPCSelectsCrossMapDriveGoal(t *testing.T) {
 	}
 	if npc.route == nil || len(npc.route.Steps) != 2 || npc.route.Steps[0].PortalID != "house-door" {
 		t.Fatalf("route = %#v, want portal step plus target step", npc.route)
+	}
+}
+
+func TestMayorSelectsAuthoredOwnedBedInCheckedInMaps(t *testing.T) {
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	world := newWorld(defaultRoomID, maps)
+	room := world.rooms[defaultMapID]
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Hunger = 95
+	npc.drives.Energy = 10
+	npc.drives.Social = 95
+	npc.drives.Work = 95
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveEnergy {
+		t.Fatalf("active drive = %q, want energy", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.mapID != "sunny-town-house-1" || npc.goal.location.ID != "mayor-sunny-bed" {
+		t.Fatalf("goal = %#v, want authored owned mayor bed", npc.goal)
+	}
+}
+
+func TestTeacherSelectsAuthoredSchoolWorkLocation(t *testing.T) {
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classroom := maps["sunny-town-classroom"]
+	classroom.NPCs[0].X = 320
+	classroom.NPCs[0].Y = 384
+	maps["sunny-town-classroom"] = classroom
+	world := newWorld(defaultRoomID, maps)
+	room := world.rooms["sunny-town-classroom"]
+	npc := room.liveNPCs["teacher"]
+	npc.drives.Hunger = 95
+	npc.drives.Energy = 95
+	npc.drives.Social = 95
+	npc.drives.Work = 10
+
+	room.step(0.1, time.Now())
+
+	if npc.activeDrive != npcDriveWork {
+		t.Fatalf("active drive = %q, want work", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.mapID != "sunny-town-classroom" || npc.goal.location.ID != "teacher-desk-work" {
+		t.Fatalf("goal = %#v, want authored teacher desk work location", npc.goal)
 	}
 }
 
