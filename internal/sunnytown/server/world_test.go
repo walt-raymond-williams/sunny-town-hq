@@ -10,6 +10,7 @@ import (
 	"time"
 
 	stconfig "hq/internal/sunnytown/config"
+	"hq/internal/sunnytown/hqclient"
 	stmaps "hq/internal/sunnytown/maps"
 )
 
@@ -201,9 +202,47 @@ func TestLoadNPCCharactersMergesDurableIdentity(t *testing.T) {
 	if err := srv.LoadNPCCharacters(context.Background()); err != nil {
 		t.Fatalf("LoadNPCCharacters() error = %v", err)
 	}
-	npcs := srv.world.rooms[defaultMapID].gameMap.NPCs
-	if len(npcs) != 1 || npcs[0].ID != "guide" || npcs[0].CharacterID != 777 {
-		t.Fatalf("npcs = %#v, want guide with character id 777", npcs)
+	staticNPCs := srv.world.rooms[defaultMapID].gameMap.NPCs
+	if len(staticNPCs) != 1 || staticNPCs[0].CharacterID != 0 {
+		t.Fatalf("static npcs = %#v, want unchanged map definition without character id", staticNPCs)
+	}
+
+	room := srv.world.rooms[defaultMapID]
+	room.mu.Lock()
+	snapshot := room.mapSnapshotLocked()
+	room.mu.Unlock()
+	if len(snapshot.NPCs) != 1 || snapshot.NPCs[0].ID != "guide" || snapshot.NPCs[0].CharacterID != 777 {
+		t.Fatalf("snapshot npcs = %#v, want guide with character id 777", snapshot.NPCs)
+	}
+}
+
+func TestJoinHelloUsesNPCCharacterSnapshotWithoutMutatingMap(t *testing.T) {
+	world := testWorld(testMap())
+	world.setNPCCharacters([]hqclient.NPCCharacterResponse{{
+		CharacterID: 888,
+		NPCKey:      "guide",
+		DisplayName: "Durable Guide",
+		AvatarID:    "durable-guide",
+	}})
+	client := testClient(nil, "42")
+
+	world.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+
+	select {
+	case message := <-client.send:
+		if message.Type != "hello" || message.Map == nil || len(message.Map.NPCs) != 1 {
+			t.Fatalf("hello message = %#v", message)
+		}
+		npc := message.Map.NPCs[0]
+		if npc.ID != "guide" || npc.CharacterID != 888 || npc.Name != "Durable Guide" || npc.SpriteKey != "durable-guide" {
+			t.Fatalf("hello npc = %#v, want durable identity overlay", npc)
+		}
+	default:
+		t.Fatal("expected hello message")
+	}
+	staticNPC := world.rooms[defaultMapID].gameMap.NPCs[0]
+	if staticNPC.CharacterID != 0 || staticNPC.Name != "Guide" || staticNPC.SpriteKey != "guide" {
+		t.Fatalf("static npc = %#v, want original map data unchanged", staticNPC)
 	}
 }
 

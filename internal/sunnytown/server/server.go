@@ -88,25 +88,7 @@ func (srv *Server) LoadNPCCharacters(ctx context.Context) error {
 		return err
 	}
 
-	byKey := map[string]hqclient.NPCCharacterResponse{}
-	for _, npc := range loaded.NPCs {
-		byKey[npc.NPCKey] = npc
-	}
-	for _, room := range srv.world.rooms {
-		room.mu.Lock()
-		for index := range room.gameMap.NPCs {
-			if character, ok := byKey[room.gameMap.NPCs[index].ID]; ok {
-				room.gameMap.NPCs[index].CharacterID = character.CharacterID
-				if character.DisplayName != "" {
-					room.gameMap.NPCs[index].Name = character.DisplayName
-				}
-				if character.AvatarID != "" {
-					room.gameMap.NPCs[index].SpriteKey = character.AvatarID
-				}
-			}
-		}
-		room.mu.Unlock()
-	}
+	srv.world.setNPCCharacters(loaded.NPCs)
 	return nil
 }
 

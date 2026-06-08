@@ -78,9 +78,17 @@ type world struct {
 	roomID         string
 	rooms          map[string]*room
 	defaultRoom    *room
+	npcMu          sync.RWMutex
+	npcCharacters  map[string]npcCharacter
 	rewardEvents   chan rewardEvent
 	resourceEvents chan resourceEvent
 	transferMu     sync.Mutex
+}
+
+type npcCharacter struct {
+	characterID int64
+	displayName string
+	avatarID    string
 }
 
 type collectible struct {

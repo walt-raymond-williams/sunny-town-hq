@@ -113,12 +113,7 @@ func EnsureNPC(ctx context.Context, querier Querier, spec NPCSpec) (NPCCharacter
 				where not exists (select 1 from existing_mapping)
 				returning id
 			),
-			target_character as (
-				select character_id as id from existing_mapping
-				union all
-				select id from inserted_character
-			),
-			inserted_mapping as (
+			written_mapping as (
 				insert into sunny_town_npc_character (
 					character_id,
 					room_id,
@@ -126,7 +121,20 @@ func EnsureNPC(ctx context.Context, querier Querier, spec NPCSpec) (NPCCharacter
 				)
 				select id, $1, $2
 				from inserted_character
-				on conflict (room_id, npc_key) do nothing
+				on conflict (room_id, npc_key) do update
+				set updated_at = now()
+				returning character_id
+			),
+			target_character as (
+				select character_id as id from existing_mapping
+				union all
+				select character_id as id from written_mapping
+			),
+			deleted_orphan as (
+				delete from sunny_town_character c
+				using inserted_character inserted, target_character target
+				where c.id = inserted.id
+					and c.id <> target.id
 			)
 			update sunny_town_character c
 			set display_name = $3,

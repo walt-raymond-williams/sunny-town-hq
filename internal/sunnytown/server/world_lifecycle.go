@@ -16,6 +16,7 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 	created := &world{
 		roomID:         roomID,
 		rooms:          map[string]*room{},
+		npcCharacters:  map[string]npcCharacter{},
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
 	}
@@ -112,12 +113,13 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 	room.players[player.id] = player
 	client.setRoom(room)
 
+	mapSnapshot := room.mapSnapshotLocked()
 	client.send <- serverMessage{
 		Type:          "hello",
 		SelfID:        player.id,
 		RoomID:        room.id,
 		MapID:         room.gameMap.ID,
-		Map:           &room.gameMap,
+		Map:           &mapSnapshot,
 		Players:       room.snapshotsLocked(),
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
@@ -193,12 +195,13 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 	target.mu.Lock()
 	target.players[playerID] = player
 	player.client.setRoom(target)
+	mapSnapshot := target.mapSnapshotLocked()
 	message := serverMessage{
 		Type:          "map_changed",
 		SelfID:        player.id,
 		RoomID:        target.id,
 		MapID:         target.gameMap.ID,
-		Map:           &target.gameMap,
+		Map:           &mapSnapshot,
 		Players:       target.snapshotsLocked(),
 		Collectibles:  target.collectibleSnapshotsLocked(),
 		ResourceNodes: target.resourceNodeSnapshotsLocked(),

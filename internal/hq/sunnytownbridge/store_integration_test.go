@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -250,6 +251,77 @@ func TestEnsureNPCCharactersUpsertsDurableRows(t *testing.T) {
 		t.Fatalf("count character rows: %v", err)
 	}
 	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_character where room_id = 'sunny-town-main' and npc_key = 'mayor-sunny'").Scan(&mappingRows); err != nil {
+		t.Fatalf("count mapping rows: %v", err)
+	}
+	if characterRows != 1 || mappingRows != 1 {
+		t.Fatalf("characterRows=%d mappingRows=%d, want 1 and 1", characterRows, mappingRows)
+	}
+}
+
+func TestEnsureNPCCharactersConcurrentCallsShareDurableRow(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	store := Store{DB: db}
+	const workers = 12
+	start := make(chan struct{})
+	errs := make(chan error, workers)
+	ids := make(chan int64, workers)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			response, err := store.EnsureNPCCharacters(context.Background(), EnsureNPCCharactersRequest{
+				RoomID: "sunny-town-main",
+				NPCs: []EnsureNPCCharacterInput{{
+					NPCKey:      "mayor-sunny",
+					DisplayName: "Mayor Sunny",
+					AvatarID:    "mayor",
+				}},
+			})
+			if err != nil {
+				errs <- err
+				return
+			}
+			if len(response.NPCs) != 1 {
+				errs <- fmt.Errorf("response npcs = %#v, want one npc", response.NPCs)
+				return
+			}
+			ids <- response.NPCs[0].CharacterID
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	close(ids)
+
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent ensure error: %v", err)
+		}
+	}
+	var firstID int64
+	for id := range ids {
+		if id == 0 {
+			t.Fatal("concurrent ensure returned zero character id")
+		}
+		if firstID == 0 {
+			firstID = id
+			continue
+		}
+		if id != firstID {
+			t.Fatalf("concurrent ensure returned character id %d, want %d", id, firstID)
+		}
+	}
+
+	var characterRows int
+	var mappingRows int
+	if err := db.QueryRow(context.Background(), "select count(*) from sunny_town_character where character_type = 'npc'").Scan(&characterRows); err != nil {
+		t.Fatalf("count character rows: %v", err)
+	}
+	if err := db.QueryRow(context.Background(), "select count(*) from sunny_town_npc_character where room_id = 'sunny-town-main' and npc_key = 'mayor-sunny'").Scan(&mappingRows); err != nil {
 		t.Fatalf("count mapping rows: %v", err)
 	}
 	if characterRows != 1 || mappingRows != 1 {
