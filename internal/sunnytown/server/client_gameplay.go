@@ -147,7 +147,7 @@ func (client *client) handleToolUse(message clientMessage) {
 			target.harvestSeq++
 			target.respawnAt = now.Add(target.respawnDelay)
 			resourceKey, amount := rollMiningDrop()
-			eventID := fmt.Sprintf("%s:%s:%d:%d", room.gameMap.ID, target.id, target.harvestSeq, player.appUserID)
+			eventID := fmt.Sprintf("%s:%s:%s:%d:%d", room.gameMap.ID, room.rewardRunID, target.id, target.harvestSeq, player.appUserID)
 			event = &resourceEvent{
 				eventID:     eventID,
 				appUserID:   player.appUserID,

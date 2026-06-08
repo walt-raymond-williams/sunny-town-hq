@@ -36,7 +36,7 @@ export function useSunnyTownInventoryActions(
 ) {
   const inventoryOpen = ref(false)
   const craftingPanelOpen = ref(false)
-  const showAllCraftingRecipes = ref(false)
+  const showAllCraftingRecipes = ref(true)
   const selectedHotbarIndex = ref(0)
 
   const stoneBlockQuantity = computed(() => inventoryStore.items.find((item) => item.key === 'stone_block')?.quantity || 0)

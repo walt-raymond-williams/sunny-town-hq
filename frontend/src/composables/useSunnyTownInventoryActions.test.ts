@@ -80,6 +80,7 @@ describe('useSunnyTownInventoryActions', () => {
 
     expect(actions.inventoryOpen.value).toBe(true)
     expect(actions.craftingPanelOpen.value).toBe(true)
+    expect(actions.showAllCraftingRecipes.value).toBe(true)
     expect(inventoryStore.loadInventory).toHaveBeenCalledOnce()
     expect(inventoryStore.loadHotbar).toHaveBeenCalledOnce()
     expect(inventoryStore.loadCraftingRecipes).toHaveBeenCalledOnce()

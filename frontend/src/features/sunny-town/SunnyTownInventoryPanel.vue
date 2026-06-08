@@ -23,7 +23,7 @@ const emit = defineEmits<{
 const inventoryStore = useStudentInventoryStore()
 const selectedHotbarItem = computed(() => inventoryStore.hotbarSlots[props.selectedHotbarIndex]?.item || null)
 const visibleCraftingRecipes = computed(() => (
-  props.showAllCraftingRecipes ? inventoryStore.craftingRecipes : inventoryStore.craftableRecipes
+  props.showAllCraftingRecipes ? inventoryStore.knownCraftingRecipes : inventoryStore.craftableRecipes
 ))
 </script>
 
@@ -58,7 +58,7 @@ const visibleCraftingRecipes = computed(() => (
         v-for="recipe in visibleCraftingRecipes"
         :key="recipe.key"
         class="sunny-town-crafting__recipe"
-        :class="{ 'sunny-town-crafting__recipe--locked': !recipe.canCraft }"
+        :class="{ 'sunny-town-crafting__recipe--disabled': !recipe.canCraft }"
       >
         <span class="inventory-item__icon" :class="`inventory-item__icon--${recipe.outputKey}`" aria-hidden="true" />
         <div>

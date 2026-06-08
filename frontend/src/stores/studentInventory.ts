@@ -3,6 +3,7 @@ import { craftStudentRecipe, getCraftingRecipes } from '../api/craftingApi'
 import { equipStudentItem, getStudentEquipment, unequipStudentItem } from '../api/equipmentApi'
 import { getStudentHotbar, setStudentHotbarSlot } from '../api/hotbarApi'
 import { getStudentInventory } from '../api/inventoryApi'
+import { withKnownCraftingRecipes } from './craftingRecipes'
 import type { CraftingRecipe, EquippedSlot, EquipmentSlot, HotbarSlot, InventoryItem, StudentHotbar, StudentInventory } from '../types/inventory'
 
 interface StudentInventoryState {
@@ -47,7 +48,8 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
   getters: {
     cookieQuantity: (state) => state.items.find((item) => item.key === 'cookie')?.quantity ?? 0,
     unequippedItems: (state) => state.items.filter((item) => !item.equipped),
-    craftableRecipes: (state) => state.craftingRecipes.filter((recipe) => recipe.canCraft),
+    knownCraftingRecipes: (state) => withKnownCraftingRecipes(state.craftingRecipes, state.items),
+    craftableRecipes: (state) => withKnownCraftingRecipes(state.craftingRecipes, state.items).filter((recipe) => recipe.canCraft),
     equippedVisuals: (state) => Object.fromEntries(
       state.equipmentSlots.map((slot) => [slot.slot, slot.item?.visualKey || '']),
     ) as Record<EquipmentSlot, string>,
@@ -167,7 +169,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       this.craftingError = ''
 
       try {
-        this.craftingRecipes = await getCraftingRecipes()
+        this.craftingRecipes = withKnownCraftingRecipes(await getCraftingRecipes(), this.items)
       } catch (error) {
         this.craftingError = error instanceof Error ? error.message : String(error)
       } finally {
@@ -181,7 +183,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       try {
         const result = await craftStudentRecipe(recipeKey)
         this.items = result.inventory.items
-        this.craftingRecipes = result.recipes
+        this.craftingRecipes = withKnownCraftingRecipes(result.recipes, this.items)
         this.markEquippedItems()
         this.syncHotbarQuantities()
       } catch (error) {

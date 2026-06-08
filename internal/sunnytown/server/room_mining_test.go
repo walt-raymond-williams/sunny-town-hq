@@ -110,6 +110,7 @@ func TestMiningRequiresPlayerInRange(t *testing.T) {
 
 func TestMiningRequiresThreeSwings(t *testing.T) {
 	room := testRoom(miningTestMap())
+	room.rewardRunID = "test-run"
 	client := testClient(room, "42")
 	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
 	room.players["42"].x = 140
@@ -142,7 +143,7 @@ func TestMiningRequiresThreeSwings(t *testing.T) {
 	}
 	select {
 	case event := <-room.resourceEvents:
-		if event.eventID != "sunny-town-v1:rock-node-001:1:42" || event.nodeID != "rock-node-001" || event.amount < 1 {
+		if event.eventID != "sunny-town-v1:test-run:rock-node-001:1:42" || event.nodeID != "rock-node-001" || event.amount < 1 {
 			t.Fatalf("resource event = %#v", event)
 		}
 	default:
