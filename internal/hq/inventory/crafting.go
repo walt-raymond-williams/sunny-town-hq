@@ -45,24 +45,34 @@ type CraftRecipeResponse struct {
 	Recipes   []CraftingRecipeResponse `json:"recipes"`
 }
 
-type craftingRecipe struct {
+type RecipeDefinition struct {
 	Key         string
 	OutputKey   string
 	Quantity    int
-	Ingredients []craftingIngredient
+	Ingredients []RecipeIngredient
 }
 
-type craftingIngredient struct {
+type RecipeIngredient struct {
 	ItemKey  string
 	Quantity int
 }
 
-var craftingRecipes = []craftingRecipe{
+type recipeStorage interface {
+	ConsumeRecipeItem(ctx context.Context, itemKey string, quantity int) (bool, error)
+	ProduceRecipeItem(ctx context.Context, itemKey string, quantity int) error
+}
+
+type studentRecipeStorage struct {
+	querier Querier
+	userID  int64
+}
+
+var recipeCatalog = []RecipeDefinition{
 	{
 		Key:       "stone_block",
 		OutputKey: "stone_block",
 		Quantity:  1,
-		Ingredients: []craftingIngredient{
+		Ingredients: []RecipeIngredient{
 			{ItemKey: "rock", Quantity: 4},
 		},
 	},
@@ -70,7 +80,7 @@ var craftingRecipes = []craftingRecipe{
 
 func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (CraftingRecipesResponse, error) {
 	itemKeys := map[string]bool{}
-	for _, recipe := range craftingRecipes {
+	for _, recipe := range recipeCatalog {
 		itemKeys[recipe.OutputKey] = true
 		for _, ingredient := range recipe.Ingredients {
 			itemKeys[ingredient.ItemKey] = true
@@ -83,7 +93,7 @@ func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (Cra
 	}
 
 	response := CraftingRecipesResponse{Recipes: []CraftingRecipeResponse{}}
-	for _, recipe := range craftingRecipes {
+	for _, recipe := range recipeCatalog {
 		output := ownedItems[recipe.OutputKey]
 		recipeResponse := CraftingRecipeResponse{
 			Key:         recipe.Key,
@@ -119,7 +129,7 @@ func CraftStudentRecipe(ctx context.Context, db *pgxpool.Pool, userID int64, req
 		return CraftRecipeResponse{}, errors.New("crafting request is missing required fields")
 	}
 
-	recipe, ok := craftingRecipeByKey(request.RecipeKey)
+	recipe, ok := recipeByKey(request.RecipeKey)
 	if !ok {
 		return CraftRecipeResponse{}, ErrUnknownRecipe
 	}
@@ -130,17 +140,8 @@ func CraftStudentRecipe(ctx context.Context, db *pgxpool.Pool, userID int64, req
 	}
 	defer tx.Rollback(ctx)
 
-	for _, ingredient := range recipe.Ingredients {
-		consumed, err := ConsumeStudentItem(ctx, tx, userID, ingredient.ItemKey, ingredient.Quantity)
-		if err != nil {
-			return CraftRecipeResponse{}, err
-		}
-		if !consumed {
-			return CraftRecipeResponse{}, ErrInsufficientIngredient
-		}
-	}
-
-	if err := IncrementStudentItem(ctx, tx, userID, recipe.OutputKey, recipe.Quantity); err != nil {
+	storage := studentRecipeStorage{querier: tx, userID: userID}
+	if err := executeRecipe(ctx, recipe, storage); err != nil {
 		return CraftRecipeResponse{}, err
 	}
 
@@ -173,13 +174,35 @@ func CraftingErrorMessage(err error) string {
 	}
 }
 
-func craftingRecipeByKey(key string) (craftingRecipe, bool) {
-	for _, recipe := range craftingRecipes {
+func recipeByKey(key string) (RecipeDefinition, bool) {
+	for _, recipe := range recipeCatalog {
 		if recipe.Key == key {
 			return recipe, true
 		}
 	}
-	return craftingRecipe{}, false
+	return RecipeDefinition{}, false
+}
+
+func executeRecipe(ctx context.Context, recipe RecipeDefinition, storage recipeStorage) error {
+	for _, ingredient := range recipe.Ingredients {
+		consumed, err := storage.ConsumeRecipeItem(ctx, ingredient.ItemKey, ingredient.Quantity)
+		if err != nil {
+			return err
+		}
+		if !consumed {
+			return ErrInsufficientIngredient
+		}
+	}
+
+	return storage.ProduceRecipeItem(ctx, recipe.OutputKey, recipe.Quantity)
+}
+
+func (storage studentRecipeStorage) ConsumeRecipeItem(ctx context.Context, itemKey string, quantity int) (bool, error) {
+	return ConsumeStudentItem(ctx, storage.querier, storage.userID, itemKey, quantity)
+}
+
+func (storage studentRecipeStorage) ProduceRecipeItem(ctx context.Context, itemKey string, quantity int) error {
+	return IncrementStudentItem(ctx, storage.querier, storage.userID, itemKey, quantity)
 }
 
 type craftingItemMetadata struct {
