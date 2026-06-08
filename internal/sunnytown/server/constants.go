@@ -61,10 +61,12 @@ func (room *room) step(dt float64, now time.Time) {
 		rewards = append(rewards, room.collectStarsLocked(player, now)...)
 	}
 
-	room.stepLiveNPCsLocked(dt, now)
+	npcTransfers := room.stepLiveNPCsLocked(dt, now)
 	room.respawnCollectiblesLocked(now)
 	room.respawnResourceNodesLocked(now)
 	room.mu.Unlock()
+
+	room.world.applyNPCTransfers(npcTransfers, now)
 
 	for _, reward := range rewards {
 		select {

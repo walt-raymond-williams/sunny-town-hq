@@ -2,7 +2,7 @@
 
 This document is the handoff-ready implementation plan for adding Sunny Town NPC movement using location tags, portal-aware pathing, and a basic drive system.
 
-Status: `Slice 7 implemented; Slice 8 is next`
+Status: `Slice 8 implemented; movement plan complete`
 
 Related docs:
 
@@ -411,6 +411,16 @@ Suggested tests:
 ## Slice 8: Cross-Map Movement Hardening
 
 Goal: NPCs can use portal routes for real needs across multiple cells.
+
+Status: `Implemented`
+
+Implemented notes:
+
+- Drive goal selection now scans matching tagged locations across all loaded Sunny Town maps, preferring the current map first and using deterministic map order after that.
+- NPC route following now supports portal route steps by walking to the portal, moving room membership to the target map, applying portal target position/facing, and continuing the remaining route on the next target-room tick.
+- NPC snapshots are scoped to the room where the live NPC currently resides, so the NPC disappears from the source room and appears in the target room after transfer.
+- Portal transfers do not use player-style trigger detection, so an NPC landing inside the destination portal does not bounce back.
+- Tests cover cross-map goal planning, one-hop portal transfer, target/source snapshot scoping, and no-bounce behavior when the landing point overlaps a return portal.
 
 Implementation notes:
 

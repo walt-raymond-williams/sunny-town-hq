@@ -15,6 +15,15 @@ const (
 	driveStartLocationID  = "town-square-center"
 )
 
+type npcTransfer struct {
+	npc         *liveNPC
+	sourceMapID string
+	targetMapID string
+	x           float64
+	y           float64
+	facing      string
+}
+
 var allNPCDrives = []npcDrive{npcDriveHunger, npcDriveEnergy, npcDriveSocial, npcDriveWork}
 
 var npcDriveLocationTags = map[npcDrive]map[string]bool{
@@ -51,18 +60,22 @@ func (room *room) configureNPCBehaviorLocked() {
 	npc.drives.Social = 40
 }
 
-func (room *room) stepLiveNPCsLocked(dt float64, now time.Time) {
+func (room *room) stepLiveNPCsLocked(dt float64, now time.Time) []npcTransfer {
 	if dt <= 0 || room.world == nil || room.world.navigation == nil {
-		return
+		return nil
 	}
+	transfers := []npcTransfer{}
 	for _, npc := range room.liveNPCs {
-		room.stepLiveNPCLocked(npc, dt, now)
+		if transfer := room.stepLiveNPCLocked(npc, dt, now); transfer != nil {
+			transfers = append(transfers, *transfer)
+		}
 	}
+	return transfers
 }
 
-func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) {
+func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) *npcTransfer {
 	if npc == nil {
-		return
+		return nil
 	}
 	npc.depleteDrives(dt)
 	room.replenishNPCDrivesLocked(npc, dt)
@@ -76,17 +89,20 @@ func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) {
 	if npc.route == nil {
 		npc.moving = false
 		room.noteNPCGoalArrivalLocked(npc, now)
-		return
+		return nil
 	}
 
 	remaining := npcSpeed * dt
 	for remaining > 0 && npc.route != nil {
 		step := npc.route.Steps[npc.routeStep]
-		if step.MapID != room.gameMap.ID || step.PortalID != "" {
+		if step.MapID != room.gameMap.ID {
 			room.clearNPCGoal(npc)
-			return
+			return nil
 		}
 		if npc.pathIndex >= len(step.Path) {
+			if step.PortalID != "" {
+				return room.transferNPCThroughPortalLocked(npc, step)
+			}
 			room.advanceLiveNPCRouteLocked(npc)
 			continue
 		}
@@ -106,7 +122,7 @@ func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) {
 		if remaining >= distance {
 			if room.collidesLocked(waypoint.X, waypoint.Y) {
 				room.clearNPCGoal(npc)
-				return
+				return nil
 			}
 			npc.x = waypoint.X
 			npc.y = waypoint.Y
@@ -121,7 +137,7 @@ func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) {
 		nextY := npc.y + dy*ratio
 		if room.collidesLocked(nextX, nextY) {
 			room.clearNPCGoal(npc)
-			return
+			return nil
 		}
 		npc.x = nextX
 		npc.y = nextY
@@ -129,6 +145,7 @@ func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) {
 		remaining = 0
 	}
 	room.noteNPCGoalArrivalLocked(npc, now)
+	return nil
 }
 
 func (room *room) chooseNPCDriveGoalLocked(npc *liveNPC, now time.Time) {
@@ -158,27 +175,109 @@ func (room *room) nextNPCDriveGoalLocked(npc *liveNPC, now time.Time, emergencyO
 
 func (room *room) routeToDriveLocationLocked(npc *liveNPC, drive npcDrive, now time.Time) (npcGoal, stnavigation.Route, bool) {
 	start := stnavigation.Point{X: npc.x, Y: npc.y}
-	for _, location := range room.gameMap.Locations {
-		if !locationMatchesDrive(location, drive) {
-			continue
+	for _, gameMap := range room.driveTargetMaps() {
+		for _, location := range gameMap.Locations {
+			if !locationMatchesDrive(location, drive) {
+				continue
+			}
+			goal := npcGoal{drive: drive, mapID: gameMap.ID, location: location}
+			if npc.targetFailedRecently(goal, now) {
+				continue
+			}
+			if gameMap.ID == room.gameMap.ID && pointWithinLocation(start, location) {
+				return npcGoal{}, stnavigation.Route{}, false
+			}
+			route, err := room.world.navigation.PlanRouteToLocation(room.gameMap.ID, start, gameMap.ID, location.ID)
+			if err != nil || len(route.Steps) == 0 {
+				continue
+			}
+			return goal, route, true
 		}
-		if npc.targetFailedRecently(npcGoal{drive: drive, mapID: room.gameMap.ID, location: location}, now) {
-			continue
-		}
-		if pointWithinLocation(start, location) {
-			return npcGoal{}, stnavigation.Route{}, false
-		}
-		route, err := room.world.navigation.PlanRouteToLocation(room.gameMap.ID, start, room.gameMap.ID, location.ID)
-		if err != nil || len(route.Steps) == 0 {
-			continue
-		}
-		return npcGoal{
-			drive:    drive,
-			mapID:    room.gameMap.ID,
-			location: location,
-		}, route, true
 	}
 	return npcGoal{}, stnavigation.Route{}, false
+}
+
+func (room *room) driveTargetMaps() []gameMap {
+	if room.world == nil {
+		return []gameMap{room.gameMap}
+	}
+	mapIDs := make([]string, 0, len(room.world.rooms))
+	for mapID := range room.world.rooms {
+		if mapID != room.gameMap.ID {
+			mapIDs = append(mapIDs, mapID)
+		}
+	}
+	sort.Strings(mapIDs)
+
+	gameMaps := []gameMap{room.gameMap}
+	for _, mapID := range mapIDs {
+		target := room.world.rooms[mapID]
+		if target == nil {
+			continue
+		}
+		gameMaps = append(gameMaps, target.gameMap)
+	}
+	return gameMaps
+}
+
+func (room *room) transferNPCThroughPortalLocked(npc *liveNPC, step stnavigation.RouteStep) *npcTransfer {
+	nextStepIndex := npc.routeStep + 1
+	if npc.route == nil || step.TargetMapID == "" || nextStepIndex >= len(npc.route.Steps) {
+		room.clearNPCGoal(npc)
+		return nil
+	}
+	target := room.world.rooms[step.TargetMapID]
+	if target == nil {
+		room.clearNPCGoal(npc)
+		return nil
+	}
+	nextStep := npc.route.Steps[nextStepIndex]
+	if nextStep.MapID != step.TargetMapID {
+		room.clearNPCGoal(npc)
+		return nil
+	}
+	delete(room.liveNPCs, npc.npcKey)
+	npc.mapID = step.TargetMapID
+	npc.x = nextStep.From.X
+	npc.y = nextStep.From.Y
+	if stmaps.IsFacing(step.TargetFacing) {
+		npc.facing = step.TargetFacing
+	}
+	npc.moving = false
+	npc.routeStep = nextStepIndex
+	npc.pathIndex = firstWaypointIndex(nextStep.Path)
+	return &npcTransfer{
+		npc:         npc,
+		sourceMapID: room.gameMap.ID,
+		targetMapID: step.TargetMapID,
+		x:           npc.x,
+		y:           npc.y,
+		facing:      npc.facing,
+	}
+}
+
+func (world *world) applyNPCTransfers(transfers []npcTransfer, now time.Time) {
+	for _, transfer := range transfers {
+		if transfer.npc == nil {
+			continue
+		}
+		target := world.rooms[transfer.targetMapID]
+		if target == nil {
+			continue
+		}
+		target.mu.Lock()
+		transfer.npc.mapID = transfer.targetMapID
+		transfer.npc.x = transfer.x
+		transfer.npc.y = transfer.y
+		transfer.npc.facing = transfer.facing
+		target.liveNPCs[transfer.npc.npcKey] = transfer.npc
+		target.mu.Unlock()
+
+		if source := world.rooms[transfer.sourceMapID]; source != nil {
+			source.broadcastSnapshot(now)
+		}
+		target.broadcastSnapshot(now)
+	}
 }
 
 func (room *room) assignNPCGoal(npc *liveNPC, goal npcGoal, route stnavigation.Route, now time.Time) {
