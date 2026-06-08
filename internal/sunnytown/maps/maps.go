@@ -21,6 +21,7 @@ type GameMap struct {
 	Portals       []Portal                 `json:"portals"`
 	NPCs          []NPC                    `json:"npcs"`
 	ResourceNodes []ResourceNodeDefinition `json:"resourceNodes"`
+	Locations     []Location               `json:"locations"`
 }
 
 type Point struct {
@@ -45,6 +46,17 @@ type Portal struct {
 	TargetX      float64 `json:"targetX"`
 	TargetY      float64 `json:"targetY"`
 	TargetFacing string  `json:"targetFacing"`
+}
+
+type Location struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	X           float64  `json:"x"`
+	Y           float64  `json:"y"`
+	Radius      float64  `json:"radius"`
+	Tags        []string `json:"tags"`
+	OwnerNPCKey string   `json:"ownerNpcKey,omitempty"`
+	Capacity    int      `json:"capacity,omitempty"`
 }
 
 type NPC struct {
@@ -108,6 +120,9 @@ func LoadMap(path string) (GameMap, error) {
 			return GameMap{}, fmt.Errorf("map %q portal %q has invalid target facing", loaded.ID, portal.ID)
 		}
 	}
+	if err := validateLocations(loaded); err != nil {
+		return GameMap{}, err
+	}
 	npcIDs := map[string]bool{}
 	for _, loadedNPC := range loaded.NPCs {
 		if loadedNPC.ID == "" || loadedNPC.Name == "" || len(loadedNPC.Dialogue) == 0 {
@@ -158,6 +173,39 @@ func LoadMap(path string) (GameMap, error) {
 		}
 	}
 	return loaded, nil
+}
+
+func validateLocations(loaded GameMap) error {
+	locationIDs := map[string]bool{}
+	maxX := float64(loaded.Width * loaded.TileSize)
+	maxY := float64(loaded.Height * loaded.TileSize)
+	for _, location := range loaded.Locations {
+		if strings.TrimSpace(location.ID) == "" {
+			return fmt.Errorf("map %q has a location with blank id", loaded.ID)
+		}
+		if locationIDs[location.ID] {
+			return fmt.Errorf("map %q has duplicate location id %q", loaded.ID, location.ID)
+		}
+		locationIDs[location.ID] = true
+		if location.X < 0 || location.Y < 0 || location.X > maxX || location.Y > maxY {
+			return fmt.Errorf("map %q location %q is outside map bounds", loaded.ID, location.ID)
+		}
+		if location.Radius <= 0 {
+			return fmt.Errorf("map %q location %q has invalid radius", loaded.ID, location.ID)
+		}
+		if len(location.Tags) == 0 {
+			return fmt.Errorf("map %q location %q has no tags", loaded.ID, location.ID)
+		}
+		for _, tag := range location.Tags {
+			if strings.TrimSpace(tag) == "" {
+				return fmt.Errorf("map %q location %q has a blank tag", loaded.ID, location.ID)
+			}
+		}
+		if location.Capacity < 0 {
+			return fmt.Errorf("map %q location %q has invalid capacity", loaded.ID, location.ID)
+		}
+	}
+	return nil
 }
 
 func LoadMaps(dir string) (map[string]GameMap, error) {

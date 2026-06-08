@@ -47,6 +47,24 @@
       }
     }
   ],
+  "locations": [
+    {
+      "id": "shared-house-rest",
+      "name": "Shared House Rest Spot",
+      "x": 160,
+      "y": 224,
+      "radius": 64,
+      "tags": ["rest", "home", "bed"]
+    },
+    {
+      "id": "shared-house-kitchen",
+      "name": "Shared House Kitchen",
+      "x": 480,
+      "y": 224,
+      "radius": 64,
+      "tags": ["food", "kitchen", "meal"]
+    }
+  ],
   "blockedRects": [
     { "x": 0, "y": 0, "width": 640, "height": 32 },
     { "x": 0, "y": 448, "width": 304, "height": 32 },

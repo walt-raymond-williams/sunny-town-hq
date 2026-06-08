@@ -61,6 +61,17 @@ export interface SunnyTownNpc {
   activity?: SunnyTownActivity
 }
 
+export interface SunnyTownLocation {
+  id: string
+  name: string
+  x: number
+  y: number
+  radius: number
+  tags: string[]
+  ownerNpcKey?: string
+  capacity?: number
+}
+
 export interface SunnyTownActivity {
   type: 'schoolwork'
 }
@@ -89,6 +100,7 @@ export interface SunnyTownMap {
   portals: SunnyTownPortal[]
   npcs: SunnyTownNpc[]
   resourceNodes: SunnyTownResourceNodeDefinition[]
+  locations?: SunnyTownLocation[]
 }
 
 export interface SunnyTownPlacedObject {

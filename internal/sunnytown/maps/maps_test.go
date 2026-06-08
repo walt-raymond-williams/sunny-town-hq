@@ -98,6 +98,79 @@ func TestLoadMapsAcceptsNPCDefinitions(t *testing.T) {
 	}
 }
 
+func TestLoadMapsAcceptsLocationDefinitions(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"locations":[{"id":"town-square-center","name":"Town Square","x":64,"y":64,"radius":48,"tags":["public","social","idle"],"ownerNpcKey":"guide","capacity":4}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	maps, err := LoadMaps(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	locations := maps["one"].Locations
+	if len(locations) != 1 || locations[0].ID != "town-square-center" {
+		t.Fatalf("loaded locations = %#v, want town-square-center", locations)
+	}
+	if len(locations[0].Tags) != 3 || locations[0].Tags[1] != "social" {
+		t.Fatalf("loaded location tags = %#v, want public/social/idle", locations[0].Tags)
+	}
+	if locations[0].OwnerNPCKey != "guide" || locations[0].Capacity != 4 {
+		t.Fatalf("loaded location metadata = %#v, want owner guide capacity 4", locations[0])
+	}
+}
+
+func TestLoadMapsRejectsDuplicateLocationIDs(t *testing.T) {
+	dir := t.TempDir()
+	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"locations":[{"id":"square","name":"Square","x":64,"y":64,"radius":48,"tags":["public"]},{"id":"square","name":"Square Again","x":96,"y":64,"radius":48,"tags":["public"]}]}`
+	if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadMaps(dir); err == nil {
+		t.Fatal("expected duplicate location ID to be rejected")
+	}
+}
+
+func TestLoadMapsRejectsInvalidLocations(t *testing.T) {
+	tests := []struct {
+		name     string
+		location string
+	}{
+		{
+			name:     "blank tag",
+			location: `{"id":"spot","name":"Spot","x":64,"y":64,"radius":48,"tags":["public"," "]}`,
+		},
+		{
+			name:     "invalid radius",
+			location: `{"id":"spot","name":"Spot","x":64,"y":64,"radius":0,"tags":["public"]}`,
+		},
+		{
+			name:     "out of bounds",
+			location: `{"id":"spot","name":"Spot","x":129,"y":64,"radius":48,"tags":["public"]}`,
+		},
+		{
+			name:     "missing tags",
+			location: `{"id":"spot","name":"Spot","x":64,"y":64,"radius":48,"tags":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"locations":[` + tt.location + `]}`
+			if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := LoadMaps(dir); err == nil {
+				t.Fatalf("expected invalid location %q to be rejected", tt.name)
+			}
+		})
+	}
+}
+
 func TestLoadMapsRejectsDuplicateNPCIDs(t *testing.T) {
 	dir := t.TempDir()
 	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"npcs":[{"id":"guide","name":"Guide","x":64,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hello."]},{"id":"guide","name":"Guide Again","x":96,"y":64,"facing":"down","spriteKey":"guide","dialogue":["Hi."]}]}`

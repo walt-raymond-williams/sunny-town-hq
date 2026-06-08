@@ -66,6 +66,16 @@
       ]
     }
   ],
+  "locations": [
+    {
+      "id": "town-square-center",
+      "name": "Town Square Center",
+      "x": 640,
+      "y": 512,
+      "radius": 96,
+      "tags": ["public", "social", "idle"]
+    }
+  ],
   "blockedRects": [
     { "x": 0, "y": 0, "width": 1280, "height": 32 },
     { "x": 0, "y": 928, "width": 1280, "height": 32 },
