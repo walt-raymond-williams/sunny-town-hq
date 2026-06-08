@@ -21,11 +21,11 @@ const inventoryStore = useStudentInventoryStore()
 </script>
 
 <template>
-  <div v-if="!open" class="sunny-town-npc-menu" role="dialog" :aria-label="npc.name">
+  <div v-if="!open" class="sunny-town-npc-menu" data-testid="sunny-town-npc-menu" role="dialog" :aria-label="npc.name">
     <strong>{{ npc.name }}</strong>
     <p>{{ npc.dialogue[0] }}</p>
     <div class="sunny-town-npc-menu__actions">
-      <v-btn color="warning" prepend-icon="mdi-store" variant="flat" @click="$emit('openTrade')">
+      <v-btn color="warning" data-testid="sunny-town-open-shop-button" prepend-icon="mdi-store" variant="flat" @click="$emit('openTrade')">
         Trade
       </v-btn>
       <v-btn prepend-icon="mdi-close" variant="tonal" @click="$emit('close')">
@@ -33,7 +33,7 @@ const inventoryStore = useStudentInventoryStore()
       </v-btn>
     </div>
   </div>
-  <div v-else class="sunny-town-shop" role="dialog" :aria-label="`${npc.name} shop`">
+  <div v-else class="sunny-town-shop" data-testid="sunny-town-shop-panel" role="dialog" :aria-label="`${npc.name} shop`">
     <div class="sunny-town-shop__header">
       <div>
         <strong>{{ npc.name }}</strong>
@@ -64,7 +64,7 @@ const inventoryStore = useStudentInventoryStore()
       </section>
       <section class="sunny-town-shop__column" aria-label="Shop inventory">
         <h2>Shop Inventory</h2>
-        <div v-for="item in npc.shop?.items || []" :key="item.itemKey" class="sunny-town-shop__item">
+        <div v-for="item in npc.shop?.items || []" :key="item.itemKey" class="sunny-town-shop__item" :data-testid="`shop-item-${item.itemKey}`">
           <span class="inventory-item__icon" :class="`inventory-item__icon--${item.itemKey}`" aria-hidden="true" />
           <div>
             <p>{{ item.name }}</p>
@@ -76,6 +76,7 @@ const inventoryStore = useStudentInventoryStore()
             :disabled="starBalance < item.priceStars || isPurchasing"
             :loading="isPurchasing"
             size="small"
+            :data-testid="`buy-${item.itemKey}-button`"
             variant="flat"
             @click="$emit('buy', item.itemKey)"
           >

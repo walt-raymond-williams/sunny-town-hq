@@ -22,11 +22,11 @@ defineEmits<{
 </script>
 
 <template>
-  <div v-if="!open" class="sunny-town-npc-menu" role="dialog" :aria-label="npc.name">
+  <div v-if="!open" class="sunny-town-npc-menu" data-testid="sunny-town-npc-menu" role="dialog" :aria-label="npc.name">
     <strong>{{ npc.name }}</strong>
     <p>{{ npc.dialogue[0] }}</p>
     <div class="sunny-town-npc-menu__actions">
-      <v-btn color="primary" prepend-icon="mdi-school" variant="flat" @click="$emit('start')">
+      <v-btn color="primary" data-testid="sunny-town-start-schoolwork-button" prepend-icon="mdi-school" variant="flat" @click="$emit('start')">
         Do School Work
       </v-btn>
       <v-btn prepend-icon="mdi-close" variant="tonal" @click="$emit('close')">
@@ -34,7 +34,7 @@ defineEmits<{
       </v-btn>
     </div>
   </div>
-  <div v-else class="sunny-town-schoolwork" role="dialog" :aria-label="`${npc.name} school work`">
+  <div v-else class="sunny-town-schoolwork" data-testid="sunny-town-schoolwork-panel" role="dialog" :aria-label="`${npc.name} school work`">
     <div class="sunny-town-schoolwork__header">
       <div>
         <strong>{{ npc.name }}</strong>
@@ -75,6 +75,7 @@ defineEmits<{
       </div>
       <v-textarea
         :model-value="answer"
+        data-testid="sunny-town-schoolwork-answer-input"
         label="Your answer"
         rows="4"
         variant="outlined"
@@ -84,6 +85,7 @@ defineEmits<{
         :disabled="answer.trim().length === 0"
         :loading="isSubmitting"
         color="primary"
+        data-testid="sunny-town-schoolwork-submit-button"
         prepend-icon="mdi-send"
         type="submit"
         variant="flat"

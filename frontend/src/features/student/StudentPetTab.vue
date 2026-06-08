@@ -83,21 +83,27 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
       <span class="cookie-display__icon" aria-hidden="true" />
       <div>
         <p class="summary-category">Cookies</p>
-        <p class="cookie-display__count">{{ studentPetStore.cookies }}</p>
+        <p class="cookie-display__count" data-testid="pet-cookie-count">{{ studentPetStore.cookies }}</p>
       </div>
       <v-divider vertical />
       <div>
         <p class="summary-category">Stars</p>
-        <p class="cookie-display__count">{{ studentPetStore.starBalance }}</p>
+        <p class="cookie-display__count" data-testid="pet-star-count">{{ studentPetStore.starBalance }}</p>
       </div>
       <div class="pet-actions">
-        <v-chip :color="studentPetStore.sleeping ? 'primary' : 'success'" size="small" variant="tonal">
+        <v-chip
+          :color="studentPetStore.sleeping ? 'primary' : 'success'"
+          data-testid="pet-sleep-state"
+          size="small"
+          variant="tonal"
+        >
           {{ studentPetStore.sleeping ? 'Sleeping' : 'Awake' }}
         </v-chip>
         <v-btn
           :disabled="!canFeedPet"
           :loading="studentPetStore.isLoading"
           color="secondary"
+          data-testid="feed-pet-button"
           prepend-icon="mdi-cookie"
           variant="flat"
           @click="$emit('feed')"
@@ -107,6 +113,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
         <v-btn
           :disabled="!canPlayWithPet"
           color="success"
+          data-testid="play-pet-button"
           prepend-icon="mdi-controller"
           variant="tonal"
           @click="$emit('play')"
@@ -117,6 +124,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
           :disabled="!canPutPetToSleep"
           :loading="studentPetStore.isLoading"
           color="primary"
+          data-testid="sleep-pet-button"
           prepend-icon="mdi-sleep"
           variant="tonal"
           @click="$emit('sleep')"
@@ -127,6 +135,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
           :disabled="!canWakePet"
           :loading="studentPetStore.isLoading"
           color="warning"
+          data-testid="wake-pet-button"
           prepend-icon="mdi-weather-sunny"
           variant="tonal"
           @click="$emit('wake')"
@@ -160,13 +169,13 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
     </v-alert>
 
     <div class="pet-stat-list">
-      <div v-for="stat in petStats" :key="stat.key" class="pet-stat-row">
+      <div v-for="stat in petStats" :key="stat.key" class="pet-stat-row" :data-testid="`pet-stat-${stat.key}`">
         <div class="pet-stat-row__header">
           <div class="question-title">
             <v-icon :color="stat.color" :icon="stat.icon" size="small" />
             <span>{{ stat.label }}</span>
           </div>
-          <strong>{{ studentPetStore[stat.key] }}</strong>
+          <strong :data-testid="`pet-stat-${stat.key}-value`">{{ studentPetStore[stat.key] }}</strong>
         </div>
         <v-progress-linear
           :color="stat.color"
@@ -189,7 +198,12 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
           {{ inventoryStore.error }}
         </v-alert>
         <section class="equipment-panel mb-4" aria-label="Equipment">
-          <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
+          <div
+            v-for="slot in inventoryStore.equipmentSlots"
+            :key="slot.slot"
+            class="equipment-slot"
+            :data-testid="`equipment-slot-${slot.slot}`"
+          >
             <div>
               <p class="summary-category">{{ slot.slot }}</p>
               <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
@@ -198,6 +212,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
               v-if="slot.item"
               :loading="inventoryStore.isUpdatingEquipment"
               color="primary"
+              :data-testid="`unequip-${slot.slot}-button`"
               size="small"
               variant="flat"
               @click="inventoryStore.unequipItem(slot.slot)"
@@ -207,7 +222,12 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
           </div>
         </section>
         <div class="inventory-list">
-          <div v-for="item in inventoryStore.unequippedItems" :key="item.key" class="inventory-item">
+          <div
+            v-for="item in inventoryStore.unequippedItems"
+            :key="item.key"
+            class="inventory-item"
+            :data-testid="`inventory-item-${item.key}`"
+          >
             <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
             <div>
               <p class="inventory-item__name">{{ item.name }}</p>
@@ -217,6 +237,7 @@ async function equipFromInventory(itemKey: string, slot: EquipmentSlot | '') {
               v-if="item.equipSlot && !item.equipped"
               :loading="inventoryStore.isUpdatingEquipment"
               color="primary"
+              :data-testid="`equip-${item.key}-button`"
               size="small"
               variant="flat"
               @click="equipFromInventory(item.key, item.equipSlot)"
