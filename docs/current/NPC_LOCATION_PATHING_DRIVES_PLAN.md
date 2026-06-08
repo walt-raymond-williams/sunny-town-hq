@@ -1,8 +1,225 @@
 # NPC Location, Pathing, And Drives Plan
 
-This document captures the future Sunny Town design for location tags, NPC pathing, and a basic drive-based movement loop. It builds on `docs/current/NPC_CHARACTER_MODEL_PLAN.md`. The sliced implementation sequence is tracked in `docs/current/NPC_MOVEMENT_IMPLEMENTATION_PLAN.md`.
+This document tracks Sunny Town location tags, NPC pathing, and drive-based movement. It builds on `docs/current/NPC_CHARACTER_MODEL_PLAN.md`. The first implementation sequence is preserved in `docs/current/NPC_MOVEMENT_IMPLEMENTATION_PLAN.md`.
 
-Status: `Concept plan for post-durable-NPC movement work`
+Status: `Initial movement/drives implementation complete; tuning and richer behavior remain`
+
+## Fresh-Agent Handoff
+
+Read this section first after context compaction.
+
+The first NPC movement implementation is complete and committed. `docs/current/NPC_MOVEMENT_IMPLEMENTATION_PLAN.md` is now historical/current-state detail for the completed vertical slice, not the next-work tracker.
+
+Current implemented baseline:
+
+- Durable NPC identity exists for static map NPCs through `sunny_town_character` and `sunny_town_npc_character`.
+- Maps support optional `locations` with IDs, coordinates, radius, tags, owner hints, and capacity.
+- Sunny Town builds a server-side portal-aware navigation graph from loaded maps.
+- Same-map route segments use A* over a coarse map grid with static blocked rectangles.
+- Live NPC runtime state is initialized per room and broadcast through server-authoritative NPC snapshots.
+- NPCs have in-memory `hunger`, `energy`, `social`, and `work` drives.
+- Drives deplete over time and replenish at matching tagged locations.
+- NPCs choose the lowest below-threshold satisfiable drive, skip unrouteable drives, and route to matching locations.
+- NPC goals have focus windows, periodic reevaluation, emergency interruption, arrival grace, failure counts, and failed-target cooldowns.
+- NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
+
+Important current code touchpoints:
+
+- Map loading and validation: `internal/sunnytown/maps/maps.go`
+- Map JSON locations and portals: `sunny-town/maps/*.json`
+- Navigation graph and A*: `internal/sunnytown/navigation/navigation.go`
+- Sunny Town room tick/runtime: `internal/sunnytown/server/constants.go`, `internal/sunnytown/server/world_lifecycle.go`
+- Live NPC state: `internal/sunnytown/server/world_types.go`
+- NPC movement/drives/controller: `internal/sunnytown/server/npc_movement.go`
+- NPC runtime initialization: `internal/sunnytown/server/npc_characters.go`
+- NPC snapshots: `internal/sunnytown/server/world_snapshots.go`
+- Movement tests: `internal/sunnytown/server/npc_movement_test.go`
+- Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
+
+Verification for movement-drive work:
+
+```powershell
+go test ./...
+cd frontend
+npm run build
+```
+
+Known recurring frontend build warnings are not caused by this work:
+
+- `studentAssignmentsApi.ts` is both dynamically and statically imported.
+- Some built chunks are larger than 500 kB.
+
+Commit hygiene for this repository:
+
+- Check `git status --short` before staging and before final response.
+- Stage files explicitly.
+- Do not stage `hq-local.err.log`, `hq-local.out.log`, or generated `web/` assets.
+
+## Next Work Tracker
+
+Use this section to continue the movement/drives work. Implement one slice at a time, update this tracker, verify, and commit before starting the next slice.
+
+### Slice ND-1: Plan Status Cleanup
+
+Status: `Implemented`
+
+Goal: make this broader plan the post-compaction tracker after the first movement implementation finished.
+
+Implemented notes:
+
+- This plan now records the implemented baseline from the completed movement implementation slices.
+- Requirements and phases below distinguish completed work from remaining tuning/richer behavior.
+- Next slices are tracked here instead of creating another document.
+
+### Slice ND-2: Location Scoring And Deterministic Target Choice
+
+Status: `Next`
+
+Goal: choose the best matching destination when multiple locations can satisfy the same drive.
+
+Implementation notes:
+
+- Replace first-match location selection in `routeToDriveLocationLocked` with candidate collection and scoring.
+- Keep current-map preference, but make it a score factor rather than a hard-coded accident of iteration order.
+- Suggested initial score inputs:
+  - drive urgency
+  - route path length or estimated route cost
+  - current map bonus
+  - owner match bonus using `ownerNpcKey`
+  - role/tag match bonus, such as merchant/shop/work
+  - failed target cooldown exclusion, preserving existing behavior
+- Keep selection deterministic with stable tie-breakers: score, map ID, location ID.
+- Do not add durable assignments yet unless needed by tests.
+
+Acceptance criteria:
+
+- If two locations match the same drive, the NPC picks the higher-scored one deterministically.
+- A closer route can beat a farther route when no ownership/role bonus applies.
+- An owned bed/home can beat a generic bed/home.
+- Failed target cooldowns still prevent immediate retry.
+- Current tests still pass.
+
+Suggested tests:
+
+- Two food locations choose the closer route.
+- Owned home/bed beats an otherwise comparable unowned location for the owning NPC.
+- Tie-breaker is deterministic by map/location ID.
+- Failed target is skipped even if it would otherwise score highest.
+
+### Slice ND-3: Debug/Inspectability For NPC Drives And Goals
+
+Status: `Planned`
+
+Goal: make current NPC behavior visible enough to tune without attaching a debugger.
+
+Implementation notes:
+
+- Add a server-side debug representation for each live NPC's drives, active drive, goal map/location, route step, focus/reevaluation timestamps, and failure count.
+- Prefer an internal/admin HTTP endpoint or structured log helper that does not change public gameplay snapshots unless there is an existing debug protocol pattern.
+- Keep private/transient state out of normal client snapshots by default.
+- Include enough data to answer: "why is this NPC going there?"
+
+Acceptance criteria:
+
+- A developer can inspect each live NPC's current drive values and active goal.
+- Failed target cooldown state is visible or loggable.
+- Debug output is deterministic and testable.
+- Normal player-facing snapshots remain stable unless a deliberate debug flag is added.
+
+Suggested tests:
+
+- Debug snapshot includes drive values and active goal.
+- Idle NPC debug state is clear when no goal is active.
+- Failed target state is represented without exposing unrelated private data.
+
+### Slice ND-4: Idle/Wander/Public Fallback
+
+Status: `Planned`
+
+Goal: avoid lifeless idle behavior when no urgent drive is satisfiable.
+
+Implementation notes:
+
+- Add a lightweight fallback behavior that routes idle NPCs to `idle`, `wander`, `public`, or `social` locations when no below-threshold drive can be satisfied.
+- Keep fallback lower priority than urgent drives.
+- Use a cooldown/focus window so fallback movement does not thrash.
+- Do not build schedules or a full behavior tree.
+
+Acceptance criteria:
+
+- If all urgent drives are unavailable or no drive is urgent, an NPC can pick a public/idle fallback.
+- An urgent satisfiable drive interrupts fallback after the normal focus/reevaluation rules.
+- Fallback targets do not immediately repeat forever if multiple options exist.
+
+Suggested tests:
+
+- NPC with no urgent drives chooses an idle/public location.
+- Unavailable urgent drive falls back to idle/public when no other urgent drive is satisfiable.
+- New emergency drive can interrupt fallback after reevaluation.
+
+### Slice ND-5: Dynamic Collision Awareness For Pathing
+
+Status: `Planned`
+
+Goal: account for blocking world objects when planning NPC routes.
+
+Implementation notes:
+
+- Current A* pathing uses static map `blockedRects`.
+- Extend route planning or grid construction to include active collision `worldObjects` where practical.
+- Keep dynamic replanning bounded; do not replan every tick for every NPC.
+- Start with placed/natural collision objects that are already represented server-side.
+
+Acceptance criteria:
+
+- NPC route planning avoids active collision world objects.
+- Removing/breaking an object can make a previously blocked route available on a later planning attempt.
+- Pathing failures mark targets failed or defer retry without trapping the NPC.
+
+Suggested tests:
+
+- Active placed collision blocks a route.
+- Inactive/broken object no longer blocks a route.
+- Failed route does not cause per-tick expensive replanning.
+
+### Slice ND-6: Richer Authored Locations And Ownership
+
+Status: `Planned`
+
+Goal: give NPCs more meaningful destinations for home/work/food/social routines.
+
+Implementation notes:
+
+- Add or refine checked-in map locations for homes, beds, kitchens, shops, school/work places, and public gathering spots.
+- Use `ownerNpcKey` for first-pass owned home/bed behavior.
+- Add role-oriented tags such as `merchant`, `school`, `farm`, or `shop` where they match existing NPCs.
+- Keep authored map changes small and validated.
+
+Acceptance criteria:
+
+- At least one NPC has a reachable owned rest/home target.
+- At least one NPC has a reachable work target.
+- Existing maps validate and load.
+- New tags improve scoring/fallback behavior without requiring durable assignments.
+
+Suggested tests:
+
+- Map validation covers new locations.
+- Owned location is selected by scoring for the matching NPC.
+- Work-tagged location can satisfy the work drive.
+
+### Later Work: Durability, Coarse Catch-Up, And Schedules
+
+Status: `Future`
+
+Do not start this until the runtime behavior above is tunable and stable.
+
+- Persist durable home/work anchors or assignments in HQ.
+- Decide whether drive snapshots should survive Sunny Town restart.
+- Add coarse catch-up when no players are connected.
+- Add day-night or schedule effects.
+- Add resource/job production loops.
+- Add social relationship effects.
 
 ## Feature Intent
 
@@ -302,9 +519,16 @@ Acceptance criteria:
 
 ### REQ-LOC-001: Map Location Definitions
 
-Status: `Future`
+Status: `Implemented`
 
 Sunny Town maps should support optional location definitions.
+
+Implemented notes:
+
+- `GameMap` supports optional `locations`.
+- Location validation covers IDs, coordinates, radius, tags, owner hints, and capacity.
+- Existing maps without locations remain valid.
+- Checked-in maps include initial social/rest/home/food locations.
 
 Acceptance criteria:
 
@@ -315,9 +539,21 @@ Acceptance criteria:
 
 ### REQ-PATH-001: Server-Authoritative NPC Navigation
 
-Status: `Future`
+Status: `Partially implemented`
 
 NPC pathing and movement must be owned by Sunny Town.
+
+Implemented notes:
+
+- Clients do not authoritatively move NPCs.
+- Sunny Town owns live NPC position, route following, drive selection, and snapshots.
+- Route planning supports static map blocked rectangles and portal edges between maps.
+- NPCs can transfer between rooms through portal route steps.
+
+Remaining notes:
+
+- Pathing does not yet account for dynamic collision world objects during planning.
+- Replanning is still intentionally simple and bounded by goal selection/failure behavior.
 
 Acceptance criteria:
 
@@ -329,9 +565,20 @@ Acceptance criteria:
 
 ### REQ-DRIVE-001: Basic Drive State Belongs To NPC Simulation
 
-Status: `Future`
+Status: `Implemented for runtime state`
 
 NPC drives should be simulation state layered on top of shared character state.
+
+Implemented notes:
+
+- Live NPCs have in-memory hunger, energy, social, and work drives.
+- Drive values are not stored in map JSON and are not player-only state.
+- Drives decrease over time and replenish near matching tagged locations.
+- NPC controllers maintain focus windows, reevaluation intervals, and failed-target cooldowns.
+
+Remaining notes:
+
+- Durable drive snapshots, home/work assignments, and no-player coarse catch-up are future work.
 
 Acceptance criteria:
 
@@ -345,9 +592,19 @@ Acceptance criteria:
 
 ### REQ-MP-LOC-001: Multiplayer Consistency
 
-Status: `Future`
+Status: `Implemented for public movement snapshots`
 
 All players in the same room should see the same public NPC movement and location-driven behavior.
+
+Implemented notes:
+
+- NPC position/state is room-shared and server broadcast through live NPC snapshots.
+- NPC snapshots are scoped to the room/map where the live NPC currently resides.
+- Existing private player dialogue/progress can remain player-specific.
+
+Remaining notes:
+
+- Debug/inspectability state for current drives/goals is not yet exposed.
 
 Acceptance criteria:
 
@@ -360,6 +617,8 @@ Acceptance criteria:
 
 ### Phase A: Location Tags Only
 
+Status: `Implemented`
+
 - Add optional `locations` to map JSON types.
 - Validate location IDs, coordinates, radius, and tags.
 - Add tests for map loading and validation.
@@ -368,6 +627,8 @@ Acceptance criteria:
 Deliverable: maps can describe meaningful places.
 
 ### Phase B: Route Planning And Same-Map Pathing
+
+Status: `Implemented`
 
 - Build a map/portal route graph from loaded maps.
 - Build a simple nav grid from map dimensions and blocked rectangles.
@@ -380,6 +641,8 @@ Deliverable: server can compute walkable same-map paths and represent cross-map 
 
 ### Phase C: Static Goal Movement
 
+Status: `Implemented`
+
 - Give one NPC a scripted goal to move between two tagged locations.
 - Prefer a route that exercises portal-aware planning if practical; same-map movement is acceptable only as a smaller smoke test.
 - Broadcast live NPC position through Sunny Town snapshots.
@@ -388,6 +651,8 @@ Deliverable: server can compute walkable same-map paths and represent cross-map 
 Deliverable: first visible moving NPC.
 
 ### Phase D: Basic Drive-Based Goal Selection
+
+Status: `Implemented`
 
 - Add a small set of drive values to NPC runtime state, such as hunger, energy, social, and work/purpose.
 - Decrease those values on a fixed interval.
@@ -399,6 +664,8 @@ Deliverable: first visible moving NPC.
 Deliverable: first intentional-feeling NPC routine.
 
 ### Phase E: Richer Cross-Map Movement
+
+Status: `Implemented for one-hop/multi-step route runtime; richer authored routines remain`
 
 - Let NPCs actively use multi-hop cross-map routes for real needs like home, bed, shop, farm, or kitchen.
 - Preserve portal re-entry guard ideas from player movement where relevant.
@@ -419,13 +686,22 @@ Deliverable: NPCs can go home/work across map boundaries.
 
 ## Relationship To Current NPC Character Plan
 
-This feature should come after durable NPC character identity exists.
+This feature came after durable NPC character identity exists.
 
-Recommended order:
+Completed order:
 
 1. `NPC_CHARACTER_MODEL_PLAN.md` Phase 3A: make current static NPCs durable character-backed entities.
 2. This plan Phase A: add map location tags.
 3. This plan Phase B/C: add portal-aware route planning, pathing, and one simple moving NPC.
 4. This plan Phase D: add basic drive-based destination choice with fixed depletion and fast replenishment.
+5. This plan Phase E: add cross-map NPC movement through portals.
+
+Current continuation order:
+
+1. Slice ND-2: location scoring and deterministic target choice.
+2. Slice ND-3: debug/inspectability for NPC drives and goals.
+3. Slice ND-4: idle/wander/public fallback.
+4. Slice ND-5: dynamic collision awareness for pathing.
+5. Slice ND-6: richer authored locations and ownership.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.
