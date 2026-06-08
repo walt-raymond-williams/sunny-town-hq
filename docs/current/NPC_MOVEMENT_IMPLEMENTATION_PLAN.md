@@ -2,7 +2,7 @@
 
 This document is the handoff-ready implementation plan for adding Sunny Town NPC movement using location tags, portal-aware pathing, and a basic drive system.
 
-Status: `Slice 1 implemented; Slice 2 is next`
+Status: `Slice 2 implemented; Slice 3 is next`
 
 Related docs:
 
@@ -135,6 +135,16 @@ Suggested tests:
 ## Slice 2: Portal-Aware Route Model And Nav Graph
 
 Goal: define the route planner shape so cross-map travel is supported from the start.
+
+Status: `Implemented`
+
+Implemented notes:
+
+- Added `internal/sunnytown/navigation` with a directed portal graph built from loaded maps.
+- Added route DTOs for same-map destination steps and portal-transition steps.
+- Route planning can target raw map points or authored map locations.
+- Cross-map planning currently resolves map-to-map portal hops; walkable in-map A* segments are Slice 3.
+- Tests cover same-map location routing, the existing Sunny Town to Forest Crossing portal, unknown target maps, unknown portal targets, and unconnected maps.
 
 Implementation notes:
 
