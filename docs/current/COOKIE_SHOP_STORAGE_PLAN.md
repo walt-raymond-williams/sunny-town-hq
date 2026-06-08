@@ -12,8 +12,9 @@ Current implemented baseline:
 - `sunny-town-house-1` has an authored `Cookie Shop` area with stable ID `cookie-shop` and tags `shop`, `workplace`, `cookie_shop`, and `storage_owner`.
 - Cookie Keeper has a reachable work anchor at `cookie-keeper-counter`.
 - `cookie-keeper-counter` remains the owned Cookie Keeper work anchor; the broader `cookie-shop` area is not NPC-owned.
-- `sunny-town-house-1` has an authored fixture `cookie-shop-output-chest` inside/associated with `cookie-shop`.
+- `sunny-town-house-1` has authored fixtures `cookie-shop-output-chest` and `cookie-shop-input-chest` inside/associated with `cookie-shop`.
 - Sunny Town initializes that fixture as a runtime `worldObject` with source `fixture`, kind `chest`, and metadata `shopId: cookie-keeper-shop`, `storageRole: output`, `itemKey: cookie`, and `locationId: cookie-shop`.
+- Sunny Town also initializes `cookie-shop-input-chest` as a runtime chest `worldObject` with `shopId: cookie-keeper-shop`, `storageRole: input`, and `locationId: cookie-shop`. It has no `itemKey` yet because ingredient storage is not durable yet.
 - The frontend can render chest world objects from the normal `worldObjects` snapshot stream.
 - Players can inspect the nearby output chest with `F`; the read-only panel loads existing `cookie-keeper-shop` stock/capacity from `GET /api/student/shop/stock`.
 - Sunny Town emits service-authenticated `shopkeeper_stock` / `shop_stock_progress` NPC job production events when Cookie Keeper is at the work anchor.
@@ -61,13 +62,16 @@ Suggested tests:
 - Purchase after full stock decrements below capacity.
 - UI shows `current / 64` and disables Buy at `0`.
 
-## Immediate Next Slice: Choose Next Storage Gameplay
+## Immediate Next Slice: HQ-Owned Input Storage And Recipe Rules
 
 Recommended next step:
 
-- Choose whether the next Cookie Shop step should be input ingredients or chest actions.
-- If choosing input ingredients, add an input chest/storage and HQ-owned recipe/input consumption rules.
-- If choosing chest actions, define whether players can withdraw/deposit cookies or whether the chest remains read-only and shop purchases remain the only sale path.
+- Add HQ-owned shop input storage and recipe/input consumption rules for Cookie Shop production.
+- Treat `cookie-shop-input-chest` as the physical interaction/ownership anchor for future ingredients, not as a local inventory source.
+- Define cookie recipe requirements in HQ-owned inventory/economy code.
+- Change Cookie Keeper production so HQ atomically consumes required inputs and increments output stock when inputs are available.
+- Define a clear "production blocked: missing inputs" result for the NPC production path before mutating output stock.
+- Keep chest actions such as withdraw/deposit deferred until the sale path and ownership transfer rules are explicit.
 - The alternate branch is teacher lesson prep durable progress if broader NPC job gameplay becomes the priority.
 - Do not create a second fixture inventory source; keep durable quantities in HQ-owned stock/inventory tables.
 
@@ -143,6 +147,20 @@ Implemented notes:
 - Walking away, changing maps, or pressing Escape closes the chest panel.
 - This does not add withdraw/deposit behavior and does not create a separate inventory source.
 
+## Slice: Physical Input Chest Fixture
+
+Status: `Implemented`
+
+Goal: give future ingredient storage a physical Cookie Shop anchor without creating premature inventory logic.
+
+Implemented notes:
+
+- Added `cookie-shop-input-chest` to `sunny-town-house-1` with `locationId: cookie-shop`, `shopId: cookie-keeper-shop`, and `storageRole: input`.
+- The input chest is a blocking/reserved `chest` fixture tagged `storage`, `input`, and `cookie_shop`.
+- Map validation now requires input storage fixtures to include both shop and location metadata.
+- Sunny Town initializes the input chest into the normal runtime `worldObjects` stream and snapshots its storage metadata.
+- The input chest intentionally has no `itemKey` and no durable quantity yet. Future ingredient storage must be HQ-owned and attached to the shop/storage identity.
+
 ## Later Slice: Input Chest And Ingredients
 
 Goal: require ingredients before Cookie Keeper can produce cookies.
@@ -151,7 +169,7 @@ Deferred intentionally. Do not implement this before output storage capacity and
 
 Recommended future shape:
 
-- Add a Cookie Shop input chest/storage.
+- Add HQ-owned Cookie Shop input storage.
 - Define cookie recipe requirements in HQ-owned inventory/crafting/economy rules.
 - Sunny Town can validate that Cookie Keeper is working, but HQ should decide whether required inputs exist and consume them atomically with production output.
 - If ingredients are missing, record/debug "worked but no inputs" or "production blocked" without mutating output stock.

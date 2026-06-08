@@ -100,6 +100,22 @@
       "storageRole": "output",
       "itemKey": "cookie",
       "tags": ["storage", "output", "cookie_shop"]
+    },
+    {
+      "id": "cookie-shop-input-chest",
+      "name": "Cookie Shop Input Chest",
+      "kind": "chest",
+      "x": 352,
+      "y": 288,
+      "width": 32,
+      "height": 32,
+      "interactionRadius": 56,
+      "collision": true,
+      "reservesPlacement": true,
+      "locationId": "cookie-shop",
+      "shopId": "cookie-keeper-shop",
+      "storageRole": "input",
+      "tags": ["storage", "input", "cookie_shop"]
     }
   ],
   "blockedRects": [

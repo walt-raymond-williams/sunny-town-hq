@@ -34,7 +34,7 @@ Current implemented baseline:
 - Cookie Keeper `shopkeeper_stock` production now increments durable HQ-owned Cookie Keeper shop cookie stock, and player purchases consume that stock.
 - Cookie Keeper has a small durable starter stock seed, a logical output storage capacity of `64`, and the shop UI shows `current / 64` stock before purchase.
 - `sunny-town-house-1` has an authored `Cookie Shop` area (`cookie-shop`) tagged as shop/workplace/storage owner; Cookie Keeper still uses `cookie-keeper-counter` as the owned work anchor.
-- `sunny-town-house-1` has an authored `cookie-shop-output-chest` fixture that snapshots as a source `fixture`, kind `chest` world object tied to `cookie-shop`, `cookie-keeper-shop`, output storage, and `cookie`.
+- `sunny-town-house-1` has authored `cookie-shop-output-chest` and `cookie-shop-input-chest` fixtures. The output chest snapshots as a source `fixture`, kind `chest` world object tied to `cookie-shop`, `cookie-keeper-shop`, output storage, and `cookie`; the input chest snapshots with `storageRole: input`, `cookie-shop`, and `cookie-keeper-shop`, but no durable ingredient quantity yet.
 - The frontend renders chest world objects from the normal `worldObjects` snapshot stream.
 - Players can inspect the nearby output chest with `F`; the read-only panel loads existing `cookie-keeper-shop` stock/capacity from `GET /api/student/shop/stock`.
 - Cookie Shop storage planning now lives in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`; it tracks logical output chest capacity, authored shop area, physical chest fixture, and later input ingredients.
@@ -56,7 +56,7 @@ Important current code touchpoints:
 - HQ shop stock persistence and purchase consumption: `internal/hq/inventory/shop.go`, `deploy/postgres/migrations/0009_shop_stock.sql`
 - Cookie Keeper starter stock seed: `deploy/postgres/migrations/0010_seed_cookie_keeper_shop_stock.sql`
 - Cookie Shop storage continuation tracker: `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
-- Cookie Shop output fixture: `sunny-town/maps/sunny-town-house-1.json` fixture `cookie-shop-output-chest`
+- Cookie Shop storage fixtures: `sunny-town/maps/sunny-town-house-1.json` fixtures `cookie-shop-output-chest` and `cookie-shop-input-chest`
 - Cookie Shop chest inspection UI: `frontend/src/composables/useSunnyTownChestInteractions.ts`, `frontend/src/features/sunny-town/SunnyTownChestPanel.vue`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
@@ -510,14 +510,18 @@ Implemented notes:
 - Frontend world-object rendering draws chest fixtures.
 - Chest snapshots now expose authored `interactionRadius`.
 - Added read-only chest inspection: pressing `F` near `cookie-shop-output-chest` opens a storage panel backed by existing `GET /api/student/shop/stock` stock/capacity.
+- Added authored `cookie-shop-input-chest` fixture as the physical anchor for future Cookie Shop ingredient storage.
+- Map validation requires input storage fixtures to identify their owning shop and location.
 - Deferred input ingredients: Cookie Keeper can make cookies while working in the shop for now.
 - This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
-- Choose and implement the next Cookie Shop storage gameplay step:
-  - input chest plus HQ-owned recipe/input consumption, or
-  - explicit chest actions such as withdraw/deposit after defining how they relate to shop sales.
+- Implement HQ-owned Cookie Shop input storage and recipe/input consumption:
+  - Define durable input storage under HQ ownership, attached to `cookie-keeper-shop`/`cookie-shop-input-chest` identity.
+  - Define cookie recipe requirements in HQ inventory/economy code.
+  - Change production commit handling so HQ atomically consumes inputs and increments output stock, or records/returns a missing-input/blocked result without mutating output.
+- Defer explicit chest actions such as withdraw/deposit until the shop sale path and ownership transfer rules are designed.
 - Alternate branch: make teacher lesson prep consume or expose durable progress if broader NPC job gameplay is the priority.
 - Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.
 - Do not create a second inventory/stock source for the output chest; keep durable quantities HQ-owned.

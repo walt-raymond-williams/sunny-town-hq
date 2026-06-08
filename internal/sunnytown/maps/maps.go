@@ -231,6 +231,9 @@ func validateFixtures(loaded GameMap) error {
 		if fixture.StorageRole != "" && fixture.StorageRole != "output" && fixture.StorageRole != "input" {
 			return fmt.Errorf("map %q fixture %q has unsupported storage role %q", loaded.ID, fixture.ID, fixture.StorageRole)
 		}
+		if fixture.StorageRole == "input" && (fixture.ShopID == "" || fixture.LocationID == "") {
+			return fmt.Errorf("map %q fixture %q input storage is missing shop or location metadata", loaded.ID, fixture.ID)
+		}
 		if fixture.StorageRole == "output" && (fixture.ShopID == "" || fixture.ItemKey == "" || fixture.LocationID == "") {
 			return fmt.Errorf("map %q fixture %q output storage is missing shop, item, or location metadata", loaded.ID, fixture.ID)
 		}

@@ -152,7 +152,7 @@ func TestCheckedInMapsIncludeAuthoredNPCLocations(t *testing.T) {
 	}
 }
 
-func TestCheckedInMapsIncludeCookieShopOutputChest(t *testing.T) {
+func TestCheckedInMapsIncludeCookieShopStorageChests(t *testing.T) {
 	maps, err := LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +168,17 @@ func TestCheckedInMapsIncludeCookieShopOutputChest(t *testing.T) {
 	}
 	if !chest.Collision || !chest.ReservesPlacement || !hasFixtureTags(*chest, "storage", "output", "cookie_shop") {
 		t.Fatalf("chest placement metadata = %#v, want blocking storage/output cookie_shop fixture", chest)
+	}
+
+	inputChest := findFixture(house.Fixtures, "cookie-shop-input-chest")
+	if inputChest == nil {
+		t.Fatal("expected cookie-shop-input-chest fixture")
+	}
+	if inputChest.Kind != "chest" || inputChest.LocationID != "cookie-shop" || inputChest.ShopID != "cookie-keeper-shop" || inputChest.StorageRole != "input" || inputChest.ItemKey != "" {
+		t.Fatalf("input chest metadata = %#v, want Cookie Shop input storage fixture without a fixed output item", inputChest)
+	}
+	if !inputChest.Collision || !inputChest.ReservesPlacement || !hasFixtureTags(*inputChest, "storage", "input", "cookie_shop") {
+		t.Fatalf("input chest placement metadata = %#v, want blocking storage/input cookie_shop fixture", inputChest)
 	}
 }
 
@@ -285,6 +296,10 @@ func TestLoadMapsRejectsInvalidFixtures(t *testing.T) {
 		{
 			name:    "output missing storage metadata",
 			fixture: `{"id":"chest","name":"Chest","kind":"chest","x":32,"y":32,"width":32,"height":32,"locationId":"shop","storageRole":"output","itemKey":"cookie"}`,
+		},
+		{
+			name:    "input missing storage metadata",
+			fixture: `{"id":"chest","name":"Chest","kind":"chest","x":32,"y":32,"width":32,"height":32,"locationId":"shop","storageRole":"input"}`,
 		},
 		{
 			name:    "blank tag",

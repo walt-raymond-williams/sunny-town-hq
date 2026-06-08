@@ -29,4 +29,16 @@ func TestNewRoomInitializesMapFixturesAsWorldObjects(t *testing.T) {
 	if snapshot.Source != worldObjectSourceFixture || snapshot.Name != "Cookie Shop Output Chest" || snapshot.LocationID != "cookie-shop" || snapshot.ShopID != "cookie-keeper-shop" || snapshot.StorageRole != "output" || snapshot.ItemKey != "cookie" || snapshot.InteractionRadius != 56 {
 		t.Fatalf("fixture snapshot = %#v, want output chest metadata", snapshot)
 	}
+
+	inputObject := room.worldObjects[worldObjectKey(worldObjectSourceFixture, "cookie-shop-input-chest")]
+	if inputObject == nil {
+		t.Fatal("expected cookie shop input chest fixture world object")
+	}
+	if inputObject.kind != worldObjectKindChest || inputObject.shopID != "cookie-keeper-shop" || inputObject.storageRole != "input" || inputObject.itemKey != "" {
+		t.Fatalf("input fixture object = %#v, want chest-backed Cookie Shop input storage identity", inputObject)
+	}
+	inputSnapshot := inputObject.worldObjectSnapshot()
+	if inputSnapshot.Source != worldObjectSourceFixture || inputSnapshot.Name != "Cookie Shop Input Chest" || inputSnapshot.LocationID != "cookie-shop" || inputSnapshot.ShopID != "cookie-keeper-shop" || inputSnapshot.StorageRole != "input" || inputSnapshot.ItemKey != "" || inputSnapshot.InteractionRadius != 56 {
+		t.Fatalf("input fixture snapshot = %#v, want input chest metadata", inputSnapshot)
+	}
 }
