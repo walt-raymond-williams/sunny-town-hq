@@ -60,6 +60,56 @@ func (srv *Server) LoadInitialMapObjects(ctx context.Context) error {
 	return nil
 }
 
+func (srv *Server) LoadNPCCharacters(ctx context.Context) error {
+	inputs := make([]hqclient.EnsureNPCCharacterInput, 0)
+	seen := map[string]bool{}
+	for _, room := range srv.world.rooms {
+		for _, npc := range room.gameMap.NPCs {
+			if strings.TrimSpace(npc.ID) == "" || seen[npc.ID] {
+				continue
+			}
+			seen[npc.ID] = true
+			inputs = append(inputs, hqclient.EnsureNPCCharacterInput{
+				NPCKey:      npc.ID,
+				DisplayName: npc.Name,
+				AvatarID:    npc.SpriteKey,
+			})
+		}
+	}
+	if len(inputs) == 0 {
+		return nil
+	}
+
+	loaded, err := srv.hq.EnsureNPCCharacters(ctx, hqclient.EnsureNPCCharactersRequest{
+		RoomID: srv.world.roomID,
+		NPCs:   inputs,
+	})
+	if err != nil {
+		return err
+	}
+
+	byKey := map[string]hqclient.NPCCharacterResponse{}
+	for _, npc := range loaded.NPCs {
+		byKey[npc.NPCKey] = npc
+	}
+	for _, room := range srv.world.rooms {
+		room.mu.Lock()
+		for index := range room.gameMap.NPCs {
+			if character, ok := byKey[room.gameMap.NPCs[index].ID]; ok {
+				room.gameMap.NPCs[index].CharacterID = character.CharacterID
+				if character.DisplayName != "" {
+					room.gameMap.NPCs[index].Name = character.DisplayName
+				}
+				if character.AvatarID != "" {
+					room.gameMap.NPCs[index].SpriteKey = character.AvatarID
+				}
+			}
+		}
+		room.mu.Unlock()
+	}
+	return nil
+}
+
 func (srv *Server) loadMapObjects(ctx context.Context, roomID string, mapID string) (map[string]*placedObject, error) {
 	loaded, err := srv.hq.LoadMapObjects(ctx, roomID, mapID)
 	if err != nil {
@@ -149,6 +199,9 @@ func (srv *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := srv.refreshRoomMapObjects(r.Context(), claims.MapID); err != nil {
 		log.Printf("refresh sunny town map objects map=%s: %v", claims.MapID, err)
+	}
+	if err := srv.LoadNPCCharacters(r.Context()); err != nil {
+		log.Printf("refresh sunny town npc characters: %v", err)
 	}
 
 	srv.world.join(client, claims, equipment, position)

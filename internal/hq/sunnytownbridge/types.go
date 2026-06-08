@@ -88,6 +88,29 @@ type MapObjectsResponse struct {
 	Objects []MapObjectResponse `json:"objects"`
 }
 
+type EnsureNPCCharactersRequest struct {
+	RoomID string                    `json:"room_id"`
+	NPCs   []EnsureNPCCharacterInput `json:"npcs"`
+}
+
+type EnsureNPCCharacterInput struct {
+	NPCKey      string `json:"npc_key"`
+	DisplayName string `json:"display_name"`
+	AvatarID    string `json:"avatar_id"`
+}
+
+type NPCCharacterResponse struct {
+	CharacterID int64  `json:"character_id"`
+	RoomID      string `json:"room_id"`
+	NPCKey      string `json:"npc_key"`
+	DisplayName string `json:"display_name"`
+	AvatarID    string `json:"avatar_id"`
+}
+
+type NPCCharactersResponse struct {
+	NPCs []NPCCharacterResponse `json:"npcs"`
+}
+
 type PlaceMapObjectRequest struct {
 	AppUserID int64  `json:"app_user_id"`
 	RoomID    string `json:"room_id"`

@@ -1,10 +1,15 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
 
+	stconfig "hq/internal/sunnytown/config"
 	stmaps "hq/internal/sunnytown/maps"
 )
 
@@ -157,6 +162,48 @@ func TestJoinHelloIncludesMapNPCs(t *testing.T) {
 		}
 	default:
 		t.Fatal("expected hello message")
+	}
+}
+
+func TestLoadNPCCharactersMergesDurableIdentity(t *testing.T) {
+	hq := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/internal/sunny-town/npc-characters/ensure" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("X-HQ-Service-Secret") != "test-secret" {
+			t.Fatalf("service secret = %q, want test-secret", r.Header.Get("X-HQ-Service-Secret"))
+		}
+		var request struct {
+			RoomID string `json:"room_id"`
+			NPCs   []struct {
+				NPCKey      string `json:"npc_key"`
+				DisplayName string `json:"display_name"`
+				AvatarID    string `json:"avatar_id"`
+			} `json:"npcs"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if request.RoomID != defaultRoomID || len(request.NPCs) != 1 || request.NPCs[0].NPCKey != "guide" {
+			t.Fatalf("request = %#v, want guide in default room", request)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"npcs":[{"character_id":777,"room_id":"sunny-town-main","npc_key":"guide","display_name":"Guide","avatar_id":"guide"}]}`))
+	}))
+	defer hq.Close()
+
+	srv := New(stconfig.Config{
+		HQInternalURL:  hq.URL,
+		ServiceSecret:  "test-secret",
+		AllowedOrigins: map[string]bool{},
+	}, map[string]gameMap{defaultMapID: testMap()})
+
+	if err := srv.LoadNPCCharacters(context.Background()); err != nil {
+		t.Fatalf("LoadNPCCharacters() error = %v", err)
+	}
+	npcs := srv.world.rooms[defaultMapID].gameMap.NPCs
+	if len(npcs) != 1 || npcs[0].ID != "guide" || npcs[0].CharacterID != 777 {
+		t.Fatalf("npcs = %#v, want guide with character id 777", npcs)
 	}
 }
 

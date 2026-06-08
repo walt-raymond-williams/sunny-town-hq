@@ -77,6 +77,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	mux.HandleFunc("/api/internal/sunny-town/inventory-quantity", sunnyTownBridge.HandleInventoryQuantity)
 	mux.HandleFunc("/api/internal/sunny-town/player-position", sunnyTownBridge.HandlePlayerPosition)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects", sunnyTownBridge.HandleMapObjects)
+	mux.HandleFunc("/api/internal/sunny-town/npc-characters/ensure", sunnyTownBridge.HandleEnsureNPCCharacters)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects/place", sunnyTownBridge.HandlePlaceMapObject)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects/remove", sunnyTownBridge.HandleRemoveMapObject)
 	aiHandler := hqai.NewHandler(hqai.HandlerConfig{

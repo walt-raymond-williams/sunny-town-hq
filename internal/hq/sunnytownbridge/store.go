@@ -6,6 +6,8 @@ import (
 	"math"
 	"strings"
 
+	hqcharacters "hq/internal/hq/characters"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -148,6 +150,50 @@ func (store Store) SavePosition(ctx context.Context, request PositionRequest) (P
 	}
 	position.Found = true
 	return position, nil
+}
+
+func (store Store) EnsureNPCCharacters(ctx context.Context, request EnsureNPCCharactersRequest) (NPCCharactersResponse, error) {
+	request.RoomID = strings.TrimSpace(request.RoomID)
+	if request.RoomID == "" {
+		return NPCCharactersResponse{}, errors.New("room_id is required")
+	}
+	specs := make([]hqcharacters.NPCSpec, 0, len(request.NPCs))
+	seen := map[string]bool{}
+	for _, npc := range request.NPCs {
+		npc.NPCKey = strings.TrimSpace(npc.NPCKey)
+		npc.DisplayName = strings.TrimSpace(npc.DisplayName)
+		npc.AvatarID = strings.TrimSpace(npc.AvatarID)
+		if npc.NPCKey == "" || npc.DisplayName == "" {
+			return NPCCharactersResponse{}, errors.New("npc character is missing required fields")
+		}
+		if seen[npc.NPCKey] {
+			continue
+		}
+		seen[npc.NPCKey] = true
+		specs = append(specs, hqcharacters.NPCSpec{
+			RoomID:      request.RoomID,
+			NPCKey:      npc.NPCKey,
+			DisplayName: npc.DisplayName,
+			AvatarID:    npc.AvatarID,
+		})
+	}
+
+	characters, err := hqcharacters.EnsureNPCs(ctx, store.DB, specs)
+	if err != nil {
+		return NPCCharactersResponse{}, err
+	}
+
+	response := NPCCharactersResponse{NPCs: make([]NPCCharacterResponse, 0, len(characters))}
+	for _, character := range characters {
+		response.NPCs = append(response.NPCs, NPCCharacterResponse{
+			CharacterID: character.ID,
+			RoomID:      character.RoomID,
+			NPCKey:      character.NPCKey,
+			DisplayName: character.DisplayName,
+			AvatarID:    character.AvatarID,
+		})
+	}
+	return response, nil
 }
 
 func IsFacing(value string) bool {

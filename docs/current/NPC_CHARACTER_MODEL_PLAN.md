@@ -2,7 +2,78 @@
 
 This document tracks the investigation, product intent, user stories, requirements, and phased plan for evolving Sunny Town NPCs into simulation-controlled town characters.
 
-Status: `Draft, Phase 2 started`
+Status: `Phase 3A implemented; static NPCs can be backed by durable character rows`
+
+## Fresh-Agent Handoff
+
+Read this section first if picking up the NPC character feature cold.
+
+The project is moving Sunny Town toward a small RimWorld-like living-town simulation. The immediate goal is not full AI. The immediate goal is to make NPCs real durable characters, using the same `sunny_town_character` identity foundation that now exists for student/player characters.
+
+Current foundation:
+
+- `deploy/postgres/migrations/0006_sunny_town_characters.sql` adds `sunny_town_character`.
+- `deploy/postgres/migrations/0007_sunny_town_npc_characters.sql` adds `sunny_town_npc_character` for stable room-scoped NPC keys and seeds `mayor-sunny`.
+- `internal/hq/characters` owns durable Sunny Town character identity helpers.
+- Student sync creates/updates player character rows through `internal/hq/characters.EnsurePlayer`.
+- Static NPC sync creates/updates NPC character rows through `internal/hq/characters.EnsureNPCs`.
+- HQ Sunny Town session creation returns/signs `character_id`.
+- Sunny Town WebSocket auth requires `character_id`.
+- Realtime player IDs are now based on `character_id`, while current wallet/inventory/map-object APIs still use `app_user_id`.
+- Sunny Town startup and WebSocket join paths call HQ's internal NPC ensure endpoint and merge returned `character_id` values into map NPCs without changing map-defined position, facing, dialogue, shop, or activity behavior.
+
+Current branch/worktree notes:
+
+- Feature foundation was committed as `30ea53a Add Sunny Town character identity foundation`.
+- As of the last planning update, untracked local files may include `docs/PLAYWRIGHT_E2E_TEST_PLAN.md`, `hq-local.err.log`, and `hq-local.out.log`. Do not stage logs unless explicitly asked.
+
+Latest completed task:
+
+Implement **Phase 3A: NPC Character Records For Static NPCs**.
+
+The target slice is deliberately modest: make current map-defined NPCs, starting with `mayor-sunny`, backed by durable `sunny_town_character` rows while preserving existing behavior. Mayor Sunny can keep standing still and talking. The win is that he becomes a real NPC character, not just map JSON.
+
+Phase 3A produced:
+
+- A durable way to create or ensure NPC character rows.
+- A stable `sunny_town_npc_character` mapping from room-scoped map NPC keys to NPC character records.
+- Sunny Town loading NPC character identity from HQ through `/api/internal/sunny-town/npc-characters/ensure`.
+- Existing dialogue/shop/schoolwork interactions still working.
+- Tests proving current map NPC behavior did not regress.
+
+Recommended implementation shape:
+
+1. Extend `sunny_town_character` or add a small companion table to store a stable NPC key.
+2. Add `EnsureNPC`/`EnsureNPCs` in `internal/hq/characters`.
+3. Seed or ensure `mayor-sunny` as an NPC character for `sunny-town-main`.
+4. Add an HQ internal Sunny Town endpoint or startup path for Sunny Town to load NPC characters by `room_id`.
+5. In Sunny Town, merge durable character identity with map JSON defaults for position, facing, dialogue, shop, and activity.
+6. Keep NPCs static in this slice; do not add autonomous movement yet.
+
+Important constraints:
+
+- HQ owns durable character state.
+- Sunny Town owns live realtime projections.
+- Sunny Town must not write HQ tables directly.
+- Do not migrate inventory/equipment in Phase 3A.
+- Do not build motives, pathfinding, schedules, or economic loops yet.
+- Preserve map JSON compatibility so current maps keep loading.
+
+Recommended verification:
+
+```powershell
+go test ./...
+cd frontend
+npm run build
+```
+
+If runtime smoke testing is practical after implementation:
+
+```powershell
+docker compose -f deploy\docker-compose.yml up -d --build --force-recreate hq sunny-town
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18080/healthz | Select-Object -ExpandProperty Content
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18082/healthz | Select-Object -ExpandProperty Content
+```
 
 ## Feature Intent
 
@@ -15,6 +86,8 @@ This avoids implementing future mechanics twice. When Sunny Town gains health, m
 The inspiration is closer to a small RimWorld colony than full Dwarf Fortress scale. The target is not hundreds of simulated citizens with deep historical simulation. The target is a small number of recognizable town residents whose visible routines, needs, relationships, work, rest, eating, and social behavior make the town feel alive.
 
 Emergence should come from simple systems interacting, not from a huge first-pass AI. A few NPCs deciding between eating, resting, working, wandering, and talking can create a strong sense of life if those decisions are visible, consistent, and tied to shared town systems.
+
+Future movement, location tags, pathing, and drive-based behavior are tracked in `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`. That work should come after static NPCs are backed by durable character rows.
 
 ## Current Assumptions To Verify
 
@@ -148,7 +221,7 @@ Acceptance criteria:
 
 ### REQ-CHAR-001: Shared Character Identity
 
-Status: `Planned`
+Status: `Partially implemented`
 
 The system must define a shared character identity for player-controlled and simulation-controlled town actors.
 
@@ -156,8 +229,8 @@ Acceptance criteria:
 
 - Every character has a stable character ID.
 - Character identity is separate from app login/session identity.
-- A player character can link to an app user/student.
-- An NPC character can link to simulation-owned town data.
+- A player character can link to an app user/student. `Implemented for students through sunny_town_character`.
+- An NPC character can link to simulation-owned town data. `Implemented for static NPC keys through sunny_town_npc_character`.
 
 ### REQ-CHAR-002: Shared Character-Owned Inventory
 
@@ -262,6 +335,8 @@ Acceptance criteria:
 
 Deliverable: current-state architecture proposal and implementation slice.
 
+Status: `Mostly complete for current scope`
+
 ### Phase 2: Minimal Character Foundation
 
 - Add or adapt shared character identity/state with minimal behavior change.
@@ -271,6 +346,18 @@ Deliverable: current-state architecture proposal and implementation slice.
 
 Deliverable: shared character foundation with low user-visible risk.
 
+Status: `Complete enough to start Phase 3A`
+
+Current implementation details:
+
+- Migration `0006_sunny_town_characters.sql` creates `sunny_town_character`.
+- `internal/hq/characters.EnsurePlayer` creates/updates student player-character rows.
+- `internal/hq/users.SyncAuthenticated` ensures student characters during auth sync.
+- `cmd/hq.handleSunnyTownSession` ensures a player character before signing the join token.
+- `internal/sunnytownauth.Claims` includes `character_id`.
+- `internal/sunnytown/server` uses `character_id` for realtime player ID.
+- Frontend Sunny Town session/player types accept `characterId`.
+
 ### Phase 3: NPC Records And Static NPC Presence
 
 - Represent one or more existing shopkeepers as NPC-backed characters.
@@ -278,6 +365,27 @@ Deliverable: shared character foundation with low user-visible risk.
 - Surface NPCs in Sunny Town runtime without complex autonomous behavior.
 
 Deliverable: NPCs exist as real town characters.
+
+Status: `Phase 3A implemented`
+
+Phase 3A should focus on static NPC identity only:
+
+- Start with `mayor-sunny` in `sunny-town/maps/sunny-town-v1.json`.
+- Keep current map-defined position, facing, dialogue, shop, and activity fields as display/runtime defaults.
+- Add durable NPC character identity in HQ.
+- Expose NPC character identity to Sunny Town.
+- Preserve current frontend interaction behavior.
+
+Do not implement movement, motives, schedules, homes, workplaces, inventory migration, or shop stock ownership in Phase 3A.
+
+Current Phase 3A implementation details:
+
+- Migration `0007_sunny_town_npc_characters.sql` creates `sunny_town_npc_character` with unique `(room_id, npc_key)` mappings and seeds `mayor-sunny` for `sunny-town-main`.
+- `internal/hq/characters.EnsureNPC` and `EnsureNPCs` create or refresh NPC rows in `sunny_town_character` and connect them to stable NPC keys.
+- HQ exposes `/api/internal/sunny-town/npc-characters/ensure` as a service-authenticated internal Sunny Town endpoint.
+- Sunny Town calls the endpoint during startup and before WebSocket joins through `internal/sunnytown/hqclient` and merges returned `characterId` values into `internal/sunnytown/maps.NPC`.
+- The frontend `SunnyTownNpc` type accepts optional `characterId`, while existing interaction code continues to use map NPC data.
+- NPCs are still static in this slice; no autonomous movement or durable position migration was added.
 
 ### Phase 4: Shared Inventory And Equipment
 
@@ -439,3 +547,6 @@ The architecture should not hard-code a tiny limit, but the first performance an
 - Durable inventory/equipment tables are currently student-owned: `student_inventory_item`, `student_inventory_ledger`, `student_equipped_item`, and `student_hotbar_slot`.
 - Durable Sunny Town position is currently student-owned through `student_sunny_town_position`.
 - Durable map objects already use `room_id` and `map_id`, which is a useful precedent for NPC scoping.
+- Phase 3A keeps NPCs in the static map payload rather than adding dynamic NPC snapshots. This preserves current frontend behavior while making map NPCs addressable by durable `character_id`.
+- The NPC mapping currently uses `room_id + npc_key`, where `npc_key` is the map NPC `id` such as `mayor-sunny`. If future maps need two distinct NPCs with the same map ID in the same room, the keying rule should be revisited before adding those maps.
+- Sunny Town tolerates startup NPC identity load failure by logging the error and continuing with map-defined NPCs, then retries before WebSocket joins so compose startup order does not permanently leave map NPCs without durable IDs.

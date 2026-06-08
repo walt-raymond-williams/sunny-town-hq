@@ -29,6 +29,9 @@ func main() {
 	defer stop()
 
 	srv := stserver.New(cfg, maps)
+	if err := srv.LoadNPCCharacters(ctx); err != nil {
+		log.Printf("load initial sunny town npc characters: %v", err)
+	}
 	srv.StartRooms(ctx)
 	if err := srv.LoadInitialMapObjects(ctx); err != nil {
 		log.Printf("load initial sunny town map objects: %v", err)

@@ -48,15 +48,16 @@ type Portal struct {
 }
 
 type NPC struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	X         float64   `json:"x"`
-	Y         float64   `json:"y"`
-	Facing    string    `json:"facing"`
-	SpriteKey string    `json:"spriteKey"`
-	Dialogue  []string  `json:"dialogue"`
-	Shop      *Shop     `json:"shop,omitempty"`
-	Activity  *Activity `json:"activity,omitempty"`
+	ID          string    `json:"id"`
+	CharacterID int64     `json:"characterId,omitempty"`
+	Name        string    `json:"name"`
+	X           float64   `json:"x"`
+	Y           float64   `json:"y"`
+	Facing      string    `json:"facing"`
+	SpriteKey   string    `json:"spriteKey"`
+	Dialogue    []string  `json:"dialogue"`
+	Shop        *Shop     `json:"shop,omitempty"`
+	Activity    *Activity `json:"activity,omitempty"`
 }
 
 type Activity struct {

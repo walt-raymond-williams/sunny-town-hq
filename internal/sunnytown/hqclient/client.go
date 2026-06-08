@@ -80,6 +80,29 @@ type MapObjectResponse struct {
 	RemainingItemAmount int    `json:"remaining_item_amount"`
 }
 
+type EnsureNPCCharactersRequest struct {
+	RoomID string                    `json:"room_id"`
+	NPCs   []EnsureNPCCharacterInput `json:"npcs"`
+}
+
+type EnsureNPCCharacterInput struct {
+	NPCKey      string `json:"npc_key"`
+	DisplayName string `json:"display_name"`
+	AvatarID    string `json:"avatar_id"`
+}
+
+type NPCCharactersResponse struct {
+	NPCs []NPCCharacterResponse `json:"npcs"`
+}
+
+type NPCCharacterResponse struct {
+	CharacterID int64  `json:"character_id"`
+	RoomID      string `json:"room_id"`
+	NPCKey      string `json:"npc_key"`
+	DisplayName string `json:"display_name"`
+	AvatarID    string `json:"avatar_id"`
+}
+
 type PlaceMapObjectRequest struct {
 	AppUserID int64  `json:"app_user_id"`
 	RoomID    string `json:"room_id"`
@@ -244,6 +267,23 @@ func (client *Client) LoadMapObjects(ctx context.Context, roomID string, mapID s
 		return MapObjectsResponse{}, err
 	}
 	return loaded, nil
+}
+
+func (client *Client) EnsureNPCCharacters(ctx context.Context, request EnsureNPCCharactersRequest) (NPCCharactersResponse, error) {
+	response, err := client.jsonRequest(ctx, http.MethodPost, "/api/internal/sunny-town/npc-characters/ensure", request)
+	if err != nil {
+		return NPCCharactersResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return NPCCharactersResponse{}, fmt.Errorf("ensure npc characters failed status=%d", response.StatusCode)
+	}
+
+	var ensured NPCCharactersResponse
+	if err := json.NewDecoder(response.Body).Decode(&ensured); err != nil {
+		return NPCCharactersResponse{}, err
+	}
+	return ensured, nil
 }
 
 func (client *Client) PlaceMapObject(ctx context.Context, request PlaceMapObjectRequest) (MapObjectResponse, error) {

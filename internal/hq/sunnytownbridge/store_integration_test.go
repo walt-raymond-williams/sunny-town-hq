@@ -208,6 +208,55 @@ func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
 	}
 }
 
+func TestEnsureNPCCharactersUpsertsDurableRows(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	first, err := store.EnsureNPCCharacters(ctx, EnsureNPCCharactersRequest{
+		RoomID: "sunny-town-main",
+		NPCs: []EnsureNPCCharacterInput{{
+			NPCKey:      "mayor-sunny",
+			DisplayName: "Mayor Sunny",
+			AvatarID:    "mayor",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("first ensure error = %v", err)
+	}
+	if len(first.NPCs) != 1 || first.NPCs[0].CharacterID == 0 || first.NPCs[0].NPCKey != "mayor-sunny" {
+		t.Fatalf("first ensure = %#v, want mayor-sunny with character id", first)
+	}
+
+	second, err := store.EnsureNPCCharacters(ctx, EnsureNPCCharactersRequest{
+		RoomID: "sunny-town-main",
+		NPCs: []EnsureNPCCharacterInput{{
+			NPCKey:      "mayor-sunny",
+			DisplayName: "Mayor Sunny",
+			AvatarID:    "mayor",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("second ensure error = %v", err)
+	}
+	if len(second.NPCs) != 1 || second.NPCs[0].CharacterID != first.NPCs[0].CharacterID {
+		t.Fatalf("second ensure = %#v, want same character id %d", second, first.NPCs[0].CharacterID)
+	}
+
+	var characterRows int
+	var mappingRows int
+	if err := db.QueryRow(ctx, "select count(*) from sunny_town_character where character_type = 'npc'").Scan(&characterRows); err != nil {
+		t.Fatalf("count character rows: %v", err)
+	}
+	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_character where room_id = 'sunny-town-main' and npc_key = 'mayor-sunny'").Scan(&mappingRows); err != nil {
+		t.Fatalf("count mapping rows: %v", err)
+	}
+	if characterRows != 1 || mappingRows != 1 {
+		t.Fatalf("characterRows=%d mappingRows=%d, want 1 and 1", characterRows, mappingRows)
+	}
+}
+
 func TestPlaceSunnyTownMapObjectConsumesStoneBlock(t *testing.T) {
 	db, cleanup := testBridgeDB(t)
 	defer cleanup()
@@ -343,6 +392,29 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 		`create table app_user (
 			id bigint primary key,
 			display_name text not null
+		)`,
+		`create table sunny_town_character (
+			id bigserial primary key,
+			character_type text not null,
+			app_user_id bigint null unique references app_user(id) on delete cascade,
+			room_id text not null default 'sunny-town-main',
+			display_name text not null,
+			avatar_id text not null default 'pet-default',
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint sunny_town_character_type_check check (character_type in ('player', 'npc')),
+			constraint sunny_town_character_owner_check check (
+				(character_type = 'player' and app_user_id is not null) or
+				(character_type = 'npc' and app_user_id is null)
+			)
+		)`,
+		`create table sunny_town_npc_character (
+			character_id bigint primary key references sunny_town_character(id) on delete cascade,
+			room_id text not null,
+			npc_key text not null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			constraint sunny_town_npc_character_room_key unique (room_id, npc_key)
 		)`,
 		`create table student_wallet (
 			app_user_id bigint primary key references app_user(id) on delete cascade,

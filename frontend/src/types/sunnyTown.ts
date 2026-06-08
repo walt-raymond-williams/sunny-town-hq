@@ -50,6 +50,7 @@ export interface SunnyTownPortal {
 
 export interface SunnyTownNpc {
   id: string
+  characterId?: number
   name: string
   x: number
   y: number

@@ -178,6 +178,30 @@ func (handler HTTPHandler) HandleMapObjects(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, response)
 }
 
+func (handler HTTPHandler) HandleEnsureNPCCharacters(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !handler.authorized(w, r) {
+		return
+	}
+
+	var request EnsureNPCCharactersRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "request body must be valid JSON"})
+		return
+	}
+
+	response, err := handler.store.EnsureNPCCharacters(r.Context(), request)
+	if err != nil {
+		log.Printf("ensure internal sunny town npc characters: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "npc characters could not be ensured"})
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (handler HTTPHandler) HandlePlaceMapObject(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
