@@ -2,7 +2,7 @@
 
 This document is the handoff-ready implementation plan for adding Sunny Town NPC movement using location tags, portal-aware pathing, and a basic drive system.
 
-Status: `Slice 3 implemented; Slice 4 is next`
+Status: `Slice 4 implemented; Slice 5 is next`
 
 Related docs:
 
@@ -228,7 +228,16 @@ Suggested tests:
 
 Goal: stop treating NPCs as only static map payload when movement begins.
 
-Current state: NPCs are currently part of `Map.NPCs`, not dynamic snapshot state.
+Status: `Implemented`
+
+Implemented notes:
+
+- Rooms now initialize live NPC runtime state from static map NPC definitions.
+- Sunny Town protocol messages include live NPC snapshots on `hello`, `snapshot`, and `map_changed`.
+- Live NPC snapshots preserve dialogue, shop, schoolwork activity, facing, sprite, and durable character identity overlays.
+- Static map NPC payloads still exist for compatibility and are not mutated by durable identity overlays.
+- Frontend world state tracks live NPC snapshots and renders/interacts with live NPC positions when present, falling back to static map NPCs otherwise.
+- Tests cover live NPC snapshots, durable identity overlays, snapshot broadcasts, frontend fallback behavior, and live NPC snapshot application.
 
 Implementation notes:
 

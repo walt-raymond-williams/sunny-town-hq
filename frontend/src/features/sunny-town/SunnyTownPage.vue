@@ -119,6 +119,7 @@ const {
   applyRemovedObject,
   applySnapshot,
   collectibles,
+  npcs,
   players,
   worldObjects,
 } = worldState
@@ -543,7 +544,7 @@ function drawScene(context: CanvasRenderingContext2D, width: number, height: num
       drawCollectible(context, collectible, cameraX, cameraY)
     }
   }
-  for (const npc of map.npcs) {
+  for (const npc of renderedSunnyTownNpcs()) {
     drawNpc(context, npc, cameraX, cameraY, nearbyNpc.value?.id || '')
   }
   for (const player of renderedPlayers) {
@@ -565,7 +566,15 @@ function nearestNpcToSelf(): SunnyTownNpc | null {
   if (!map) {
     return null
   }
-  return nearestSunnyTownNpc(map.npcs, self, npcInteractionRadius)
+  return nearestSunnyTownNpc(renderedSunnyTownNpcs(), self, npcInteractionRadius)
+}
+
+function renderedSunnyTownNpcs(): SunnyTownNpc[] {
+  const map = activeMap.value
+  if (!map) {
+    return []
+  }
+  return npcs.value.length > 0 ? npcs.value : map.npcs
 }
 
 function renderedSunnyTownPlayers(): SunnyTownPlayer[] {

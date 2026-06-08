@@ -28,6 +28,7 @@ type ServerMessage struct {
 	Tick           int64                  `json:"tick,omitempty"`
 	ServerTimeMS   int64                  `json:"serverTimeMs,omitempty"`
 	Players        []PlayerSnapshot       `json:"players,omitempty"`
+	NPCs           []NPCSnapshot          `json:"npcs,omitempty"`
 	Collectibles   []CollectibleSnapshot  `json:"collectibles,omitempty"`
 	ResourceNodes  []ResourceNodeSnapshot `json:"resourceNodes,omitempty"`
 	PlacedObjects  []PlacedObjectSnapshot `json:"placedObjects,omitempty"`
@@ -57,6 +58,20 @@ type PlayerSnapshot struct {
 	AvatarID         string            `json:"avatarId"`
 	Equipment        EquipmentSnapshot `json:"equipment"`
 	LastProcessedSeq int64             `json:"lastProcessedSeq"`
+}
+
+type NPCSnapshot struct {
+	ID          string           `json:"id"`
+	CharacterID int64            `json:"characterId,omitempty"`
+	Name        string           `json:"name"`
+	X           float64          `json:"x"`
+	Y           float64          `json:"y"`
+	Facing      string           `json:"facing"`
+	Moving      bool             `json:"moving"`
+	SpriteKey   string           `json:"spriteKey"`
+	Dialogue    []string         `json:"dialogue"`
+	Shop        *stmaps.Shop     `json:"shop,omitempty"`
+	Activity    *stmaps.Activity `json:"activity,omitempty"`
 }
 
 type CollectibleSnapshot struct {

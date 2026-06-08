@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
   SunnyTownMap,
+  SunnyTownNpc,
   SunnyTownPlacedObject,
   SunnyTownResourceNode,
   SunnyTownServerMessage,
@@ -38,6 +39,19 @@ function placedObject(overrides: Partial<SunnyTownPlacedObject> = {}): SunnyTown
     y: 160,
     width: 32,
     height: 32,
+    ...overrides,
+  }
+}
+
+function npc(overrides: Partial<SunnyTownNpc> = {}): SunnyTownNpc {
+  return {
+    id: 'guide',
+    name: 'Guide',
+    x: 160,
+    y: 160,
+    facing: 'down',
+    spriteKey: 'guide',
+    dialogue: ['Hello.'],
     ...overrides,
   }
 }
@@ -86,8 +100,9 @@ describe('useSunnyTownWorldState', () => {
 
     state.applyMapState({
       type: 'hello',
-      map: map(),
+      map: map({ npcs: [npc()] }),
       players: [{ id: 'self', displayName: 'Ari', x: 1, y: 2, facing: 'down', moving: false, avatarId: 'sunny', lastProcessedSeq: 0 }],
+      npcs: [npc({ x: 192 })],
       collectibles: [{ id: 'star-1', kind: 'star', x: 10, y: 12, active: true }],
       resourceNodes: [node],
       placedObjects: [object],
@@ -95,8 +110,37 @@ describe('useSunnyTownWorldState', () => {
 
     expect(state.activeMap.value?.id).toBe('sunny-town-v1')
     expect(state.players.value).toHaveLength(1)
+    expect(state.npcs.value[0]?.x).toBe(192)
     expect(state.collectibles.value).toHaveLength(1)
     expect(state.worldObjects.value.map((worldObject) => worldObject.source)).toEqual(['natural', 'placed'])
+  })
+
+  it('falls back to static map npcs when map state omits live npcs', () => {
+    const state = useSunnyTownWorldState()
+
+    state.applyMapState({
+      type: 'hello',
+      map: map({ npcs: [npc()] }),
+    })
+
+    expect(state.npcs.value.map((liveNpc) => liveNpc.id)).toEqual(['guide'])
+  })
+
+  it('applies live npc snapshots for the active map', () => {
+    const state = useSunnyTownWorldState()
+    state.applyMapState({
+      type: 'hello',
+      map: map({ npcs: [npc()] }),
+    })
+
+    const applied = state.applySnapshot({
+      type: 'snapshot',
+      mapId: 'sunny-town-v1',
+      npcs: [npc({ x: 220, y: 180, moving: true })],
+    })
+
+    expect(applied).toBe(true)
+    expect(state.npcs.value[0]).toMatchObject({ id: 'guide', x: 220, y: 180, moving: true })
   })
 
   it('ignores snapshots from a stale map', () => {

@@ -25,6 +25,7 @@ type clientMessage = stprotocol.ClientMessage
 type equipmentSnapshot = stprotocol.EquipmentSnapshot
 type inventorySnapshot = stprotocol.InventorySnapshot
 type serverMessage = stprotocol.ServerMessage
+type npcSnapshot = stprotocol.NPCSnapshot
 type playerSnapshot = stprotocol.PlayerSnapshot
 
 type player struct {
@@ -63,6 +64,7 @@ type room struct {
 
 	mu             sync.Mutex
 	players        map[string]*player
+	liveNPCs       map[string]*liveNPC
 	collectibles   map[string]*collectible
 	resourceNodes  map[string]*resourceNode
 	placedObjects  map[string]*placedObject
@@ -72,6 +74,21 @@ type room struct {
 	rewardEvents   chan rewardEvent
 	resourceEvents chan resourceEvent
 	world          *world
+}
+
+type liveNPC struct {
+	characterID int64
+	npcKey      string
+	displayName string
+	spriteKey   string
+	mapID       string
+	x           float64
+	y           float64
+	facing      string
+	moving      bool
+	dialogue    []string
+	shop        *shop
+	activity    *activity
 }
 
 type world struct {

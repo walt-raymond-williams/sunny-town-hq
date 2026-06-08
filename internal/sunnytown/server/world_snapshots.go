@@ -13,6 +13,7 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		Tick:          room.tick,
 		ServerTimeMS:  now.UnixMilli(),
 		Players:       room.snapshotsLocked(),
+		NPCs:          room.npcSnapshotsLocked(),
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 		PlacedObjects: room.placedObjectSnapshotsLocked(),
@@ -30,6 +31,42 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		default:
 			room.leave(client)
 		}
+	}
+}
+
+func (room *room) npcSnapshotsLocked() []npcSnapshot {
+	snapshots := make([]npcSnapshot, 0, len(room.liveNPCs))
+	for _, liveNPC := range room.liveNPCs {
+		snapshots = append(snapshots, liveNPC.snapshot(room.world.npcCharacter(liveNPC.npcKey)))
+	}
+	return snapshots
+}
+
+func (liveNPC *liveNPC) snapshot(character npcCharacter, hasCharacter bool) npcSnapshot {
+	name := liveNPC.displayName
+	spriteKey := liveNPC.spriteKey
+	characterID := liveNPC.characterID
+	if hasCharacter {
+		characterID = character.characterID
+		if character.displayName != "" {
+			name = character.displayName
+		}
+		if character.avatarID != "" {
+			spriteKey = character.avatarID
+		}
+	}
+	return npcSnapshot{
+		ID:          liveNPC.npcKey,
+		CharacterID: characterID,
+		Name:        name,
+		X:           math.Round(liveNPC.x*10) / 10,
+		Y:           math.Round(liveNPC.y*10) / 10,
+		Facing:      liveNPC.facing,
+		Moving:      liveNPC.moving,
+		SpriteKey:   spriteKey,
+		Dialogue:    append([]string(nil), liveNPC.dialogue...),
+		Shop:        cloneShop(liveNPC.shop),
+		Activity:    cloneActivity(liveNPC.activity),
 	}
 }
 

@@ -166,6 +166,72 @@ func TestJoinHelloIncludesMapNPCs(t *testing.T) {
 	}
 }
 
+func TestJoinHelloIncludesLiveNPCSnapshots(t *testing.T) {
+	room := testRoom(indoorTestMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+
+	select {
+	case message := <-client.send:
+		if message.Type != "hello" || len(message.NPCs) != 1 {
+			t.Fatalf("hello live npcs = %#v", message)
+		}
+		npc := message.NPCs[0]
+		if npc.ID != "indoor-npc" || npc.Name != "Indoor NPC" || npc.X != 200 || npc.Y != 200 || npc.Facing != "down" {
+			t.Fatalf("live npc = %#v, want indoor npc position and identity", npc)
+		}
+		if npc.Shop == nil || npc.Shop.ID != "cookie-keeper-shop" {
+			t.Fatalf("live npc shop = %#v, want copied shop payload", npc.Shop)
+		}
+	default:
+		t.Fatal("expected hello message")
+	}
+}
+
+func TestLiveNPCSnapshotUsesDurableIdentityWithoutMutatingMap(t *testing.T) {
+	world := testWorld(testMap())
+	world.setNPCCharacters([]hqclient.NPCCharacterResponse{{
+		CharacterID: 999,
+		NPCKey:      "guide",
+		DisplayName: "Live Guide",
+		AvatarID:    "live-guide",
+	}})
+	room := world.rooms[defaultMapID]
+
+	room.mu.Lock()
+	snapshots := room.npcSnapshotsLocked()
+	room.mu.Unlock()
+
+	if len(snapshots) != 1 {
+		t.Fatalf("live npc snapshots = %#v, want guide", snapshots)
+	}
+	if snapshots[0].CharacterID != 999 || snapshots[0].Name != "Live Guide" || snapshots[0].SpriteKey != "live-guide" {
+		t.Fatalf("live npc snapshot = %#v, want durable identity overlay", snapshots[0])
+	}
+	staticNPC := room.gameMap.NPCs[0]
+	if staticNPC.CharacterID != 0 || staticNPC.Name != "Guide" || staticNPC.SpriteKey != "guide" {
+		t.Fatalf("static npc = %#v, want original map data unchanged", staticNPC)
+	}
+}
+
+func TestBroadcastSnapshotIncludesLiveNPCs(t *testing.T) {
+	room := testRoom(testMap())
+	client := testClient(room, "42")
+	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
+	<-client.send
+
+	room.broadcastSnapshot(time.Now())
+
+	select {
+	case message := <-client.send:
+		if message.Type != "snapshot" || len(message.NPCs) != 1 || message.NPCs[0].ID != "guide" {
+			t.Fatalf("snapshot live npcs = %#v, want guide", message)
+		}
+	default:
+		t.Fatal("expected snapshot message")
+	}
+}
+
 func TestLoadNPCCharactersMergesDurableIdentity(t *testing.T) {
 	hq := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/internal/sunny-town/npc-characters/ensure" {

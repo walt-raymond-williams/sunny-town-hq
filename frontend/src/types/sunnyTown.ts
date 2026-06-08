@@ -55,6 +55,7 @@ export interface SunnyTownNpc {
   x: number
   y: number
   facing: SunnyTownPlayer['facing']
+  moving?: boolean
   spriteKey: string
   dialogue: string[]
   shop?: SunnyTownShop
@@ -175,6 +176,7 @@ export interface SunnyTownServerMessage {
   tick?: number
   serverTimeMs?: number
   players?: SunnyTownPlayer[]
+  npcs?: SunnyTownNpc[]
   collectibles?: SunnyTownCollectible[]
   resourceNodes?: SunnyTownResourceNode[]
   placedObjects?: SunnyTownPlacedObject[]

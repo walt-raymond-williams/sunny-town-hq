@@ -20,6 +20,51 @@ func (world *world) setNPCCharacters(characters []hqclient.NPCCharacterResponse)
 	world.npcCharacters = next
 }
 
+func (world *world) npcCharacter(npcKey string) (npcCharacter, bool) {
+	world.npcMu.RLock()
+	defer world.npcMu.RUnlock()
+	character, ok := world.npcCharacters[npcKey]
+	return character, ok
+}
+
+func initialLiveNPCs(gameMap gameMap) map[string]*liveNPC {
+	liveNPCs := make(map[string]*liveNPC, len(gameMap.NPCs))
+	for _, mapNPC := range gameMap.NPCs {
+		liveNPCs[mapNPC.ID] = &liveNPC{
+			characterID: mapNPC.CharacterID,
+			npcKey:      mapNPC.ID,
+			displayName: mapNPC.Name,
+			spriteKey:   mapNPC.SpriteKey,
+			mapID:       gameMap.ID,
+			x:           mapNPC.X,
+			y:           mapNPC.Y,
+			facing:      mapNPC.Facing,
+			dialogue:    append([]string(nil), mapNPC.Dialogue...),
+			shop:        cloneShop(mapNPC.Shop),
+			activity:    cloneActivity(mapNPC.Activity),
+		}
+	}
+	return liveNPCs
+}
+
+func cloneShop(shopSnapshot *shop) *shop {
+	if shopSnapshot == nil {
+		return nil
+	}
+	cloned := &shop{
+		ID:    shopSnapshot.ID,
+		Items: append([]shopItem(nil), shopSnapshot.Items...),
+	}
+	return cloned
+}
+
+func cloneActivity(activitySnapshot *activity) *activity {
+	if activitySnapshot == nil {
+		return nil
+	}
+	return &activity{Type: activitySnapshot.Type}
+}
+
 func (room *room) mapSnapshotLocked() gameMap {
 	snapshot := room.gameMap
 	if len(snapshot.NPCs) == 0 {

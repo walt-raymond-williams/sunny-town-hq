@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import type {
   SunnyTownCollectible,
   SunnyTownMap,
+  SunnyTownNpc,
   SunnyTownPlacedObject,
   SunnyTownPlayer,
   SunnyTownResourceNode,
@@ -29,6 +30,7 @@ export function normalizeSunnyTownMap(map: SunnyTownMap): SunnyTownMap {
 export function useSunnyTownWorldState() {
   const activeMap = ref<SunnyTownMap | null>(null)
   const players = ref<SunnyTownPlayer[]>([])
+  const npcs = ref<SunnyTownNpc[]>([])
   const collectibles = ref<SunnyTownCollectible[]>([])
   const resourceNodes = ref<SunnyTownResourceNode[]>([])
   const placedObjects = ref<SunnyTownPlacedObject[]>([])
@@ -39,6 +41,7 @@ export function useSunnyTownWorldState() {
       return false
     }
     players.value = message.players || []
+    npcs.value = message.npcs || npcs.value
     collectibles.value = message.collectibles || []
     resourceNodes.value = message.resourceNodes || []
     placedObjects.value = message.placedObjects || placedObjects.value
@@ -51,6 +54,7 @@ export function useSunnyTownWorldState() {
       activeMap.value = normalizeSunnyTownMap(message.map)
     }
     players.value = message.players || []
+    npcs.value = message.npcs || activeMap.value?.npcs || []
     collectibles.value = message.collectibles || []
     resourceNodes.value = message.resourceNodes || []
     placedObjects.value = message.placedObjects || []
@@ -97,6 +101,7 @@ export function useSunnyTownWorldState() {
     applyRemovedObject,
     applySnapshot,
     collectibles,
+    npcs,
     placedObjects,
     players,
     resourceNodes,
