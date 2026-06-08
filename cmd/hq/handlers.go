@@ -6,6 +6,7 @@ import (
 	"time"
 
 	hqauth "hq/internal/hq/auth"
+	hqcharacters "hq/internal/hq/characters"
 	hqhttpapi "hq/internal/hq/httpapi"
 	hqinventory "hq/internal/hq/inventory"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
@@ -15,6 +16,7 @@ import (
 type sunnyTownSessionResponse struct {
 	RoomID       string                            `json:"room_id"`
 	MapID        string                            `json:"map_id"`
+	CharacterID  int64                             `json:"character_id"`
 	AvatarID     string                            `json:"avatar_id"`
 	WebSocketURL string                            `json:"websocket_url"`
 	JoinToken    string                            `json:"join_token"`
@@ -135,14 +137,23 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 
 	expiresAt := time.Now().UTC().Add(time.Minute)
 	avatarID := "pet-default"
+	character, err := hqcharacters.EnsurePlayer(r.Context(), app.db, roleUser.ID, profile.DisplayName, avatarID)
+	if err != nil {
+		log.Printf("ensure sunny town player character: %v", err)
+		hqhttpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "sunny town session could not be created",
+		})
+		return
+	}
 	token, err := sunnytownauth.Sign(sunnytownauth.Claims{
 		AppUserID:       roleUser.ID,
+		CharacterID:     character.ID,
 		KeycloakSubject: user.KeycloakSubject,
-		DisplayName:     profile.DisplayName,
+		DisplayName:     character.DisplayName,
 		Roles:           user.Roles,
 		RoomID:          roomID,
 		MapID:           mapID,
-		AvatarID:        avatarID,
+		AvatarID:        character.AvatarID,
 		ExpiresAt:       expiresAt.Unix(),
 	}, app.sunnyTownJoinSecret)
 	if err != nil {
@@ -180,7 +191,8 @@ func (app *app) handleSunnyTownSession(w http.ResponseWriter, r *http.Request) {
 	hqhttpapi.WriteJSON(w, http.StatusOK, sunnyTownSessionResponse{
 		RoomID:       roomID,
 		MapID:        mapID,
-		AvatarID:     avatarID,
+		CharacterID:  character.ID,
+		AvatarID:     character.AvatarID,
 		WebSocketURL: app.sunnyTownWebSocketURL,
 		JoinToken:    token,
 		ExpiresAt:    expiresAt,

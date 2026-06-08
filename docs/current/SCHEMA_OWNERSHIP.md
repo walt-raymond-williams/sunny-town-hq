@@ -111,6 +111,23 @@ Tables, constraints, and indexes:
 
 Migration target: `0004_sunny_town_state.sql`
 
+### Sunny Town Characters
+
+Owner: `internal/hq/characters`, coordinated with `internal/hq/users`, `cmd/hq` Sunny Town session creation, and Sunny Town realtime auth.
+
+Tables, constraints, and indexes:
+
+- `sunny_town_character`
+- `sunny_town_character_type_check`
+- `sunny_town_character_owner_check`
+- `sunny_town_character_room_id_check`
+- `sunny_town_character_display_name_check`
+- `sunny_town_character_avatar_id_check`
+- `sunny_town_character_app_user_id_key`
+- `sunny_town_character_room_idx`
+
+Migration target: `0006_sunny_town_characters.sql`
+
 ## Migration Notes
 
 - Preserve statement order when adding future schema migrations.

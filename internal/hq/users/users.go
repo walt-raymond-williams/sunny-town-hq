@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	hqauth "hq/internal/hq/auth"
+	hqcharacters "hq/internal/hq/characters"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -73,6 +74,9 @@ func (store *Store) SyncAuthenticated(ctx context.Context, user hqauth.User) (hq
 	}
 
 	if hqauth.HasRole(user, "student") {
+		if _, err := hqcharacters.EnsurePlayer(ctx, tx, user.ID, user.DisplayName, hqcharacters.DefaultAvatar); err != nil {
+			return hqauth.User{}, err
+		}
 		if _, err := tx.Exec(
 			ctx,
 			`

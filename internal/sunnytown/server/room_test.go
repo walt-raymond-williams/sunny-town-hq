@@ -78,6 +78,7 @@ func testWorld(maps ...gameMap) *world {
 func testClaims(appUserID int64) sunnytownauth.Claims {
 	return sunnytownauth.Claims{
 		AppUserID:       appUserID,
+		CharacterID:     appUserID,
 		KeycloakSubject: "subject",
 		DisplayName:     "Student",
 		Roles:           []string{"student"},

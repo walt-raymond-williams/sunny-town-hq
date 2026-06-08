@@ -91,6 +91,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 	}
 	player := &player{
 		appUserID:   claims.AppUserID,
+		characterID: claims.CharacterID,
 		id:          client.id,
 		displayName: claims.DisplayName,
 		avatarID:    claims.AvatarID,

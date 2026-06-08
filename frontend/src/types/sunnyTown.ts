@@ -3,6 +3,7 @@ import type { StudentHotbar, StudentInventory } from './inventory'
 export interface SunnyTownSession {
   roomId: string
   mapId: string
+  characterId: number
   avatarId: string
   websocketUrl: string
   joinToken: string
@@ -18,6 +19,7 @@ export interface SunnyTownWallet {
 
 export interface SunnyTownPlayer {
   id: string
+  characterId?: number
   displayName: string
   x: number
   y: number

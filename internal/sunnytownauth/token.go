@@ -19,6 +19,7 @@ var (
 
 type Claims struct {
 	AppUserID       int64    `json:"app_user_id"`
+	CharacterID     int64    `json:"character_id"`
 	KeycloakSubject string   `json:"sub"`
 	DisplayName     string   `json:"display_name"`
 	Roles           []string `json:"roles"`
@@ -74,7 +75,7 @@ func Verify(token string, secret string, now time.Time) (Claims, error) {
 	if claims.ExpiresAt <= now.Unix() {
 		return Claims{}, ErrExpiredToken
 	}
-	if claims.AppUserID < 1 || claims.KeycloakSubject == "" || claims.RoomID == "" || claims.MapID == "" {
+	if claims.AppUserID < 1 || claims.CharacterID < 1 || claims.KeycloakSubject == "" || claims.RoomID == "" || claims.MapID == "" {
 		return Claims{}, ErrInvalidToken
 	}
 	if !HasRole(claims.Roles, "student") {
@@ -93,8 +94,8 @@ func HasRole(roles []string, role string) bool {
 	return false
 }
 
-func PlayerID(appUserID int64) string {
-	return strconv.FormatInt(appUserID, 10)
+func PlayerID(characterID int64) string {
+	return strconv.FormatInt(characterID, 10)
 }
 
 func sign(payload string, secret string) string {

@@ -17,7 +17,7 @@ func TestSignAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
-	if claims.AppUserID != 42 || claims.RoomID != "sunny-town-main" {
+	if claims.AppUserID != 42 || claims.CharacterID != 420 || claims.RoomID != "sunny-town-main" {
 		t.Fatalf("Verify() claims = %#v", claims)
 	}
 }
@@ -66,6 +66,7 @@ func TestVerifyRequiresStudentRole(t *testing.T) {
 func testClaims(expiresAt time.Time) Claims {
 	return Claims{
 		AppUserID:       42,
+		CharacterID:     420,
 		KeycloakSubject: "subject",
 		DisplayName:     "Student",
 		Roles:           []string{"student"},

@@ -51,6 +51,7 @@ func (room *room) snapshotsLocked() []playerSnapshot {
 	for _, player := range room.players {
 		snapshots = append(snapshots, playerSnapshot{
 			ID:               player.id,
+			CharacterID:      player.characterID,
 			DisplayName:      player.displayName,
 			X:                math.Round(player.x*10) / 10,
 			Y:                math.Round(player.y*10) / 10,

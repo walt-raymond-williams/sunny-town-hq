@@ -40,6 +40,7 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_hotbar_slot`: current student hotbar slots
 - `student_sunny_town_position`: last accepted Sunny Town map position
 - `sunny_town_map_object`: persisted placed map objects
+- `sunny_town_character`: shared Sunny Town character identity for player-controlled and future NPC actors
 
 ## Migration Layout
 
@@ -52,6 +53,7 @@ deploy/postgres/migrations/
   0003_inventory_equipment.sql
   0004_sunny_town_state.sql
   0005_ai_grading.sql
+  0006_sunny_town_characters.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.

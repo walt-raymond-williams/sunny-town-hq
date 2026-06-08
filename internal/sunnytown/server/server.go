@@ -128,7 +128,7 @@ func (srv *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	playerID := sunnytownauth.PlayerID(claims.AppUserID)
+	playerID := sunnytownauth.PlayerID(claims.CharacterID)
 	client := &client{
 		conn:   conn,
 		send:   make(chan serverMessage, 16),

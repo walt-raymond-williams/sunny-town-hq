@@ -48,6 +48,7 @@ type ServerMessage struct {
 
 type PlayerSnapshot struct {
 	ID               string            `json:"id"`
+	CharacterID      int64             `json:"characterId"`
 	DisplayName      string            `json:"displayName"`
 	X                float64           `json:"x"`
 	Y                float64           `json:"y"`

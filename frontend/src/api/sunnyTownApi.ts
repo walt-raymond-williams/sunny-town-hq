@@ -7,12 +7,14 @@ import { normalizeInventoryItem, type StudentInventoryResponse } from './invento
 interface SunnyTownSessionResponse {
   room_id?: string
   map_id?: string
+  character_id?: number
   avatar_id?: string
   websocket_url?: string
   join_token?: string
   expires_at?: string
   roomId?: string
   mapId?: string
+  characterId?: number
   websocketUrl?: string
   joinToken?: string
   expiresAt?: string
@@ -33,6 +35,7 @@ export async function createSunnyTownSession(): Promise<SunnyTownSession> {
   return {
     roomId: response.room_id || response.roomId || 'sunny-town-main',
     mapId: response.map_id || response.mapId || 'sunny-town-v1',
+    characterId: response.character_id || response.characterId || 0,
     avatarId: response.avatar_id || response.avatar?.id || 'pet-default',
     websocketUrl: response.websocket_url || response.websocketUrl || 'ws://127.0.0.1:18082/sunny-town/ws',
     joinToken: response.join_token || response.joinToken || '',

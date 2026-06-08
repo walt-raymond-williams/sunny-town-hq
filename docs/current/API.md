@@ -75,4 +75,4 @@ Sunny Town exposes realtime gameplay at:
 /sunny-town/ws
 ```
 
-Browsers receive a short-lived join token from HQ before connecting. Client messages are requests; Sunny Town validates gameplay effects against server-accepted position and equipped/owned tools before committing durable effects to HQ.
+Browsers receive a short-lived join token from HQ before connecting. The token includes the authenticated `app_user_id` and the linked Sunny Town `character_id`. Sunny Town uses the character ID for realtime player identity while current durable inventory, wallet, and student-owned actions continue to use the app user ID. Client messages are requests; Sunny Town validates gameplay effects against server-accepted position and equipped/owned tools before committing durable effects to HQ.

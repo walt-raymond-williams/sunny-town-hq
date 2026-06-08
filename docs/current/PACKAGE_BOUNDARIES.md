@@ -16,6 +16,7 @@ Do not move `cmd/hq` app construction or route registration just to reduce line 
 
 - `internal/hq/app`: HQ runtime configuration loading.
 - `internal/hq/auth`: Keycloak JWT verification, auth user types, context helpers, and role checks.
+- `internal/hq/characters`: durable Sunny Town character identity shared by player-controlled characters and future NPCs.
 - `internal/hq/users`: app user persistence, role sync, default student provisioning, and student listing.
 - `internal/hq/assignments`: assignment DTOs, typed assignment queries, submission, grading commands, teacher/student HTTP handlers, and AI grading coordination points.
 - `internal/hq/inventory`: student inventory, equipment, hotbar, crafting, wallet, shop, and related HTTP handlers.

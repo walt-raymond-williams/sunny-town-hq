@@ -29,6 +29,7 @@ type playerSnapshot = stprotocol.PlayerSnapshot
 
 type player struct {
 	appUserID     int64
+	characterID   int64
 	id            string
 	displayName   string
 	avatarID      string
