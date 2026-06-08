@@ -89,6 +89,10 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
+	if len(room.players) == 0 {
+		room.catchUpNPCsAfterNoPlayersLocked(time.Now())
+	}
+
 	spawn := room.spawnPointLocked()
 	x := spawn.X
 	y := spawn.Y
@@ -121,6 +125,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		player.avatarID = "pet-default"
 	}
 	room.players[player.id] = player
+	room.npcPausedAt = time.Time{}
 	client.setRoom(room)
 
 	mapSnapshot := room.mapSnapshotLocked()
@@ -141,9 +146,13 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 
 func (room *room) leave(client *client) {
 	var saved *studentPositionRequest
+	now := time.Now()
 	room.mu.Lock()
 	if existing := room.players[client.id]; existing != nil && existing.client == client {
 		delete(room.players, client.id)
+		if len(room.players) == 0 {
+			room.npcPausedAt = now
+		}
 		saved = &studentPositionRequest{
 			AppUserID: existing.appUserID,
 			RoomID:    room.id,
@@ -191,6 +200,9 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 		return
 	}
 	delete(source.players, playerID)
+	if len(source.players) == 0 {
+		source.npcPausedAt = now
+	}
 	source.mu.Unlock()
 
 	player.x = target.clampX(usedPortal.TargetX)
@@ -204,7 +216,11 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 	player.portalLocked = true
 
 	target.mu.Lock()
+	if len(target.players) == 0 {
+		target.catchUpNPCsAfterNoPlayersLocked(now)
+	}
 	target.players[playerID] = player
+	target.npcPausedAt = time.Time{}
 	player.client.setRoom(target)
 	mapSnapshot := target.mapSnapshotLocked()
 	message := serverMessage{

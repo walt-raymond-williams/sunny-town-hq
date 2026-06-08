@@ -72,6 +72,7 @@ type room struct {
 	placedObjects  map[string]*placedObject
 	worldObjects   map[string]*worldObject
 	tick           int64
+	npcPausedAt    time.Time
 	rewardRunID    string
 	rewardEvents   chan rewardEvent
 	resourceEvents chan resourceEvent

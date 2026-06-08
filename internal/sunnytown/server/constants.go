@@ -30,6 +30,7 @@ const (
 	npcGoalReevaluateInterval  = 2 * time.Second
 	npcGoalGraceDuration       = 2 * time.Second
 	npcFailedTargetCooldown    = 10 * time.Second
+	npcNoPlayerCatchUpMax      = 5 * time.Minute
 	starPickupRadius           = 30.0
 	resourceCommitQueueSize    = 32
 	resourceHitsRequired       = 3
@@ -61,7 +62,10 @@ func (room *room) step(dt float64, now time.Time) {
 		rewards = append(rewards, room.collectStarsLocked(player, now)...)
 	}
 
-	npcTransfers := room.stepLiveNPCsLocked(dt, now)
+	var npcTransfers []npcTransfer
+	if len(room.players) > 0 || room.npcPausedAt.IsZero() {
+		npcTransfers = room.stepLiveNPCsLocked(dt, now)
+	}
 	room.respawnCollectiblesLocked(now)
 	room.respawnResourceNodesLocked(now)
 	room.mu.Unlock()

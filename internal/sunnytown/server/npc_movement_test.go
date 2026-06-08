@@ -512,6 +512,69 @@ func TestNPCDriveRouteIgnoresInactiveCollisionWorldObjectAfterCooldown(t *testin
 	}
 }
 
+func TestPausedRoomSkipsExactNPCMovementWhenNoPlayersRemain(t *testing.T) {
+	room := testRoom(driveNPCTestMap())
+	npc := room.liveNPCs[driveControlledNPCKey]
+	startX := npc.x
+	startY := npc.y
+	now := time.Now()
+	room.npcPausedAt = now
+
+	room.step(2, now.Add(2*time.Second))
+
+	if npc.x != startX || npc.y != startY {
+		t.Fatalf("npc position = (%v,%v), want unchanged (%v,%v)", npc.x, npc.y, startX, startY)
+	}
+	if npc.activeDrive != "" || npc.goal != nil || npc.route != nil || npc.moving {
+		t.Fatalf("npc state activeDrive=%q goal=%#v route=%#v moving=%v, want no exact movement while paused", npc.activeDrive, npc.goal, npc.route, npc.moving)
+	}
+}
+
+func TestNoPlayerCatchUpIsBoundedAndClearsTransientNPCGoal(t *testing.T) {
+	room := testRoom(driveNPCTestMap())
+	npc := room.liveNPCs[driveControlledNPCKey]
+	now := time.Now()
+	goal, route, ok := room.nextNPCFallbackGoalLocked(npc, now)
+	if !ok {
+		t.Fatal("expected fallback goal")
+	}
+	room.assignNPCGoal(npc, goal, route, now)
+	room.npcPausedAt = now.Add(-10 * time.Minute)
+
+	room.catchUpNPCsAfterNoPlayersLocked(now)
+
+	wantDrive := npcDriveDefault - npcDriveDepletePerSecond*npcNoPlayerCatchUpMax.Seconds()
+	if npc.drives.Hunger != wantDrive || npc.drives.Energy != wantDrive || npc.drives.Work != wantDrive {
+		t.Fatalf("drives = %#v, want bounded depletion to %v", npc.drives, wantDrive)
+	}
+	if npc.goal != nil || npc.route != nil || npc.activeDrive != "" || npc.moving {
+		t.Fatalf("npc state activeDrive=%q goal=%#v route=%#v moving=%v, want transient goal cleared", npc.activeDrive, npc.goal, npc.route, npc.moving)
+	}
+	if !room.npcPausedAt.IsZero() {
+		t.Fatalf("npcPausedAt = %v, want reset after catch-up", room.npcPausedAt)
+	}
+}
+
+func TestNoPlayerCatchUpReplenishesCurrentLocation(t *testing.T) {
+	gameMap := driveNPCTestMap()
+	gameMap.NPCs[0].X = 160
+	gameMap.NPCs[0].Y = 64
+	room := testRoom(gameMap)
+	npc := room.liveNPCs[driveControlledNPCKey]
+	npc.drives.Social = 40
+	now := time.Now()
+	room.npcPausedAt = now.Add(-time.Minute)
+
+	room.catchUpNPCsAfterNoPlayersLocked(now)
+
+	if npc.drives.Social != 100 {
+		t.Fatalf("social = %v, want replenished to 100 at current social location", npc.drives.Social)
+	}
+	if npc.drives.Hunger >= npcDriveDefault {
+		t.Fatalf("hunger = %v, want nonmatching drive to deplete", npc.drives.Hunger)
+	}
+}
+
 func TestUrgentDriveInterruptsIdleFallbackAfterReevaluation(t *testing.T) {
 	gameMap := driveNPCTestMap()
 	gameMap.Locations = append(gameMap.Locations, stmaps.Location{

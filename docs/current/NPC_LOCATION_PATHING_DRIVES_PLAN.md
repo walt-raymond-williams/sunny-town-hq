@@ -27,6 +27,7 @@ Current implemented baseline:
 - NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
 - NPCs use deterministic UTC schedule phases (`morning`, `day`, `evening`, `night`) to apply selection-time drive pressure for strong routine anchors.
 - Schedule pressure is visible in `/debug/npcs`, and urgent raw needs still override scheduled behavior.
+- Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -267,7 +268,7 @@ The first movement/drives implementation, tuning slices, runtime routine anchors
 
 Recommended next order:
 
-1. ND-9: Persistence and no-player coarse catch-up.
+1. Finish ND-9 persistence decisions and any durable snapshot endpoints that are actually needed.
 2. ND-10: Resource/job production loops.
 3. ND-11: Social relationship effects.
 
@@ -376,7 +377,7 @@ Suggested tests:
 
 ### Slice ND-9: Persistence And No-Player Coarse Catch-Up
 
-Status: `Next`
+Status: `Partially implemented`
 
 Goal: decide which NPC routine state should survive process restarts and how much simulation should advance when no players are connected.
 
@@ -390,11 +391,35 @@ Implementation notes:
 - Keep transient controller state, such as exact route path, focus windows, and path indexes, in memory unless a strong reason appears.
 - Coarse catch-up should be bounded and approximate, not full per-tick simulation while nobody is connected.
 
-- Persist durable home/work anchors or assignments in HQ.
-- Decide whether drive snapshots should survive Sunny Town restart.
-- Add coarse catch-up when no players are connected.
-- Add resource/job production loops.
-- Add social relationship effects.
+Implemented notes:
+
+- Room-level exact NPC path-following now pauses after the last player leaves a map.
+- On player re-entry or transfer into a previously empty map, Sunny Town applies bounded coarse catch-up to live NPC drives before sending the player snapshot.
+- Catch-up is capped by `npcNoPlayerCatchUpMax` and currently updates drive depletion/replenishment at the NPC's current location only.
+- Catch-up clears transient route/goal/focus state so normal goal selection can resume from fresh drive values.
+- Initial test worlds and rooms that have never had players still step NPCs normally, preserving deterministic unit-test ergonomics.
+- No HQ persistence was added in this sub-slice.
+
+Remaining notes:
+
+- Decide whether drive snapshots should survive Sunny Town process restarts.
+- If durable drive snapshots are needed, add HQ-owned internal endpoints and Sunny Town client calls; Sunny Town must not write HQ storage directly.
+- Persist durable home/work assignments only if anchors stop being purely map-authored/runtime-derived.
+- Keep exact route paths, path indexes, focus windows, failed-target cooldowns, and other transient controller state in Sunny Town memory unless a later feature proves they need durability.
+
+Acceptance criteria:
+
+- A documented decision exists for which NPC drive/routine state is durable versus transient. (`Pending`)
+- If durable state is added, it belongs to HQ-owned storage and Sunny Town writes through service-authenticated internal APIs. (`Pending`)
+- No-player catch-up is bounded and does not run full path simulation while nobody is connected. (`Implemented`)
+- Exact path/controller state is not persisted unless there is a clear reason. (`Implemented for current runtime behavior`)
+
+Suggested tests:
+
+- Coarse catch-up advances drive values by a capped amount after an offline interval. (`Implemented`)
+- Catch-up does not attempt exact portal/path movement for long offline intervals. (`Implemented`)
+- Catch-up can replenish a drive when the NPC is already standing at a matching location. (`Implemented`)
+- Durable save/load, if added, restores only chosen durable fields. (`Pending`)
 
 ## Feature Intent
 
@@ -874,7 +899,7 @@ Completed order:
 
 Current continuation order:
 
-1. Slice ND-9: persistence and no-player coarse catch-up.
+1. Finish Slice ND-9 by deciding and implementing any durable drive/anchor snapshot persistence that is worth saving across Sunny Town restarts.
 2. Later: resource/job production loops and social relationship effects.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.

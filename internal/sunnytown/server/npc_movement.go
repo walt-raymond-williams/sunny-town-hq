@@ -86,6 +86,30 @@ func (room *room) stepLiveNPCsLocked(dt float64, now time.Time) []npcTransfer {
 	return transfers
 }
 
+func (room *room) catchUpNPCsAfterNoPlayersLocked(now time.Time) {
+	if room.npcPausedAt.IsZero() || !now.After(room.npcPausedAt) {
+		return
+	}
+	elapsed := now.Sub(room.npcPausedAt)
+	if elapsed > npcNoPlayerCatchUpMax {
+		elapsed = npcNoPlayerCatchUpMax
+	}
+	if elapsed <= 0 {
+		room.npcPausedAt = time.Time{}
+		return
+	}
+	dt := elapsed.Seconds()
+	for _, npc := range room.liveNPCs {
+		if npc == nil {
+			continue
+		}
+		npc.depleteDrives(dt)
+		room.replenishNPCDrivesLocked(npc, dt)
+		room.clearNPCGoal(npc)
+	}
+	room.npcPausedAt = time.Time{}
+}
+
 func (room *room) stepLiveNPCLocked(npc *liveNPC, dt float64, now time.Time) *npcTransfer {
 	if npc == nil {
 		return nil
