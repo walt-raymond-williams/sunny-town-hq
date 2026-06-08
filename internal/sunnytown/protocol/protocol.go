@@ -106,23 +106,28 @@ type PlacedObjectSnapshot struct {
 }
 
 type WorldObjectSnapshot struct {
-	ID                string  `json:"id"`
-	Kind              string  `json:"kind"`
-	Source            string  `json:"source"`
-	ItemKey           string  `json:"itemKey,omitempty"`
-	ResourceKind      string  `json:"resourceKind,omitempty"`
-	X                 float64 `json:"x"`
-	Y                 float64 `json:"y"`
-	Width             float64 `json:"width,omitempty"`
-	Height            float64 `json:"height,omitempty"`
-	Radius            float64 `json:"radius,omitempty"`
-	Active            bool    `json:"active"`
-	Collision         bool    `json:"collision"`
-	Breakable         bool    `json:"breakable"`
-	ReservesPlacement bool    `json:"reservesPlacement"`
-	Hits              int     `json:"hits,omitempty"`
-	Needed            int     `json:"needed,omitempty"`
-	GridX             int     `json:"gridX,omitempty"`
-	GridY             int     `json:"gridY,omitempty"`
-	PlacedByAppUserID int64   `json:"placedByAppUserId,omitempty"`
+	ID                string   `json:"id"`
+	Kind              string   `json:"kind"`
+	Source            string   `json:"source"`
+	ItemKey           string   `json:"itemKey,omitempty"`
+	ResourceKind      string   `json:"resourceKind,omitempty"`
+	Name              string   `json:"name,omitempty"`
+	LocationID        string   `json:"locationId,omitempty"`
+	ShopID            string   `json:"shopId,omitempty"`
+	StorageRole       string   `json:"storageRole,omitempty"`
+	X                 float64  `json:"x"`
+	Y                 float64  `json:"y"`
+	Width             float64  `json:"width,omitempty"`
+	Height            float64  `json:"height,omitempty"`
+	Radius            float64  `json:"radius,omitempty"`
+	Active            bool     `json:"active"`
+	Collision         bool     `json:"collision"`
+	Breakable         bool     `json:"breakable"`
+	ReservesPlacement bool     `json:"reservesPlacement"`
+	Hits              int      `json:"hits,omitempty"`
+	Needed            int      `json:"needed,omitempty"`
+	GridX             int      `json:"gridX,omitempty"`
+	GridY             int      `json:"gridY,omitempty"`
+	PlacedByAppUserID int64    `json:"placedByAppUserId,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
 }

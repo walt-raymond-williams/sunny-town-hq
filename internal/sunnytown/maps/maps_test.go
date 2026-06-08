@@ -152,6 +152,25 @@ func TestCheckedInMapsIncludeAuthoredNPCLocations(t *testing.T) {
 	}
 }
 
+func TestCheckedInMapsIncludeCookieShopOutputChest(t *testing.T) {
+	maps, err := LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	house := maps["sunny-town-house-1"]
+	chest := findFixture(house.Fixtures, "cookie-shop-output-chest")
+	if chest == nil {
+		t.Fatal("expected cookie-shop-output-chest fixture")
+	}
+	if chest.Kind != "chest" || chest.LocationID != "cookie-shop" || chest.ShopID != "cookie-keeper-shop" || chest.StorageRole != "output" || chest.ItemKey != "cookie" {
+		t.Fatalf("chest metadata = %#v, want Cookie Shop output storage for cookie-keeper-shop cookies", chest)
+	}
+	if !chest.Collision || !chest.ReservesPlacement || !hasFixtureTags(*chest, "storage", "output", "cookie_shop") {
+		t.Fatalf("chest placement metadata = %#v, want blocking storage/output cookie_shop fixture", chest)
+	}
+}
+
 func TestLoadMapsRejectsDuplicateLocationIDs(t *testing.T) {
 	dir := t.TempDir()
 	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"locations":[{"id":"square","name":"Square","x":64,"y":64,"radius":48,"tags":["public"]},{"id":"square","name":"Square Again","x":96,"y":64,"radius":48,"tags":["public"]}]}`
@@ -173,9 +192,31 @@ func findLocation(locations []Location, id string) *Location {
 	return nil
 }
 
+func findFixture(fixtures []FixtureDefinition, id string) *FixtureDefinition {
+	for index := range fixtures {
+		if fixtures[index].ID == id {
+			return &fixtures[index]
+		}
+	}
+	return nil
+}
+
 func hasLocationTags(location Location, tags ...string) bool {
 	seen := map[string]bool{}
 	for _, tag := range location.Tags {
+		seen[tag] = true
+	}
+	for _, tag := range tags {
+		if !seen[tag] {
+			return false
+		}
+	}
+	return true
+}
+
+func hasFixtureTags(fixture FixtureDefinition, tags ...string) bool {
+	seen := map[string]bool{}
+	for _, tag := range fixture.Tags {
 		seen[tag] = true
 	}
 	for _, tag := range tags {
@@ -219,6 +260,52 @@ func TestLoadMapsRejectsInvalidLocations(t *testing.T) {
 
 			if _, err := LoadMaps(dir); err == nil {
 				t.Fatalf("expected invalid location %q to be rejected", tt.name)
+			}
+		})
+	}
+}
+
+func TestLoadMapsRejectsInvalidFixtures(t *testing.T) {
+	tests := []struct {
+		name    string
+		fixture string
+	}{
+		{
+			name:    "duplicate id",
+			fixture: `{"id":"chest","name":"Chest","kind":"chest","x":32,"y":32,"width":32,"height":32},{"id":"chest","name":"Chest Again","kind":"chest","x":64,"y":32,"width":32,"height":32}`,
+		},
+		{
+			name:    "unsupported kind",
+			fixture: `{"id":"crate","name":"Crate","kind":"crate","x":32,"y":32,"width":32,"height":32}`,
+		},
+		{
+			name:    "unknown location",
+			fixture: `{"id":"chest","name":"Chest","kind":"chest","x":32,"y":32,"width":32,"height":32,"locationId":"missing"}`,
+		},
+		{
+			name:    "output missing storage metadata",
+			fixture: `{"id":"chest","name":"Chest","kind":"chest","x":32,"y":32,"width":32,"height":32,"locationId":"shop","storageRole":"output","itemKey":"cookie"}`,
+		},
+		{
+			name:    "blank tag",
+			fixture: `{"id":"chest","name":"Chest","kind":"chest","x":32,"y":32,"width":32,"height":32,"tags":["storage"," "]}`,
+		},
+		{
+			name:    "outside map",
+			fixture: `{"id":"chest","name":"Chest","kind":"chest","x":112,"y":32,"width":32,"height":32}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"locations":[{"id":"shop","name":"Shop","x":64,"y":64,"radius":48,"tags":["shop"]}],"fixtures":[` + tt.fixture + `]}`
+			if err := os.WriteFile(filepath.Join(dir, "one.json"), []byte(mapJSON), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := LoadMaps(dir); err == nil {
+				t.Fatalf("expected invalid fixture %q to be rejected", tt.name)
 			}
 		})
 	}

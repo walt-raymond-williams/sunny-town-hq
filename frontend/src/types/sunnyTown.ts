@@ -102,6 +102,25 @@ export interface SunnyTownMap {
   npcs: SunnyTownNpc[]
   resourceNodes: SunnyTownResourceNodeDefinition[]
   locations?: SunnyTownLocation[]
+  fixtures?: SunnyTownFixtureDefinition[]
+}
+
+export interface SunnyTownFixtureDefinition {
+  id: string
+  name: string
+  kind: 'chest'
+  x: number
+  y: number
+  width: number
+  height: number
+  interactionRadius?: number
+  collision?: boolean
+  reservesPlacement?: boolean
+  locationId?: string
+  shopId?: string
+  storageRole?: 'output' | 'input'
+  itemKey?: string
+  tags?: string[]
 }
 
 export interface SunnyTownPlacedObject {
@@ -147,10 +166,14 @@ export interface SunnyTownResourceNode {
 
 export interface SunnyTownWorldObject {
   id: string
-  kind: 'rock_node' | 'stone_block'
-  source: 'natural' | 'placed'
-  itemKey?: 'stone_block'
+  kind: 'rock_node' | 'stone_block' | 'chest'
+  source: 'natural' | 'placed' | 'fixture'
+  itemKey?: string
   resourceKind?: 'rock'
+  name?: string
+  locationId?: string
+  shopId?: string
+  storageRole?: 'output' | 'input'
   x: number
   y: number
   width?: number
@@ -165,6 +188,7 @@ export interface SunnyTownWorldObject {
   gridX?: number
   gridY?: number
   placedByAppUserId?: number
+  tags?: string[]
 }
 
 export interface SunnyTownServerMessage {

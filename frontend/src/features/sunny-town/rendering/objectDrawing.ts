@@ -30,8 +30,41 @@ export function drawWorldObjects(
     }
     if (object.kind === 'rock_node' && object.resourceKind === 'rock') {
       drawResourceNode(context, worldObjectToResourceNode(object), cameraX, cameraY)
+      continue
+    }
+    if (object.kind === 'chest') {
+      drawChestObject(context, object, cameraX, cameraY)
     }
   }
+}
+
+export function drawChestObject(
+  context: CanvasRenderingContext2D,
+  object: SunnyTownWorldObject,
+  cameraX: number,
+  cameraY: number,
+) {
+  const width = object.width || 32
+  const height = object.height || 32
+  const x = object.x - cameraX
+  const y = object.y - cameraY
+  context.save()
+  context.fillStyle = '#8a5a35'
+  context.fillRect(x + 3, y + 8, width - 6, height - 11)
+  context.fillStyle = '#a97844'
+  context.fillRect(x + 5, y + 5, width - 10, 10)
+  context.strokeStyle = '#4f3320'
+  context.lineWidth = 2
+  context.strokeRect(x + 3, y + 8, width - 6, height - 11)
+  context.strokeRect(x + 5, y + 5, width - 10, 10)
+  context.fillStyle = '#f2c14e'
+  context.fillRect(x + width / 2 - 3, y + height / 2 - 1, 6, 7)
+  context.strokeStyle = '#6f4a24'
+  context.beginPath()
+  context.moveTo(x + 6, y + height / 2)
+  context.lineTo(x + width - 6, y + height / 2)
+  context.stroke()
+  context.restore()
 }
 
 export function drawPlacedObject(

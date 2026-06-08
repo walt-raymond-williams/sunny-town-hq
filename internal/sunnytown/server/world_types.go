@@ -21,6 +21,7 @@ type activity = stmaps.Activity
 type shop = stmaps.Shop
 type shopItem = stmaps.ShopItem
 type resourceNodeDefinition = stmaps.ResourceNodeDefinition
+type fixtureDefinition = stmaps.FixtureDefinition
 type npcRoute = stnavigation.Route
 
 type clientMessage = stprotocol.ClientMessage
@@ -187,6 +188,11 @@ type worldObject struct {
 	source            string
 	itemKey           string
 	resourceKind      string
+	name              string
+	locationID        string
+	shopID            string
+	storageRole       string
+	tags              []string
 	mapID             string
 	x                 float64
 	y                 float64

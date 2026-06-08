@@ -38,9 +38,13 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 
 func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resourceEvents chan resourceEvent, npcJobEvents chan npcJobProductionEvent, world *world) *room {
 	resourceNodes := initialResourceNodes(gameMap)
+	fixtureObjects := initialFixtureObjects(gameMap)
 	worldObjects := map[string]*worldObject{}
 	for _, node := range resourceNodes {
 		worldObjects[worldObjectKey(node.source, node.id)] = node
+	}
+	for _, object := range fixtureObjects {
+		worldObjects[worldObjectKey(object.source, object.id)] = object
 	}
 	room := &room{
 		id:             id,

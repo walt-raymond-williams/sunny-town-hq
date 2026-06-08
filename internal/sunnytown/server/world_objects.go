@@ -152,6 +152,38 @@ func initialResourceNodes(gameMap gameMap) map[string]*resourceNode {
 	return nodes
 }
 
+func initialFixtureObjects(gameMap gameMap) map[string]*worldObject {
+	objects := map[string]*worldObject{}
+	for _, definition := range gameMap.Fixtures {
+		objects[definition.ID] = fixtureObjectFromDefinition(gameMap, definition)
+	}
+	return objects
+}
+
+func fixtureObjectFromDefinition(gameMap gameMap, definition fixtureDefinition) *worldObject {
+	return &worldObject{
+		id:                definition.ID,
+		kind:              definition.Kind,
+		source:            worldObjectSourceFixture,
+		itemKey:           definition.ItemKey,
+		name:              definition.Name,
+		locationID:        definition.LocationID,
+		shopID:            definition.ShopID,
+		storageRole:       definition.StorageRole,
+		tags:              append([]string(nil), definition.Tags...),
+		mapID:             gameMap.ID,
+		x:                 definition.X,
+		y:                 definition.Y,
+		width:             definition.Width,
+		height:            definition.Height,
+		interactionRadius: definition.InteractionRadius,
+		collision:         definition.Collision,
+		breakable:         false,
+		reservesPlacement: definition.ReservesPlacement,
+		active:            true,
+	}
+}
+
 func placedObjectFromResponse(gameMap gameMap, response mapObjectResponse) *placedObject {
 	objectRect := gridRect(gameMap, response.GridX, response.GridY)
 	return &placedObject{

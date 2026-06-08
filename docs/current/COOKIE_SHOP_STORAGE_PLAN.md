@@ -12,6 +12,9 @@ Current implemented baseline:
 - `sunny-town-house-1` has an authored `Cookie Shop` area with stable ID `cookie-shop` and tags `shop`, `workplace`, `cookie_shop`, and `storage_owner`.
 - Cookie Keeper has a reachable work anchor at `cookie-keeper-counter`.
 - `cookie-keeper-counter` remains the owned Cookie Keeper work anchor; the broader `cookie-shop` area is not NPC-owned.
+- `sunny-town-house-1` has an authored fixture `cookie-shop-output-chest` inside/associated with `cookie-shop`.
+- Sunny Town initializes that fixture as a runtime `worldObject` with source `fixture`, kind `chest`, and metadata `shopId: cookie-keeper-shop`, `storageRole: output`, `itemKey: cookie`, and `locationId: cookie-shop`.
+- The frontend can render chest world objects from the normal `worldObjects` snapshot stream.
 - Sunny Town emits service-authenticated `shopkeeper_stock` / `shop_stock_progress` NPC job production events when Cookie Keeper is at the work anchor.
 - HQ records those events in `sunny_town_npc_job_production_ledger`.
 - HQ stores saleable Cookie Keeper cookies in durable `shop_stock_item` / `shop_stock_ledger` tables.
@@ -26,7 +29,7 @@ Current architecture decision:
 
 - The stable gameplay owner is the shop/storage, not the NPC.
 - Do not add NPC-held inventory for Cookie Keeper unless a future gameplay requirement truly needs character-carried items.
-- Treat current `shop_stock_item` as the logical Cookie Shop output chest until physical chest fixtures are implemented.
+- Treat current `shop_stock_item` as the durable stock backing the physical Cookie Shop output chest. The chest fixture is presentation/routing/interaction metadata, not a second inventory source.
 - Cookie production does not require ingredients yet. Cookie Keeper can produce as long as he is working in the shop.
 
 ## Slice: Logical Output Chest Capacity
@@ -57,13 +60,14 @@ Suggested tests:
 - Purchase after full stock decrements below capacity.
 - UI shows `current / 64` and disables Buy at `0`.
 
-## Immediate Next Slice: Physical Output Chest Fixture
+## Immediate Next Slice: Output Chest Inspection/Interaction
 
 Recommended next step:
 
-- Implement the physical Cookie Shop output chest fixture next.
-- The chest should be authored inside or associated with `cookie-shop`.
-- The chest should point at existing HQ-owned `cookie-keeper-shop` cookie stock, not create a second stock/inventory source.
+- Decide and implement how players inspect/interact with `cookie-shop-output-chest`.
+- Inspection should read the same existing HQ-owned `cookie-keeper-shop` cookie stock and capacity already shown in the shop UI.
+- Keep the chest as an interaction surface over the existing stock; do not create separate fixture inventory.
+- A lightweight first version can show current cookie count/capacity near the chest, without adding withdrawals/deposits yet.
 - The alternate branch is still teacher lesson prep durable progress if broader NPC job gameplay becomes the priority, but the Cookie Shop storage path is now ready for the chest.
 
 ## Slice: Authored Cookie Shop Area
@@ -93,7 +97,9 @@ Implemented notes:
 - Kept `cookie-keeper-counter` as the owned work point for Cookie Keeper so routine anchor resolution still prefers the counter.
 - Checked-in map validation covers the new location metadata.
 
-## Later Slice: Physical Output Chest Fixture
+## Slice: Physical Output Chest Fixture
+
+Status: `Implemented`
 
 Goal: show the Cookie Shop output storage as a physical chest/fixture in the shop.
 
@@ -110,6 +116,15 @@ Acceptance criteria:
 - Cookie production stores into the chest-backed stock.
 - Cookie Seller purchases consume from the same stock.
 - No duplicate stock source exists.
+
+Implemented notes:
+
+- Added optional map `fixtures` with validation for IDs, bounds, location references, storage role, and output storage metadata.
+- Added `cookie-shop-output-chest` to `sunny-town-house-1` with `locationId: cookie-shop`, `shopId: cookie-keeper-shop`, `storageRole: output`, and `itemKey: cookie`.
+- Sunny Town initializes map fixtures into the existing runtime `worldObjects` stream using source `fixture`.
+- Chest snapshots include name, location, shop, storage role, item key, and tags.
+- Frontend Sunny Town types and world-object drawing support `chest` objects.
+- This slice makes the chest visible and metadata-inspectable by the client/debug payloads. Player-facing chest interaction UI is the next slice.
 
 ## Later Slice: Input Chest And Ingredients
 

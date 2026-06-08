@@ -22,6 +22,7 @@ type GameMap struct {
 	NPCs          []NPC                    `json:"npcs"`
 	ResourceNodes []ResourceNodeDefinition `json:"resourceNodes"`
 	Locations     []Location               `json:"locations"`
+	Fixtures      []FixtureDefinition      `json:"fixtures"`
 }
 
 type Point struct {
@@ -98,6 +99,24 @@ type ResourceNodeDefinition struct {
 	RespawnSeconds    int     `json:"respawnSeconds"`
 }
 
+type FixtureDefinition struct {
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Kind              string   `json:"kind"`
+	X                 float64  `json:"x"`
+	Y                 float64  `json:"y"`
+	Width             float64  `json:"width"`
+	Height            float64  `json:"height"`
+	InteractionRadius float64  `json:"interactionRadius,omitempty"`
+	Collision         bool     `json:"collision,omitempty"`
+	ReservesPlacement bool     `json:"reservesPlacement,omitempty"`
+	LocationID        string   `json:"locationId,omitempty"`
+	ShopID            string   `json:"shopId,omitempty"`
+	StorageRole       string   `json:"storageRole,omitempty"`
+	ItemKey           string   `json:"itemKey,omitempty"`
+	Tags              []string `json:"tags,omitempty"`
+}
+
 func LoadMap(path string) (GameMap, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -121,6 +140,9 @@ func LoadMap(path string) (GameMap, error) {
 		}
 	}
 	if err := validateLocations(loaded); err != nil {
+		return GameMap{}, err
+	}
+	if err := validateFixtures(loaded); err != nil {
 		return GameMap{}, err
 	}
 	npcIDs := map[string]bool{}
@@ -173,6 +195,52 @@ func LoadMap(path string) (GameMap, error) {
 		}
 	}
 	return loaded, nil
+}
+
+func validateFixtures(loaded GameMap) error {
+	fixtureIDs := map[string]bool{}
+	locationIDs := map[string]bool{}
+	for _, location := range loaded.Locations {
+		locationIDs[location.ID] = true
+	}
+	maxX := float64(loaded.Width * loaded.TileSize)
+	maxY := float64(loaded.Height * loaded.TileSize)
+	for _, fixture := range loaded.Fixtures {
+		if strings.TrimSpace(fixture.ID) == "" {
+			return fmt.Errorf("map %q has a fixture with blank id", loaded.ID)
+		}
+		if fixtureIDs[fixture.ID] {
+			return fmt.Errorf("map %q has duplicate fixture id %q", loaded.ID, fixture.ID)
+		}
+		fixtureIDs[fixture.ID] = true
+		if strings.TrimSpace(fixture.Name) == "" || strings.TrimSpace(fixture.Kind) == "" {
+			return fmt.Errorf("map %q fixture %q is missing required metadata", loaded.ID, fixture.ID)
+		}
+		if fixture.Kind != "chest" {
+			return fmt.Errorf("map %q fixture %q has unsupported kind %q", loaded.ID, fixture.ID, fixture.Kind)
+		}
+		if fixture.X < 0 || fixture.Y < 0 || fixture.X+fixture.Width > maxX || fixture.Y+fixture.Height > maxY {
+			return fmt.Errorf("map %q fixture %q is outside map bounds", loaded.ID, fixture.ID)
+		}
+		if fixture.Width <= 0 || fixture.Height <= 0 || fixture.InteractionRadius < 0 {
+			return fmt.Errorf("map %q fixture %q has invalid dimensions", loaded.ID, fixture.ID)
+		}
+		if fixture.LocationID != "" && !locationIDs[fixture.LocationID] {
+			return fmt.Errorf("map %q fixture %q references unknown location %q", loaded.ID, fixture.ID, fixture.LocationID)
+		}
+		if fixture.StorageRole != "" && fixture.StorageRole != "output" && fixture.StorageRole != "input" {
+			return fmt.Errorf("map %q fixture %q has unsupported storage role %q", loaded.ID, fixture.ID, fixture.StorageRole)
+		}
+		if fixture.StorageRole == "output" && (fixture.ShopID == "" || fixture.ItemKey == "" || fixture.LocationID == "") {
+			return fmt.Errorf("map %q fixture %q output storage is missing shop, item, or location metadata", loaded.ID, fixture.ID)
+		}
+		for _, tag := range fixture.Tags {
+			if strings.TrimSpace(tag) == "" {
+				return fmt.Errorf("map %q fixture %q has a blank tag", loaded.ID, fixture.ID)
+			}
+		}
+	}
+	return nil
 }
 
 func validateLocations(loaded GameMap) error {

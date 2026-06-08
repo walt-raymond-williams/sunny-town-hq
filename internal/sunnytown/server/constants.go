@@ -48,9 +48,11 @@ const (
 const (
 	worldObjectSourceNatural = "natural"
 	worldObjectSourcePlaced  = "placed"
+	worldObjectSourceFixture = "fixture"
 
 	worldObjectKindRockNode   = "rock_node"
 	worldObjectKindStoneBlock = "stone_block"
+	worldObjectKindChest      = "chest"
 )
 
 func (room *room) step(dt float64, now time.Time) {

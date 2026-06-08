@@ -189,6 +189,10 @@ func (object *worldObject) worldObjectSnapshot() worldObjectSnapshot {
 		Source:            object.source,
 		ItemKey:           object.itemKey,
 		ResourceKind:      object.resourceKind,
+		Name:              object.name,
+		LocationID:        object.locationID,
+		ShopID:            object.shopID,
+		StorageRole:       object.storageRole,
 		X:                 object.x,
 		Y:                 object.y,
 		Width:             object.width,
@@ -203,5 +207,6 @@ func (object *worldObject) worldObjectSnapshot() worldObjectSnapshot {
 		GridX:             object.gridX,
 		GridY:             object.gridY,
 		PlacedByAppUserID: object.placedByAppUserID,
+		Tags:              append([]string(nil), object.tags...),
 	}
 }
