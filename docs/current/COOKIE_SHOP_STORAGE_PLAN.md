@@ -32,6 +32,9 @@ Current architecture decision:
 - The stable gameplay owner is the shop/storage, not the NPC.
 - Do not add NPC-held inventory for Cookie Keeper unless a future gameplay requirement truly needs character-carried items.
 - Treat current `shop_stock_item` as the durable stock backing the physical Cookie Shop output chest. The chest fixture is presentation/routing/interaction metadata, not a second inventory source.
+- Recipes must be shared HQ-owned gameplay definitions, not Cookie Keeper-specific production rules.
+- Player crafting and NPC/shop production should use the same recipe catalog and execution semantics, with different storage endpoints.
+- Workstations, such as a future Cookie Shop stove, should be the recipe interaction point. Chests remain storage anchors.
 - Cookie production does not require ingredients yet. Cookie Keeper can produce as long as he is working in the shop.
 
 ## Slice: Logical Output Chest Capacity
@@ -62,18 +65,30 @@ Suggested tests:
 - Purchase after full stock decrements below capacity.
 - UI shows `current / 64` and disables Buy at `0`.
 
-## Immediate Next Slice: HQ-Owned Input Storage And Recipe Rules
+## Immediate Next Slice: Shared Recipe Execution Foundation
 
 Recommended next step:
 
-- Add HQ-owned shop input storage and recipe/input consumption rules for Cookie Shop production.
+- Refactor the existing HQ student crafting recipe code into a shared recipe catalog/execution foundation.
+- Preserve current player crafting behavior for `stone_block`: consume from `student_inventory_item`, output to `student_inventory_item`, and keep existing APIs compatible.
+- Model recipes as actor-agnostic definitions: inputs, output, quantity, and later station/workstation requirements.
+- Add execution seams for different storage endpoints without implementing all endpoints at once:
+  - student inventory input -> student inventory output for player crafting,
+  - shop input storage -> shop output stock for NPC/store production later,
+  - possible future player-at-shop mode after ownership transfer rules are designed.
+- Do not bake cookie recipe consumption directly into `CommitNPCJobProduction`.
 - Treat `cookie-shop-input-chest` as the physical interaction/ownership anchor for future ingredients, not as a local inventory source.
-- Define cookie recipe requirements in HQ-owned inventory/economy code.
-- Change Cookie Keeper production so HQ atomically consumes required inputs and increments output stock when inputs are available.
-- Define a clear "production blocked: missing inputs" result for the NPC production path before mutating output stock.
+- Define a clear future "production blocked: missing inputs" result for the NPC production path before mutating output stock.
 - Keep chest actions such as withdraw/deposit deferred until the sale path and ownership transfer rules are explicit.
 - The alternate branch is teacher lesson prep durable progress if broader NPC job gameplay becomes the priority.
 - Do not create a second fixture inventory source; keep durable quantities in HQ-owned stock/inventory tables.
+
+Acceptance criteria for this next slice:
+
+- Existing student crafting tests still pass without frontend API changes.
+- Recipe definitions can be reused by non-student execution code without depending on a player `app_user_id`.
+- The code shape makes the later Cookie Shop path explicit: consume ingredients from HQ-owned shop input storage and produce cookies into HQ-owned shop output stock.
+- No NPC production behavior changes yet unless the shared executor and storage endpoints are ready.
 
 ## Slice: Authored Cookie Shop Area
 
@@ -165,18 +180,22 @@ Implemented notes:
 
 Goal: require ingredients before Cookie Keeper can produce cookies.
 
-Deferred intentionally. Do not implement this before output storage capacity and physical ownership are stable.
+Deferred intentionally. Do not implement this before the shared recipe execution foundation is stable.
 
 Recommended future shape:
 
 - Add HQ-owned Cookie Shop input storage.
-- Define cookie recipe requirements in HQ-owned inventory/crafting/economy rules.
-- Sunny Town can validate that Cookie Keeper is working, but HQ should decide whether required inputs exist and consume them atomically with production output.
+- Add a Cookie Shop workstation fixture, likely a stove/oven, as the player/NPC recipe interaction point.
+- Define cookie recipe requirements in the shared HQ recipe catalog.
+- Sunny Town can validate that Cookie Keeper is working at the right authored location/workstation, but HQ should decide whether required inputs exist and consume them atomically with production output.
 - If ingredients are missing, record/debug "worked but no inputs" or "production blocked" without mutating output stock.
+- Player crafting at a stove should call the same recipe definition and execution semantics, using player inventory or explicitly designed shop-storage transfer rules.
 
 ## Non-Goals For Current Work
 
 - Do not persist raw NPC drive values, routes, goals, path indexes, or live position for this feature.
 - Do not create general NPC inventory for Cookie Keeper.
 - Do not require ingredients before the output storage loop is stable.
+- Do not create a separate Cookie Keeper-only recipe system.
+- Do not put recipe state or ingredient quantities in Sunny Town fixture/client state.
 - Do not build a broad building/ownership system before the Cookie Shop use case proves the needed fields.
