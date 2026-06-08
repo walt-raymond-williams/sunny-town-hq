@@ -28,6 +28,7 @@ Current implemented baseline:
 - NPCs use deterministic UTC schedule phases (`morning`, `day`, `evening`, `night`) to apply selection-time drive pressure for strong routine anchors.
 - Schedule pressure is visible in `/debug/npcs`, and urgent raw needs still override scheduled behavior.
 - Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
+- ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -268,14 +269,14 @@ The first movement/drives implementation, tuning slices, runtime routine anchors
 
 Recommended next order:
 
-1. Finish ND-9 persistence decisions and any durable snapshot endpoints that are actually needed.
-2. ND-10: Resource/job production loops.
-3. ND-11: Social relationship effects.
+1. ND-10: Resource/job production loops, expressed as durable gameplay outcomes rather than raw movement-controller persistence.
+2. ND-11: Social relationship effects.
+3. Later durable routine state only when there are stable gameplay concepts to store, such as job/home assignments, relationships, or production outputs.
 
 Rationale:
 
-- Runtime anchors and simple schedule pressure now make it clearer which state is worth saving.
-- Persistence and coarse catch-up should come before production loops so no-player behavior does not diverge wildly from online behavior.
+- Runtime anchors and simple schedule pressure clarify the boundary between runtime controller state and durable gameplay state.
+- Bounded no-player catch-up is in place, so production loops can be designed without relying on full per-tick simulation while nobody is connected.
 - Resource/job production and social systems should wait until the basic routine loop is readable and debuggable.
 
 ### Slice ND-7: Runtime Routine Anchors
@@ -377,17 +378,24 @@ Suggested tests:
 
 ### Slice ND-9: Persistence And No-Player Coarse Catch-Up
 
-Status: `Partially implemented`
+Status: `Implemented`
 
 Goal: decide which NPC routine state should survive process restarts and how much simulation should advance when no players are connected.
 
 Implementation notes:
 
 - Do this after ND-7 and ND-8 clarify what runtime state is worth saving.
-- Likely durable candidates:
-  - home/work anchor assignments if they stop being purely map-authored.
-  - coarse drive snapshots.
-  - last known map/position if NPC continuity matters across restart.
+- Decision for current architecture:
+  - Do not persist raw drive snapshots yet.
+  - Do not persist current NPC map/position/facing yet.
+  - Do not persist exact movement-controller state, including current goal, route path, path index, focus windows, reevaluation windows, arrival grace, or failed-target cooldowns.
+  - Continue deriving current anchors from authored map locations at runtime.
+  - Add HQ-owned persistence only when the state represents a stable gameplay concept rather than a controller implementation detail.
+- Future durable candidates, once the related gameplay exists:
+  - job/work/home assignments if players or systems can change them.
+  - social relationship state and relationship events.
+  - production outputs, resource reservations, inventory/economy effects, and other authoritative results.
+  - schedule templates or durable routine preferences if they become authored/gameplay data rather than inferred runtime bias.
 - Keep transient controller state, such as exact route path, focus windows, and path indexes, in memory unless a strong reason appears.
 - Coarse catch-up should be bounded and approximate, not full per-tick simulation while nobody is connected.
 
@@ -399,18 +407,14 @@ Implemented notes:
 - Catch-up clears transient route/goal/focus state so normal goal selection can resume from fresh drive values.
 - Initial test worlds and rooms that have never had players still step NPCs normally, preserving deterministic unit-test ergonomics.
 - No HQ persistence was added in this sub-slice.
-
-Remaining notes:
-
-- Decide whether drive snapshots should survive Sunny Town process restarts.
-- If durable drive snapshots are needed, add HQ-owned internal endpoints and Sunny Town client calls; Sunny Town must not write HQ storage directly.
-- Persist durable home/work assignments only if anchors stop being purely map-authored/runtime-derived.
-- Keep exact route paths, path indexes, focus windows, failed-target cooldowns, and other transient controller state in Sunny Town memory unless a later feature proves they need durability.
+- Architecture decision: raw drives, positions, anchors, and controller state stay runtime-only for now because they are still movement implementation details.
+- Future persistence should attach to durable NPC characters through HQ-owned APIs and should store assignments, relationships, production outcomes, or other stable gameplay records.
+- This avoids cementing the current drive tuning model into schema that would likely need replacement once jobs, housing, production, and relationships are real systems.
 
 Acceptance criteria:
 
-- A documented decision exists for which NPC drive/routine state is durable versus transient. (`Pending`)
-- If durable state is added, it belongs to HQ-owned storage and Sunny Town writes through service-authenticated internal APIs. (`Pending`)
+- A documented decision exists for which NPC drive/routine state is durable versus transient. (`Implemented`)
+- If durable state is added, it belongs to HQ-owned storage and Sunny Town writes through service-authenticated internal APIs. (`Implemented as architecture decision; no new persistence needed now`)
 - No-player catch-up is bounded and does not run full path simulation while nobody is connected. (`Implemented`)
 - Exact path/controller state is not persisted unless there is a clear reason. (`Implemented for current runtime behavior`)
 
@@ -419,7 +423,43 @@ Suggested tests:
 - Coarse catch-up advances drive values by a capped amount after an offline interval. (`Implemented`)
 - Catch-up does not attempt exact portal/path movement for long offline intervals. (`Implemented`)
 - Catch-up can replenish a drive when the NPC is already standing at a matching location. (`Implemented`)
-- Durable save/load, if added, restores only chosen durable fields. (`Pending`)
+- Durable save/load is intentionally deferred until durable gameplay fields exist; do not add a raw drive snapshot table in the current architecture.
+
+### Slice ND-10: Resource And Job Production Loops
+
+Status: `Next`
+
+Goal: let NPC routines produce durable gameplay outcomes without persisting raw movement-controller internals.
+
+Architecture direction:
+
+- HQ owns durable economy, inventory, assignment, and production-result state.
+- Sunny Town owns live simulation, pathing, NPC controller state, and server-side validation of what happened in the realtime world.
+- Do not persist NPC drive values, current route, current goal, path index, focus windows, or exact live position as part of production.
+- Production should be expressed as durable gameplay facts or events, such as "NPC worked at assigned station and produced X" or "job progress advanced by Y", not as "NPC work drive was 37.2".
+- Use service-authenticated internal HQ APIs with `X-HQ-Service-Secret` for any durable production writes.
+
+Recommended first sub-slice:
+
+- Identify one small job loop tied to existing authored work anchors, such as Cookie Keeper at a shop/work counter or Teacher at the classroom work location.
+- Add runtime production eligibility in Sunny Town: NPC is at a matching work anchor/location, has a work goal or work-compatible routine state, and enough time has elapsed.
+- Emit a bounded production/progress event to HQ only if there is already a clear HQ domain owner for the resulting state. If not, first add the HQ domain/API for that stable gameplay outcome.
+- Keep no-player behavior coarse: production can use bounded elapsed time, but should not require exact per-tick path simulation while nobody is connected.
+
+Acceptance criteria:
+
+- A first NPC job loop has a clear durable gameplay output or progress record.
+- Durable writes go through HQ-owned service-authenticated APIs.
+- The implementation does not persist raw movement-controller state.
+- The loop remains bounded during no-player catch-up/offline intervals.
+- Debug output or logs make it possible to understand why production did or did not occur.
+
+Suggested tests:
+
+- NPC at a valid work anchor can produce or advance job progress after enough elapsed time.
+- NPC away from a valid work location does not produce.
+- No-player/coarse elapsed time is capped or otherwise bounded for production.
+- HQ internal API/service client tests cover durable production writes, if a new endpoint is added.
 
 ## Feature Intent
 
@@ -899,7 +939,8 @@ Completed order:
 
 Current continuation order:
 
-1. Finish Slice ND-9 by deciding and implementing any durable drive/anchor snapshot persistence that is worth saving across Sunny Town restarts.
-2. Later: resource/job production loops and social relationship effects.
+1. Slice ND-10: resource/job production loops, using HQ-owned durable outcomes where needed.
+2. Slice ND-11: social relationship effects.
+3. Later: durable routine assignments/preferences only when they are stable gameplay concepts, not raw movement-controller internals.
 
 The key dependency is identity: movement, drives, jobs, and home/work assignments should attach to durable NPC characters, not anonymous map fixtures.
