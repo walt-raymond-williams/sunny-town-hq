@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after creating issue #23.
+Snapshot refreshed: 2026-06-09 after creating issue #24.
 
 ### Closed
 
@@ -75,74 +75,51 @@ Snapshot refreshed: 2026-06-09 after creating issue #23.
   Completed in `20bac63`.  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/19
 
+- #20 Add stats-ready character panel  
+  Completed in `19e9957`.  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/20
+
 - #21 Expand E menu to use the play area  
   Completed in `985ef34`.  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/21
 
-### Open
-
-- #20 Add stats-ready character panel  
-  Status: `status:in-progress`  
-  Blocked by: #19 and #21, both closed  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/20
-
 - #22 Move equipment slots into character preview card  
-  Status: open follow-up / ready after #20 coordination  
-  Related: #19, #20, #17  
-  Handoff: `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`  
+  Completed in `c2c5247`.  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/22
 
 - #23 Fix stone block crafting failure after slotted inventory migration  
-  Status: `status:ready` / high-priority correctness bug  
-  Related: #10, #13, #15, future crafting panel redesign  
-  Handoff: `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`  
+  Completed in `8da662b`.  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/23
+
+### Open
+
+- #24 Redesign crafting panel for inventory menu  
+  Status: `status:ready`  
+  Blocked by: #12, #13, and #23, all closed  
+  Related: future storage-context crafting and Cookie Shop input storage  
+  Handoff: `docs/SUNNY_TOWN_CRAFTING_PANEL_REDESIGN_HANDOFF.md`  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/24
 
 ## Recommended Next Management Step
 
-Start issue #23:
+Start issue #24:
 
-`Fix stone block crafting failure after slotted inventory migration`
-
-Why:
-
-- Manual testing found that crafting a `stone_block` can fail with `crafting could not be completed` even when the player appears to have enough rocks.
-- This is a gameplay correctness issue in the inventory/crafting loop, not just presentation polish.
-- It likely touches the slotted-inventory transition boundary: recipe availability currently reads aggregate inventory while crafting mutation consumes from slots.
-- The future crafting panel redesign should build on reliable crafting behavior.
-- Handoff: `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`.
-
-After #23, continue with the character-panel UI work:
-
-`Add stats-ready character panel`
+`Redesign crafting panel for inventory menu`
 
 Why:
 
-- The character preview shell landed and is verified.
-- The expanded play-area E menu landed and is verified.
-- The stats-ready panel directly follows the preview work now that the menu has room.
-- This preserves room for future activity-driven progression without adding fake stats or manual point allocation.
-- It is a small frontend slice before larger crafting, container, and tabbed-menu work.
-- Handoff: `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`.
-
-Follow-up UI polish now tracked:
-
-`Move equipment slots into character preview card` (#22)
-
-Why:
-
-- Manual review found the gear/accessory/tool slots listed below the character image, which wastes vertical space and reads poorly.
-- The desired layout is a compact equipment rail inside the character preview card, preferably to the left of the avatar.
-- This should generally wait for #20 or coordinate with it, because both touch the same character-panel surface.
-- Handoff: `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`.
+- The inventory grid, drag/drop, hotbar, equipment, expanded E menu, character panel, and crafting correctness fixes have landed.
+- Crafting is now reliable enough to polish the panel without building on ambiguous backend behavior.
+- This keeps the player-facing E menu moving toward the final game-style inventory experience.
+- The slice is frontend-focused and does not block on storage-aware crafting.
+- Handoff: `docs/SUNNY_TOWN_CRAFTING_PANEL_REDESIGN_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 24 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 23 --comments
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 20 --comments
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 22 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -166,3 +143,4 @@ git pull
 - `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`
 - `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`
 - `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`
+- `docs/SUNNY_TOWN_CRAFTING_PANEL_REDESIGN_HANDOFF.md`
