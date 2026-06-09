@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after issue #16 creation.
+Snapshot refreshed: 2026-06-09 after issue #17 creation.
 
 ### Closed
 
@@ -44,32 +44,37 @@ Snapshot refreshed: 2026-06-09 after issue #16 creation.
 - #15 Add inventory drag/drop state and API integration  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/15
 
+- #16 Replace hotbar assignment buttons with drop targets  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/16
+
 ### Open
 
-- #16 Replace hotbar assignment buttons with drop targets  
+- #17 Replace equipment buttons with drop targets  
   Status: `status:ready`  
   Blocked by: #15, closed  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/16
+  Related precedent: #16, closed  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/17
 
 ## Recommended Next Management Step
 
-Start issue #16:
+Start issue #17:
 
-`Replace hotbar assignment buttons with drop targets`
+`Replace equipment buttons with drop targets`
 
 Why:
 
 - The first inventory grid foundation slice and slot-to-slot drag/drop are complete.
-- Hotbar assignment already has a durable backend API.
-- This is the smallest next direct-manipulation slice.
-- It removes the most awkward `Slot N` hotbar assignment path from the critical player workflow.
-- Handoff: `docs/SUNNY_TOWN_HOTBAR_DROP_TARGET_HANDOFF.md`.
+- Hotbar drop targets are complete, giving a frontend pattern for compact drop slots.
+- Equipment assignment already has durable backend APIs and server-side compatibility validation.
+- This removes the other awkward legacy button flow from the critical player workflow.
+- It unblocks the later character preview shell.
+- Handoff: `docs/SUNNY_TOWN_EQUIPMENT_DROP_TARGET_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 16 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 17 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -86,3 +91,4 @@ git pull
 - `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`
 - `docs/SUNNY_TOWN_INVENTORY_DRAG_DROP_HANDOFF.md`
 - `docs/SUNNY_TOWN_HOTBAR_DROP_TARGET_HANDOFF.md`
+- `docs/SUNNY_TOWN_EQUIPMENT_DROP_TARGET_HANDOFF.md`
