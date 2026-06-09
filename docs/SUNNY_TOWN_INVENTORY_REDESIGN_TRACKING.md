@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after creating issue #22.
+Snapshot refreshed: 2026-06-09 after creating issue #23.
 
 ### Closed
 
@@ -92,9 +92,27 @@ Snapshot refreshed: 2026-06-09 after creating issue #22.
   Handoff: `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/22
 
+- #23 Fix stone block crafting failure after slotted inventory migration  
+  Status: `status:ready` / high-priority correctness bug  
+  Related: #10, #13, #15, future crafting panel redesign  
+  Handoff: `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/23
+
 ## Recommended Next Management Step
 
-Start issue #20:
+Start issue #23:
+
+`Fix stone block crafting failure after slotted inventory migration`
+
+Why:
+
+- Manual testing found that crafting a `stone_block` can fail with `crafting could not be completed` even when the player appears to have enough rocks.
+- This is a gameplay correctness issue in the inventory/crafting loop, not just presentation polish.
+- It likely touches the slotted-inventory transition boundary: recipe availability currently reads aggregate inventory while crafting mutation consumes from slots.
+- The future crafting panel redesign should build on reliable crafting behavior.
+- Handoff: `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`.
+
+After #23, continue with the character-panel UI work:
 
 `Add stats-ready character panel`
 
@@ -122,6 +140,7 @@ Why:
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 23 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 20 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 22 --comments
 git checkout codex/inventory-redesign-dev
@@ -146,3 +165,4 @@ git pull
 - `docs/SUNNY_TOWN_E_MENU_PLAY_AREA_HANDOFF.md`
 - `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`
 - `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`
+- `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`
