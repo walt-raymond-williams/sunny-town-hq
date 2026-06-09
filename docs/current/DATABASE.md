@@ -36,6 +36,7 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `inventory_item_type`: inventory catalog
 - `student_inventory_item`: current per-student item quantities
 - `student_inventory_ledger`: idempotent resource and inventory event records
+- `shop_input_storage_item`: durable shop-owned ingredient/input storage quantities
 - `student_equipped_item`: current gear/accessory/tool equipment
 - `student_hotbar_slot`: current student hotbar slots
 - `shop_stock_item`: current HQ-owned shop item quantities
@@ -62,6 +63,7 @@ deploy/postgres/migrations/
   0008_sunny_town_npc_job_production.sql
   0009_shop_stock.sql
   0010_seed_cookie_keeper_shop_stock.sql
+  0011_shop_input_storage.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.

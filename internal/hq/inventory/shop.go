@@ -16,6 +16,7 @@ var ErrInsufficientShopStock = errors.New("not enough shop stock")
 
 const CookieKeeperShopID = "cookie-keeper-shop"
 const CookieKeeperCookieStockCapacity = 64
+const CookieKeeperInputStorageCapacity = 64
 
 type ShopStockEventRequest struct {
 	EventID string
@@ -45,6 +46,18 @@ type ShopStockItemResponse struct {
 type ShopStockResponse struct {
 	ShopID string                  `json:"shopId"`
 	Items  []ShopStockItemResponse `json:"items"`
+}
+
+type ShopInputStorageItemResponse struct {
+	ItemKey  string `json:"itemKey"`
+	Name     string `json:"name"`
+	Quantity int    `json:"quantity"`
+}
+
+type ShopInputStorageResponse struct {
+	ShopID   string                         `json:"shopId"`
+	Capacity int                            `json:"capacity"`
+	Items    []ShopInputStorageItemResponse `json:"items"`
 }
 
 func EnsureStudentWallet(ctx context.Context, db *pgxpool.Pool, userID int64) (int, error) {
@@ -308,4 +321,141 @@ func ConsumeShopStockItem(ctx context.Context, querier Querier, shopID string, i
 		return false, err
 	}
 	return result.RowsAffected() > 0, nil
+}
+
+func LoadShopInputStorage(ctx context.Context, querier Loader, shopID string) (ShopInputStorageResponse, error) {
+	shopID = strings.TrimSpace(shopID)
+	if shopID == "" {
+		return ShopInputStorageResponse{}, errors.New("shop input storage shop_id is required")
+	}
+	if shopID != CookieKeeperShopID {
+		return ShopInputStorageResponse{}, errors.New("unsupported shop input storage")
+	}
+
+	rows, err := querier.Query(
+		ctx,
+		`
+			select iit.key,
+				iit.name,
+				sisi.quantity
+			from shop_input_storage_item sisi
+			join inventory_item_type iit on iit.id = sisi.item_type_id
+			where sisi.shop_id = $1
+				and sisi.quantity > 0
+			order by iit.id
+		`,
+		shopID,
+	)
+	if err != nil {
+		return ShopInputStorageResponse{}, err
+	}
+	defer rows.Close()
+
+	response := ShopInputStorageResponse{
+		ShopID:   shopID,
+		Capacity: shopInputStorageCapacity(shopID),
+		Items:    []ShopInputStorageItemResponse{},
+	}
+	for rows.Next() {
+		var item ShopInputStorageItemResponse
+		if err := rows.Scan(&item.ItemKey, &item.Name, &item.Quantity); err != nil {
+			return ShopInputStorageResponse{}, err
+		}
+		response.Items = append(response.Items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return ShopInputStorageResponse{}, err
+	}
+	return response, nil
+}
+
+func IncrementShopInputStorageItem(ctx context.Context, querier rowQuerier, shopID string, itemKey string, quantity int) (bool, int, error) {
+	shopID = strings.TrimSpace(shopID)
+	itemKey = strings.TrimSpace(itemKey)
+	if shopID == "" || itemKey == "" || quantity < 1 {
+		return false, 0, errors.New("shop input storage increment is missing required fields")
+	}
+	if shopID != CookieKeeperShopID {
+		return false, 0, errors.New("unsupported shop input storage")
+	}
+	capacity := shopInputStorageCapacity(shopID)
+
+	var accepted bool
+	var totalQuantity int
+	err := querier.QueryRow(
+		ctx,
+		`
+			with item_type as (
+				select id
+				from inventory_item_type
+				where key = $2
+			),
+			shop_lock as (
+				select pg_advisory_xact_lock(hashtext('shop-input-storage:' || $1))
+			),
+			current_total as (
+				select coalesce(sum(quantity), 0)::integer as quantity
+				from shop_input_storage_item, shop_lock
+				where shop_id = $1
+			),
+			upserted as (
+				insert into shop_input_storage_item (shop_id, item_type_id, quantity)
+				select $1, item_type.id, $3
+				from item_type, current_total
+				where current_total.quantity + $3 <= $4
+				on conflict (shop_id, item_type_id) do update
+				set quantity = shop_input_storage_item.quantity + excluded.quantity,
+					updated_at = now()
+				returning quantity
+			)
+			select exists(select 1 from upserted) as accepted,
+				(
+					select quantity from current_total
+				) + case when exists(select 1 from upserted) then $3 else 0 end as total_quantity
+		`,
+		shopID,
+		itemKey,
+		quantity,
+		capacity,
+	).Scan(&accepted, &totalQuantity)
+	return accepted, totalQuantity, err
+}
+
+func ConsumeShopInputStorageItem(ctx context.Context, querier Querier, shopID string, itemKey string, quantity int) (bool, error) {
+	shopID = strings.TrimSpace(shopID)
+	itemKey = strings.TrimSpace(itemKey)
+	if shopID == "" || itemKey == "" || quantity < 1 {
+		return false, errors.New("shop input storage consume is missing required fields")
+	}
+	if shopID != CookieKeeperShopID {
+		return false, errors.New("unsupported shop input storage")
+	}
+
+	result, err := querier.Exec(
+		ctx,
+		`
+			update shop_input_storage_item sisi
+			set quantity = quantity - $3,
+				updated_at = now()
+			from inventory_item_type iit
+			where sisi.item_type_id = iit.id
+				and sisi.shop_id = $1
+				and iit.key = $2
+				and sisi.quantity >= $3
+		`,
+		shopID,
+		itemKey,
+		quantity,
+	)
+	if err != nil {
+		return false, err
+	}
+	return result.RowsAffected() > 0, nil
+}
+
+func shopInputStorageCapacity(shopID string) int {
+	if shopID == CookieKeeperShopID {
+		return CookieKeeperInputStorageCapacity
+	}
+	return 0
 }

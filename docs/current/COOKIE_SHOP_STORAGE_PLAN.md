@@ -39,13 +39,14 @@ Current architecture decision:
 - HQ crafting now has a shared recipe catalog/execution foundation in `internal/hq/inventory/crafting.go`.
 - The current `stone_block` player recipe still uses the existing `/api/student/crafting/...` behavior, but execution is routed through storage operations instead of being hard-coded to student inventory.
 - Shared recipe execution is intentionally storage-agnostic: current student crafting adapts `ConsumeStudentItem` / `IncrementStudentItem`, while future Cookie Shop work should add shop input/output storage operations.
+- Inventory redesign discovery in `docs/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md` agrees with this direction: chest fixtures are interaction metadata, durable quantities live in HQ, and future grid/container UI should wrap explicit storage endpoints rather than create Sunny Town-local inventory state.
 
 Next task for a fresh agent:
 
-- Start with HQ-owned Cookie Shop input storage, likely in `internal/hq/inventory` plus a new migration.
-- Add durable input storage keyed by shop/storage identity, not by NPC identity and not by Sunny Town fixture state.
+- Start with wiring shop input storage into shared recipe execution only after blocked-production behavior is designed.
+- The current shop input table is `shop_input_storage_item`: shop-owned, item-quantity based, and capacity-limited to `64` total units for `cookie-keeper-shop`.
 - Keep the existing output stock table as the saleable/output side; do not create a duplicate output inventory source.
-- Design input storage so a future recipe executor can consume ingredients from shop input storage and produce into shop output stock in one HQ-owned transaction.
+- Use the input storage consume operation as the future recipe executor input adapter, and output stock operations as the future output adapter.
 - Do not add Cookie Keeper-held inventory.
 - Do not add chest withdraw/deposit UI until ownership/transfer rules are explicit.
 - Do not add a cookie recipe to NPC production until shop input storage operations and blocked-production behavior are ready.
@@ -126,6 +127,8 @@ Implemented notes:
 
 ## Immediate Next Slice: HQ-Owned Shop Input Storage
 
+Status: `Implemented`
+
 Recommended next step:
 
 - Add durable Cookie Shop input storage in HQ for ingredients that will eventually feed recipes.
@@ -147,6 +150,33 @@ Suggested implementation shape:
 - Add `internal/hq/inventory` methods for loading and incrementing/decrementing shop input storage.
 - Keep any seed data small and explicit if needed for tests; avoid pretending ingredients are required for Cookie Keeper production in this slice.
 - Add backend tests for persistence, capacity or validation, and insufficient input handling at the storage operation level.
+
+Implemented notes:
+
+- Added `deploy/postgres/migrations/0011_shop_input_storage.sql` with `shop_input_storage_item`.
+- Added `CookieKeeperInputStorageCapacity = 64` as the first input chest capacity rule.
+- Added `LoadShopInputStorage`, `IncrementShopInputStorageItem`, and `ConsumeShopInputStorageItem` in `internal/hq/inventory/shop.go`.
+- Input storage is scoped by shop ID and item type, not by NPC identity or fixture-local state.
+- Incrementing input storage rejects writes that would exceed the total input capacity; it does not partially fill.
+- Input storage increment uses a per-shop transaction advisory lock so concurrent capacity checks serialize.
+- This slice intentionally does not expose player deposit/withdraw UI, add a cookie recipe, or change NPC production behavior.
+
+## Immediate Next Slice: Recipe-Aware Shop Production Design
+
+Recommended next step:
+
+- Design the blocked-production semantics before consuming ingredients from Cookie Keeper production.
+- Decide what HQ records or returns when Cookie Keeper works but the shop input storage lacks required ingredients.
+- Add a cookie recipe to the shared catalog only when it can be executed through storage adapters, not as a Cookie Keeper-only rule.
+- Create a shop recipe storage adapter that consumes from `shop_input_storage_item` and produces to `shop_stock_item` in one transaction.
+- Keep the future stove/workstation fixture in mind, but do not require it unless the slice explicitly includes player/NPC workstation interaction.
+
+Acceptance criteria for this next slice:
+
+- Missing ingredients do not mutate output stock.
+- Successful recipe execution consumes input storage and increments output stock atomically.
+- NPC production ledger behavior remains idempotent and understandable when production is blocked.
+- Existing no-ingredient Cookie Keeper behavior changes only when the blocked/success path is fully covered by tests.
 
 ## Slice: Authored Cookie Shop Area
 

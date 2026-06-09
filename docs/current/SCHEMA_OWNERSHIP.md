@@ -89,8 +89,11 @@ Tables, constraints, and indexes:
 - `shop_stock_ledger_shop_id_check`
 - `shop_stock_ledger_delta_nonzero`
 - `shop_stock_ledger_shop_idx`
+- `shop_input_storage_item`
+- `shop_input_storage_item_shop_id_check`
+- `shop_input_storage_item_quantity_nonnegative`
 
-Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`
+Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`
 
 ### Pet
 

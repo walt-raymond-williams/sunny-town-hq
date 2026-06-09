@@ -309,6 +309,100 @@ func TestCommitShopStockDeltaClampsAtCapacity(t *testing.T) {
 	}
 }
 
+func TestShopInputStoragePersistsAndLoadsItems(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	storage, err := LoadShopInputStorage(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load empty input storage: %v", err)
+	}
+	if storage.ShopID != CookieKeeperShopID || storage.Capacity != CookieKeeperInputStorageCapacity || len(storage.Items) != 0 {
+		t.Fatalf("empty input storage = %#v, want shop, capacity, and no items", storage)
+	}
+
+	accepted, total, err := IncrementShopInputStorageItem(ctx, db, CookieKeeperShopID, "rock", 12)
+	if err != nil {
+		t.Fatalf("increment input storage: %v", err)
+	}
+	if !accepted || total != 12 {
+		t.Fatalf("accepted=%v total=%d, want true and 12", accepted, total)
+	}
+
+	storage, err = LoadShopInputStorage(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load input storage: %v", err)
+	}
+	if len(storage.Items) != 1 || storage.Items[0].ItemKey != "rock" || storage.Items[0].Quantity != 12 {
+		t.Fatalf("input storage = %#v, want 12 rocks", storage)
+	}
+}
+
+func TestShopInputStorageCapacityRejectsOverflow(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	accepted, total, err := IncrementShopInputStorageItem(ctx, db, CookieKeeperShopID, "rock", CookieKeeperInputStorageCapacity)
+	if err != nil {
+		t.Fatalf("fill input storage: %v", err)
+	}
+	if !accepted || total != CookieKeeperInputStorageCapacity {
+		t.Fatalf("accepted=%v total=%d, want true and capacity", accepted, total)
+	}
+
+	accepted, total, err = IncrementShopInputStorageItem(ctx, db, CookieKeeperShopID, "crystal", 1)
+	if err != nil {
+		t.Fatalf("overflow input storage: %v", err)
+	}
+	if accepted || total != CookieKeeperInputStorageCapacity {
+		t.Fatalf("accepted=%v total=%d, want false and capacity", accepted, total)
+	}
+
+	storage, err := LoadShopInputStorage(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load input storage after overflow: %v", err)
+	}
+	if len(storage.Items) != 1 || storage.Items[0].ItemKey != "rock" || storage.Items[0].Quantity != CookieKeeperInputStorageCapacity {
+		t.Fatalf("input storage after overflow = %#v, want only capped rocks", storage)
+	}
+}
+
+func TestConsumeShopInputStorageItem(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if accepted, _, err := IncrementShopInputStorageItem(ctx, db, CookieKeeperShopID, "rock", 5); err != nil || !accepted {
+		t.Fatalf("seed input storage accepted=%v err=%v, want accepted", accepted, err)
+	}
+
+	consumed, err := ConsumeShopInputStorageItem(ctx, db, CookieKeeperShopID, "rock", 4)
+	if err != nil {
+		t.Fatalf("consume input storage: %v", err)
+	}
+	if !consumed {
+		t.Fatalf("consumed = false, want true")
+	}
+
+	consumed, err = ConsumeShopInputStorageItem(ctx, db, CookieKeeperShopID, "rock", 2)
+	if err != nil {
+		t.Fatalf("consume missing input storage: %v", err)
+	}
+	if consumed {
+		t.Fatalf("consumed = true, want false for insufficient input storage")
+	}
+
+	storage, err := LoadShopInputStorage(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load input storage after consume: %v", err)
+	}
+	if len(storage.Items) != 1 || storage.Items[0].Quantity != 1 {
+		t.Fatalf("input storage after consume = %#v, want 1 rock", storage)
+	}
+}
+
 func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
@@ -667,6 +761,15 @@ func testInventoryDB(t *testing.T) (*pgxpool.Pool, func()) {
 			metadata jsonb not null default '{}'::jsonb,
 			created_at timestamptz not null default now(),
 			constraint shop_stock_ledger_delta_nonzero check (delta <> 0)
+		)`,
+		`create table shop_input_storage_item (
+			shop_id text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			quantity integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (shop_id, item_type_id),
+			constraint shop_input_storage_item_quantity_nonnegative check (quantity >= 0)
 		)`,
 		`create table student_equipped_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
