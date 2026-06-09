@@ -19,53 +19,54 @@ Workflow:
 
 ## Current GitHub Issues
 
+Snapshot refreshed: 2026-06-09.
+
 ### Closed
 
 - #8 Add item metadata needed for grid inventory  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/8
 
-- #12 Build reusable inventory slot component  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/12
-
-### Open
-
 - #9 Design slotted player inventory schema and compatibility plan  
-  Status: `status:in-progress`  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/9
 
 - #10 Implement slotted player inventory persistence  
-  Status: `status:blocked`  
-  Blocked by: #9  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/10
 
 - #11 Add inventory stack move, swap, and merge API  
-  Status: `status:blocked`  
-  Blocked by: #10  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/11
 
+- #12 Build reusable inventory slot component  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/12
+
 - #13 Render Sunny Town inventory as a grid  
-  Status: `status:blocked`  
-  Blocked by: #10 and #12  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/13
+
+### Open
+
+- #15 Add inventory drag/drop state and API integration  
+  Status: `status:ready`  
+  Blocked by: #11 and #13, both closed  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/15
 
 ## Recommended Next Management Step
 
-Complete issue #9:
+Start issue #15:
 
-`Design slotted player inventory schema and compatibility plan`
+`Add inventory drag/drop state and API integration`
 
 Why:
 
-- It unblocks the backend implementation path.
-- #13 remains blocked until slotted inventory persistence exists.
-- #12 is closed, so the frontend component foundation is available or expected to be available on the integration branch.
-- #9 is now in progress and should produce `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`.
+- The first inventory grid foundation slice is complete.
+- The HQ move/swap/merge API exists.
+- The frontend renders slotted inventory but still behaves like a click-selected grid with legacy buttons.
+- Drag/drop is the next bridge toward hotbar and equipment drop targets.
+- Handoff: `docs/SUNNY_TOWN_INVENTORY_DRAG_DROP_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 9 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 15 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -79,3 +80,5 @@ git pull
 - `docs/SUNNY_TOWN_INVENTORY_METADATA_HANDOFF.md`
 - `docs/SUNNY_TOWN_INVENTORY_SLOT_COMPONENT_HANDOFF.md`
 - `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_HANDOFF.md`
+- `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`
+- `docs/SUNNY_TOWN_INVENTORY_DRAG_DROP_HANDOFF.md`
