@@ -73,14 +73,6 @@ export function useSunnyTownInventoryActions(
     options.onHotbarSelectionChanged()
   }
 
-  async function equipInventoryItem(itemKey: string, slot: EquipmentSlot | '') {
-    if (!slot) {
-      return
-    }
-    await inventoryStore.equipItem(slot, itemKey)
-    options.onEquipmentChanged()
-  }
-
   async function equipInventorySlotDrop(slot: EquipmentSlot) {
     await inventoryStore.dropInventorySlotOnEquipment(slot, async (equipmentSlot, itemKey) => {
       await inventoryStore.equipItem(equipmentSlot, itemKey)
@@ -93,23 +85,16 @@ export function useSunnyTownInventoryActions(
     options.onEquipmentChanged()
   }
 
-  async function assignInventoryItemToSelectedHotbarSlot(itemKey: string) {
-    await inventoryStore.setHotbarSlot(selectedHotbarIndex.value + 1, itemKey)
-    options.onHotbarUpdated()
-  }
-
   async function clearSelectedHotbarSlot() {
     await inventoryStore.setHotbarSlot(selectedHotbarIndex.value + 1, '')
     options.onHotbarUpdated()
   }
 
   return {
-    assignInventoryItemToSelectedHotbarSlot,
     clearSelectedHotbarSlot,
     craftInventoryRecipe,
     craftingPanelOpen,
     equipInventorySlotDrop,
-    equipInventoryItem,
     inventoryOpen,
     placingStoneBlock,
     selectedHotbarIndex,

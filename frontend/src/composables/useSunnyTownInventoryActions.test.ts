@@ -105,7 +105,7 @@ describe('useSunnyTownInventoryActions', () => {
     expect(onHotbarSelectionChanged).toHaveBeenCalledOnce()
   })
 
-  it('assigns and clears the selected hotbar slot using one-based API slots', async () => {
+  it('clears the selected hotbar slot using one-based API slots', async () => {
     const inventoryStore = store()
     const onHotbarUpdated = vi.fn()
     const actions = useSunnyTownInventoryActions(inventoryStore, {
@@ -115,15 +115,14 @@ describe('useSunnyTownInventoryActions', () => {
     })
     actions.selectHotbarSlot(2)
 
-    await actions.assignInventoryItemToSelectedHotbarSlot('rock')
     await actions.clearSelectedHotbarSlot()
 
-    expect(inventoryStore.setHotbarSlot).toHaveBeenNthCalledWith(1, 3, 'rock')
-    expect(inventoryStore.setHotbarSlot).toHaveBeenNthCalledWith(2, 3, '')
-    expect(onHotbarUpdated).toHaveBeenCalledTimes(2)
+    expect(inventoryStore.setHotbarSlot).toHaveBeenCalledOnce()
+    expect(inventoryStore.setHotbarSlot).toHaveBeenCalledWith(3, '')
+    expect(onHotbarUpdated).toHaveBeenCalledOnce()
   })
 
-  it('updates equipment and skips missing equipment slots', async () => {
+  it('unequips inventory slots and runs the equipment callback', async () => {
     const inventoryStore = store()
     const onEquipmentChanged = vi.fn()
     const actions = useSunnyTownInventoryActions(inventoryStore, {
@@ -132,14 +131,11 @@ describe('useSunnyTownInventoryActions', () => {
       onHotbarUpdated: vi.fn(),
     })
 
-    await actions.equipInventoryItem('pickaxe', '')
-    await actions.equipInventoryItem('pickaxe', 'tool')
     await actions.unequipInventorySlot('tool')
 
-    expect(inventoryStore.equipItem).toHaveBeenCalledOnce()
-    expect(inventoryStore.equipItem).toHaveBeenCalledWith('tool', 'pickaxe')
+    expect(inventoryStore.equipItem).not.toHaveBeenCalled()
     expect(inventoryStore.unequipItem).toHaveBeenCalledWith('tool')
-    expect(onEquipmentChanged).toHaveBeenCalledTimes(2)
+    expect(onEquipmentChanged).toHaveBeenCalledOnce()
   })
 
   it('equips dropped inventory slots through the store and runs the equipment callback from the drop handler', async () => {

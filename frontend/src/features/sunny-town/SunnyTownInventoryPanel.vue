@@ -11,11 +11,9 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  assignHotbar: [itemKey: string]
   clearHotbar: []
   close: []
   craftRecipe: [recipeKey: string]
-  equipItem: [itemKey: string, slot: EquipmentSlot | '']
   equipInventorySlotDrop: [slot: EquipmentSlot]
   selectHotbarSlot: [index: number]
   toggleCraftingPanel: []
@@ -194,25 +192,7 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
             <p class="inventory-item__description">{{ selectedInventoryItem.description }}</p>
           </div>
           <div class="sunny-town-inventory__item-actions">
-            <v-btn
-              v-if="selectedInventoryItem.equipSlot && !selectedInventoryItem.equipped"
-              :loading="inventoryStore.isUpdatingEquipment"
-              color="primary"
-              size="x-small"
-              variant="flat"
-              @click="emit('equipItem', selectedInventoryItem.key, selectedInventoryItem.equipSlot)"
-            >
-              Wear
-            </v-btn>
-            <v-btn
-              :loading="inventoryStore.isUpdatingHotbar"
-              color="warning"
-              size="x-small"
-              variant="tonal"
-              @click="emit('assignHotbar', selectedInventoryItem.key)"
-            >
-              Slot {{ selectedHotbarIndex + 1 }}
-            </v-btn>
+            <span v-if="selectedInventoryItem.equipped" class="inventory-item__status">Equipped</span>
             <strong class="inventory-item__quantity">{{ selectedInventoryItem.quantity }}</strong>
           </div>
         </template>

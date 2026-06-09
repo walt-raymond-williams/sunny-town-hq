@@ -147,12 +147,10 @@ const {
 } = worldState
 const placementHoverGrid = placement.hoverGrid
 const {
-  assignInventoryItemToSelectedHotbarSlot,
   clearSelectedHotbarSlot,
   craftInventoryRecipe,
   craftingPanelOpen,
   equipInventorySlotDrop,
-  equipInventoryItem,
   inventoryOpen,
   placingStoneBlock,
   selectedHotbarIndex,
@@ -754,12 +752,10 @@ function backToPet() {
         :crafting-panel-open="craftingPanelOpen"
         :selected-hotbar-index="selectedHotbarIndex"
         :show-all-crafting-recipes="showAllCraftingRecipes"
-        @assign-hotbar="assignInventoryItemToSelectedHotbarSlot"
         @clear-hotbar="clearSelectedHotbarSlot"
         @close="inventoryOpen = false"
         @craft-recipe="craftInventoryRecipe"
         @equip-inventory-slot-drop="equipInventorySlotDrop"
-        @equip-item="equipInventoryItem"
         @select-hotbar-slot="selectHotbarSlot"
         @toggle-crafting-panel="toggleCraftingPanel"
         @unequip-slot="unequipInventorySlot"
