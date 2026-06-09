@@ -17,6 +17,24 @@ Workflow:
 - `main` remains stable until the integrated feature slice is ready for human review.
 - A human reviews the integrated feature before merging `codex/inventory-redesign-dev` into `main`.
 
+## Management Workflow Loop
+
+Use this loop when advancing the inventory redesign backlog:
+
+1. Check live GitHub issue state with `gh issue list` and inspect the last completed issue comments.
+2. Confirm the previous ticket is closed with a commit hash and verification notes.
+3. Pick the next roadmap item based on blockers, dependencies, and the current integrated branch state.
+4. Create the GitHub issue if it does not already exist.
+5. Create a focused handoff doc under `docs/` for the selected issue.
+6. Update this tracking file with the closed/open issue snapshot, recommended next task, and handoff path.
+7. Commit and push only the handoff/tracking docs to `codex/inventory-redesign-dev`.
+8. Comment on the GitHub issue with the handoff path, branch, and commit hash.
+9. The implementation agent works from the GitHub issue plus the linked handoff doc.
+10. When implementation lands on `codex/inventory-redesign-dev`, close the issue with the commit hash and verification results.
+11. Repeat from step 1.
+
+Keep GitHub issues as the execution source of truth. Keep this file as the compact local recovery snapshot for compaction, coordination, and fresh-agent handoff.
+
 ## Current GitHub Issues
 
 Snapshot refreshed: 2026-06-09 after issue #19 creation.
