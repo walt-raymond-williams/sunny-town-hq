@@ -403,6 +403,80 @@ func TestConsumeShopInputStorageItem(t *testing.T) {
 	}
 }
 
+func TestStudentInventoryResponsesExposeItemMetadata(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "sunny_hoodie", 1); err != nil {
+		t.Fatalf("seed hoodie inventory: %v", err)
+	}
+	if err := IncrementStudentItem(ctx, db, 123, "pickaxe", 1); err != nil {
+		t.Fatalf("seed pickaxe inventory: %v", err)
+	}
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if err := IncrementStudentItem(ctx, db, 123, "stone_block", 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+	if _, err := EquipStudentItem(ctx, db, 123, EquipmentChangeRequest{
+		Slot:    EquipmentSlotGear,
+		ItemKey: "sunny_hoodie",
+	}); err != nil {
+		t.Fatalf("equip hoodie: %v", err)
+	}
+
+	inventory, err := LoadStudent(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load inventory: %v", err)
+	}
+	hoodie := inventoryItemByKey(t, inventory.Items, "sunny_hoodie")
+	assertItemMetadata(t, hoodie.IconKey, hoodie.MaxStack, hoodie.Category, "sunny_hoodie", 1, "gear")
+	if hoodie.VisualKey != "sunny_hoodie_visual" {
+		t.Fatalf("hoodie visual key = %q, want separate render key", hoodie.VisualKey)
+	}
+
+	hotbar, err := LoadStudentHotbar(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load hotbar: %v", err)
+	}
+	if hotbar.Slots[0].Item == nil {
+		t.Fatalf("hotbar slot 1 item = nil, want pickaxe")
+	}
+	assertItemMetadata(t, hotbar.Slots[0].Item.IconKey, hotbar.Slots[0].Item.MaxStack, hotbar.Slots[0].Item.Category, "pickaxe", 1, "tool")
+	if hotbar.Slots[1].Item == nil {
+		t.Fatalf("hotbar slot 2 item = nil, want stone block")
+	}
+	assertItemMetadata(t, hotbar.Slots[1].Item.IconKey, hotbar.Slots[1].Item.MaxStack, hotbar.Slots[1].Item.Category, "stone_block", 64, "building")
+
+	equipment, err := LoadStudentEquipment(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load equipment: %v", err)
+	}
+	if equipment.Slots[0].Item == nil {
+		t.Fatalf("equipment gear item = nil, want hoodie")
+	}
+	assertItemMetadata(t, equipment.Slots[0].Item.IconKey, equipment.Slots[0].Item.MaxStack, equipment.Slots[0].Item.Category, "sunny_hoodie", 1, "gear")
+	if equipment.Slots[0].Item.VisualKey != "sunny_hoodie_visual" {
+		t.Fatalf("equipment visual key = %q, want separate render key", equipment.Slots[0].Item.VisualKey)
+	}
+
+	recipes, err := LoadCraftingRecipes(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load crafting recipes: %v", err)
+	}
+	if len(recipes.Recipes) != 1 {
+		t.Fatalf("recipes = %#v, want one student recipe", recipes)
+	}
+	recipe := recipes.Recipes[0]
+	assertItemMetadata(t, recipe.OutputIconKey, recipe.OutputMaxStack, recipe.OutputCategory, "stone_block", 64, "building")
+	if len(recipe.Ingredients) != 1 {
+		t.Fatalf("ingredients = %#v, want one rock ingredient", recipe.Ingredients)
+	}
+	assertItemMetadata(t, recipe.Ingredients[0].IconKey, recipe.Ingredients[0].MaxStack, recipe.Ingredients[0].Category, "rock", 64, "resource")
+}
+
 func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
@@ -640,6 +714,32 @@ func TestStudentHotbarRejectsUnownedItem(t *testing.T) {
 	}
 }
 
+func inventoryItemByKey(t *testing.T, items []ItemResponse, key string) ItemResponse {
+	t.Helper()
+	for _, item := range items {
+		if item.Key == key {
+			return item
+		}
+	}
+	t.Fatalf("inventory items = %#v, want item %q", items, key)
+	return ItemResponse{}
+}
+
+func assertItemMetadata(t *testing.T, iconKey string, maxStack int, category string, wantIconKey string, wantMaxStack int, wantCategory string) {
+	t.Helper()
+	if iconKey != wantIconKey || maxStack != wantMaxStack || category != wantCategory {
+		t.Fatalf(
+			"metadata iconKey=%q maxStack=%d category=%q, want iconKey=%q maxStack=%d category=%q",
+			iconKey,
+			maxStack,
+			category,
+			wantIconKey,
+			wantMaxStack,
+			wantCategory,
+		)
+	}
+}
+
 func testInventoryDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 
@@ -704,6 +804,9 @@ func testInventoryDB(t *testing.T) (*pgxpool.Pool, func()) {
 			description text not null default '',
 			equip_slot text null,
 			visual_key text null,
+			icon_key text null,
+			max_stack integer null,
+			category text null,
 			created_at timestamptz not null default now(),
 			updated_at timestamptz not null default now()
 		)`,
@@ -711,14 +814,25 @@ func testInventoryDB(t *testing.T) (*pgxpool.Pool, func()) {
 			values ('cookie', 'Cookie', 'A treat for your pet.')`,
 		`insert into inventory_item_type (key, name, description, equip_slot, visual_key)
 			values
-				('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie'),
-				('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap'),
-				('pickaxe', 'Pickaxe', 'A sturdy starter tool.', 'tool', 'pickaxe')`,
+				('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie_visual'),
+				('star_cap', 'Star Cap', 'A bright cap for sunny adventures.', 'accessory', 'star_cap_visual'),
+				('pickaxe', 'Pickaxe', 'A sturdy starter tool.', 'tool', 'pickaxe_visual')`,
 		`insert into inventory_item_type (key, name, description)
 			values
 				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
 				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
 				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
+		`update inventory_item_type
+			set icon_key = key,
+				max_stack = case when key in ('sunny_hoodie', 'star_cap', 'pickaxe') then 1 else 64 end,
+				category = case
+					when key = 'cookie' then 'consumable'
+					when key in ('sunny_hoodie', 'star_cap') then 'gear'
+					when key = 'pickaxe' then 'tool'
+					when key in ('rock', 'crystal') then 'resource'
+					when key = 'stone_block' then 'building'
+					else category
+				end`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,

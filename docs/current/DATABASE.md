@@ -122,3 +122,13 @@ docker compose -f deploy\docker-compose.yml up -d --build
 ```
 
 The Postgres init entrypoint only runs on an empty database volume. Existing volumes are migrated by HQ startup instead.
+
+## Inventory Catalog Metadata
+
+`inventory_item_type` includes item display and grid-inventory metadata:
+
+- `icon_key`: inventory UI icon or asset key, separate from Sunny Town equipment `visual_key`.
+- `max_stack`: maximum stack size for future slotted inventory operations.
+- `category`: item grouping for inventory UI and validation, currently `consumable`, `gear`, `tool`, `resource`, or `building`.
+
+Current seeded items use `max_stack = 1` for starter equipment/tools and `max_stack = 64` for stackable consumables, resources, and placed blocks.

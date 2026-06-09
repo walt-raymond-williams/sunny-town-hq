@@ -28,19 +28,25 @@ type CraftingIngredientResponse struct {
 	ItemKey     string `json:"itemKey"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	IconKey     string `json:"iconKey,omitempty"`
+	MaxStack    int    `json:"maxStack,omitempty"`
+	Category    string `json:"category,omitempty"`
 	Required    int    `json:"required"`
 	Owned       int    `json:"owned"`
 }
 
 type CraftingRecipeResponse struct {
-	Key         string                       `json:"key"`
-	Name        string                       `json:"name"`
-	Description string                       `json:"description"`
-	OutputKey   string                       `json:"outputKey"`
-	OutputName  string                       `json:"outputName"`
-	Quantity    int                          `json:"quantity"`
-	CanCraft    bool                         `json:"canCraft"`
-	Ingredients []CraftingIngredientResponse `json:"ingredients"`
+	Key            string                       `json:"key"`
+	Name           string                       `json:"name"`
+	Description    string                       `json:"description"`
+	OutputKey      string                       `json:"outputKey"`
+	OutputName     string                       `json:"outputName"`
+	OutputIconKey  string                       `json:"outputIconKey,omitempty"`
+	OutputMaxStack int                          `json:"outputMaxStack,omitempty"`
+	OutputCategory string                       `json:"outputCategory,omitempty"`
+	Quantity       int                          `json:"quantity"`
+	CanCraft       bool                         `json:"canCraft"`
+	Ingredients    []CraftingIngredientResponse `json:"ingredients"`
 }
 
 type CraftingRecipesResponse struct {
@@ -124,14 +130,17 @@ func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (Cra
 		}
 		output := ownedItems[recipe.OutputKey]
 		recipeResponse := CraftingRecipeResponse{
-			Key:         recipe.Key,
-			Name:        output.Name,
-			Description: output.Description,
-			OutputKey:   recipe.OutputKey,
-			OutputName:  output.Name,
-			Quantity:    recipe.Quantity,
-			CanCraft:    true,
-			Ingredients: []CraftingIngredientResponse{},
+			Key:            recipe.Key,
+			Name:           output.Name,
+			Description:    output.Description,
+			OutputKey:      recipe.OutputKey,
+			OutputName:     output.Name,
+			OutputIconKey:  output.IconKey,
+			OutputMaxStack: output.MaxStack,
+			OutputCategory: output.Category,
+			Quantity:       recipe.Quantity,
+			CanCraft:       true,
+			Ingredients:    []CraftingIngredientResponse{},
 		}
 		for _, ingredient := range recipe.Ingredients {
 			item := ownedItems[ingredient.ItemKey]
@@ -142,6 +151,9 @@ func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (Cra
 				ItemKey:     ingredient.ItemKey,
 				Name:        item.Name,
 				Description: item.Description,
+				IconKey:     item.IconKey,
+				MaxStack:    item.MaxStack,
+				Category:    item.Category,
 				Required:    ingredient.Quantity,
 				Owned:       item.Quantity,
 			})
@@ -258,6 +270,9 @@ func (storage studentRecipeStorage) ProduceRecipeItem(ctx context.Context, itemK
 type craftingItemMetadata struct {
 	Name        string
 	Description string
+	IconKey     string
+	MaxStack    int
+	Category    string
 	Quantity    int
 }
 
@@ -273,6 +288,9 @@ func loadCraftingItemMetadata(ctx context.Context, querier Loader, userID int64,
 			select iit.key,
 				iit.name,
 				iit.description,
+				coalesce(iit.icon_key, '') as icon_key,
+				coalesce(iit.max_stack, 0) as max_stack,
+				coalesce(iit.category, '') as category,
 				coalesce(sii.quantity, 0) as quantity
 			from inventory_item_type iit
 			left join student_inventory_item sii on sii.item_type_id = iit.id
@@ -291,7 +309,7 @@ func loadCraftingItemMetadata(ctx context.Context, querier Loader, userID int64,
 	for rows.Next() {
 		var key string
 		var item craftingItemMetadata
-		if err := rows.Scan(&key, &item.Name, &item.Description, &item.Quantity); err != nil {
+		if err := rows.Scan(&key, &item.Name, &item.Description, &item.IconKey, &item.MaxStack, &item.Category, &item.Quantity); err != nil {
 			return nil, err
 		}
 		items[key] = item

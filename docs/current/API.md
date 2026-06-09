@@ -41,6 +41,24 @@ Current public API handler ownership:
 
 `GET /api/student/shop/stock` returns each saleable stock item with its current `quantity` and shop-owned `capacity`; Cookie Keeper cookies currently use capacity `64`.
 
+Inventory item payloads returned by student inventory, hotbar, equipment, and crafting endpoints include backward-compatible item identity/display fields plus grid-inventory metadata:
+
+```json
+{
+  "key": "stone_block",
+  "name": "Stone Block",
+  "description": "A solid block crafted from stone.",
+  "quantity": 1,
+  "equipSlot": "",
+  "visualKey": "",
+  "iconKey": "stone_block",
+  "maxStack": 64,
+  "category": "building"
+}
+```
+
+`visualKey` remains the Sunny Town avatar/equipment render key. Inventory icons should use `iconKey`.
+
 ## Internal Service APIs
 
 Sunny Town calls HQ through service-authenticated internal endpoints using `X-HQ-Service-Secret`.

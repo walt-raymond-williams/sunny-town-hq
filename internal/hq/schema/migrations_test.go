@@ -57,12 +57,17 @@ func TestRunMigrationsIntegration(t *testing.T) {
 		t.Fatalf("RunMigrations() second run error = %v", err)
 	}
 
+	migrations, err := LoadMigrations("../../../deploy/postgres/migrations")
+	if err != nil {
+		t.Fatalf("load migrations: %v", err)
+	}
+
 	var migrationCount int
 	if err := db.QueryRow(ctx, "select count(*) from schema_migration").Scan(&migrationCount); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrationCount != 8 {
-		t.Fatalf("migration count = %d, want 8", migrationCount)
+	if migrationCount != len(migrations) {
+		t.Fatalf("migration count = %d, want %d", migrationCount, len(migrations))
 	}
 
 	var tableCount int
@@ -102,5 +107,41 @@ func TestRunMigrationsIntegration(t *testing.T) {
 	}
 	if tableCount != 22 {
 		t.Fatalf("table count = %d, want 22", tableCount)
+	}
+
+	var iconKey string
+	var maxStack int
+	var category string
+	var visualKey *string
+	if err := db.QueryRow(
+		ctx,
+		`
+			select icon_key, max_stack, category, visual_key
+			from inventory_item_type
+			where key = 'stone_block'
+		`,
+	).Scan(&iconKey, &maxStack, &category, &visualKey); err != nil {
+		t.Fatalf("load stone block metadata: %v", err)
+	}
+	if iconKey != "stone_block" || maxStack != 64 || category != "building" || visualKey != nil {
+		t.Fatalf("stone_block metadata iconKey=%q maxStack=%d category=%q visualKey=%v, want icon/stack/category and nil visual key", iconKey, maxStack, category, visualKey)
+	}
+
+	var hoodieIconKey string
+	var hoodieMaxStack int
+	var hoodieCategory string
+	var hoodieVisualKey string
+	if err := db.QueryRow(
+		ctx,
+		`
+			select icon_key, max_stack, category, visual_key
+			from inventory_item_type
+			where key = 'sunny_hoodie'
+		`,
+	).Scan(&hoodieIconKey, &hoodieMaxStack, &hoodieCategory, &hoodieVisualKey); err != nil {
+		t.Fatalf("load hoodie metadata: %v", err)
+	}
+	if hoodieIconKey != "sunny_hoodie" || hoodieMaxStack != 1 || hoodieCategory != "gear" || hoodieVisualKey != "sunny_hoodie" {
+		t.Fatalf("hoodie metadata iconKey=%q maxStack=%d category=%q visualKey=%q, want separate icon and visual metadata", hoodieIconKey, hoodieMaxStack, hoodieCategory, hoodieVisualKey)
 	}
 }

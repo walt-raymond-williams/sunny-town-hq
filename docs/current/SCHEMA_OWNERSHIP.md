@@ -72,6 +72,9 @@ Tables, constraints, and indexes:
 - `inventory_item_type`
 - `inventory_item_type_key_check`
 - `inventory_item_type_equip_slot_check`
+- `inventory_item_type_icon_key_check`
+- `inventory_item_type_max_stack_check`
+- `inventory_item_type_category_check`
 - `student_inventory_item`
 - `student_inventory_ledger`
 - `student_inventory_ledger_app_user_id_idx`

@@ -8,6 +8,9 @@ export interface InventoryItemResponse {
   quantity?: number
   equipSlot?: EquipmentSlot | ''
   visualKey?: string
+  iconKey?: string
+  maxStack?: number
+  category?: string
   equipped?: boolean
 }
 
@@ -30,6 +33,9 @@ export function normalizeInventoryItem(item: InventoryItemResponse): InventoryIt
     quantity: item.quantity ?? 0,
     equipSlot: item.equipSlot || '',
     visualKey: item.visualKey || '',
+    iconKey: item.iconKey || item.key || '',
+    maxStack: item.maxStack ?? 0,
+    category: item.category || '',
     equipped: item.equipped ?? false,
   }
 }

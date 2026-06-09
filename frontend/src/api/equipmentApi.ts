@@ -7,6 +7,9 @@ interface EquipmentItemResponse {
   description?: string
   equipSlot?: EquipmentSlot
   visualKey?: string
+  iconKey?: string
+  maxStack?: number
+  category?: string
 }
 
 interface EquipmentSlotResponse {
@@ -39,7 +42,7 @@ export async function unequipStudentItem(slot: EquipmentSlot): Promise<StudentEq
   return normalizeStudentEquipment(response)
 }
 
-function normalizeStudentEquipment(response: StudentEquipmentResponse): StudentEquipment {
+export function normalizeStudentEquipment(response: StudentEquipmentResponse): StudentEquipment {
   return {
     slots: (response.slots || [])
       .filter((slot): slot is EquipmentSlotResponse & { slot: EquipmentSlot } => slot.slot === 'gear' || slot.slot === 'accessory' || slot.slot === 'tool')
@@ -50,12 +53,15 @@ function normalizeStudentEquipment(response: StudentEquipmentResponse): StudentE
   }
 }
 
-function normalizeEquipmentItem(item: EquipmentItemResponse): EquipmentItem {
+export function normalizeEquipmentItem(item: EquipmentItemResponse): EquipmentItem {
   return {
     key: item.key || '',
     name: item.name || '',
     description: item.description || '',
     equipSlot: item.equipSlot || 'gear',
     visualKey: item.visualKey || item.key || '',
+    iconKey: item.iconKey || item.key || '',
+    maxStack: item.maxStack ?? 0,
+    category: item.category || '',
   }
 }

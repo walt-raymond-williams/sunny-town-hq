@@ -6,6 +6,9 @@ interface CraftingIngredientResponse {
   itemKey?: string
   name?: string
   description?: string
+  iconKey?: string
+  maxStack?: number
+  category?: string
   required?: number
   owned?: number
 }
@@ -16,6 +19,9 @@ interface CraftingRecipeResponse {
   description?: string
   outputKey?: string
   outputName?: string
+  outputIconKey?: string
+  outputMaxStack?: number
+  outputCategory?: string
   quantity?: number
   canCraft?: boolean
   ingredients?: CraftingIngredientResponse[]
@@ -48,24 +54,30 @@ export async function craftStudentRecipe(recipeKey: string): Promise<CraftRecipe
   }
 }
 
-function normalizeCraftingRecipe(recipe: CraftingRecipeResponse): CraftingRecipe {
+export function normalizeCraftingRecipe(recipe: CraftingRecipeResponse): CraftingRecipe {
   return {
     key: recipe.key || '',
     name: recipe.name || '',
     description: recipe.description || '',
     outputKey: recipe.outputKey || '',
     outputName: recipe.outputName || recipe.name || '',
+    outputIconKey: recipe.outputIconKey || recipe.outputKey || '',
+    outputMaxStack: recipe.outputMaxStack ?? 0,
+    outputCategory: recipe.outputCategory || '',
     quantity: recipe.quantity ?? 0,
     canCraft: recipe.canCraft ?? false,
     ingredients: (recipe.ingredients || []).map(normalizeCraftingIngredient),
   }
 }
 
-function normalizeCraftingIngredient(ingredient: CraftingIngredientResponse): CraftingIngredient {
+export function normalizeCraftingIngredient(ingredient: CraftingIngredientResponse): CraftingIngredient {
   return {
     itemKey: ingredient.itemKey || '',
     name: ingredient.name || '',
     description: ingredient.description || '',
+    iconKey: ingredient.iconKey || ingredient.itemKey || '',
+    maxStack: ingredient.maxStack ?? 0,
+    category: ingredient.category || '',
     required: ingredient.required ?? 0,
     owned: ingredient.owned ?? 0,
   }

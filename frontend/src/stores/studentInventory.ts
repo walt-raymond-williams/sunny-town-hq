@@ -96,6 +96,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         stone_block: { name: 'Stone Block', description: 'A solid block crafted from stone.' },
       }
       const fallback = names[itemKey] || { name: itemKey, description: '' }
+      const metadata = fallbackItemMetadata(itemKey)
       this.items = [
         ...this.items,
         {
@@ -105,6 +106,9 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
           quantity,
           equipSlot: '',
           visualKey: '',
+          iconKey: metadata.iconKey,
+          maxStack: metadata.maxStack,
+          category: metadata.category,
           equipped: false,
         },
       ]
@@ -261,4 +265,21 @@ function mergeHotbarSlots(slots: HotbarSlot[]): HotbarSlot[] {
     const slot = slots.find((candidate) => candidate.slot === defaultSlot.slot)
     return slot ? { slot: slot.slot, item: slot.item ? { ...slot.item } : null } : { ...defaultSlot }
   })
+}
+
+function fallbackItemMetadata(itemKey: string): Pick<InventoryItem, 'iconKey' | 'maxStack' | 'category'> {
+  const categories: Record<string, string> = {
+    cookie: 'consumable',
+    sunny_hoodie: 'gear',
+    star_cap: 'gear',
+    pickaxe: 'tool',
+    rock: 'resource',
+    crystal: 'resource',
+    stone_block: 'building',
+  }
+  return {
+    iconKey: itemKey,
+    maxStack: itemKey === 'sunny_hoodie' || itemKey === 'star_cap' || itemKey === 'pickaxe' ? 1 : 64,
+    category: categories[itemKey] || '',
+  }
 }

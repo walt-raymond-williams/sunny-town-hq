@@ -5,6 +5,9 @@ export interface InventoryItem {
   quantity: number
   equipSlot: EquipmentSlot | ''
   visualKey: string
+  iconKey: string
+  maxStack: number
+  category: string
   equipped: boolean
 }
 
@@ -25,6 +28,9 @@ export interface CraftingIngredient {
   itemKey: string
   name: string
   description: string
+  iconKey: string
+  maxStack: number
+  category: string
   required: number
   owned: number
 }
@@ -35,6 +41,9 @@ export interface CraftingRecipe {
   description: string
   outputKey: string
   outputName: string
+  outputIconKey: string
+  outputMaxStack: number
+  outputCategory: string
   quantity: number
   canCraft: boolean
   ingredients: CraftingIngredient[]
@@ -53,6 +62,9 @@ export interface EquipmentItem {
   description: string
   equipSlot: EquipmentSlot
   visualKey: string
+  iconKey: string
+  maxStack: number
+  category: string
 }
 
 export interface EquippedSlot {

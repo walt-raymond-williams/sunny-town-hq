@@ -13,6 +13,9 @@ function inventoryItem(overrides: Partial<InventoryItem> = {}): InventoryItem {
     quantity: 2,
     equipSlot: '',
     visualKey: '',
+    iconKey: 'stone_block',
+    maxStack: 64,
+    category: 'building',
     equipped: false,
     ...overrides,
   }

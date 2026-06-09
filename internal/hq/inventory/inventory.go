@@ -18,6 +18,9 @@ type ItemResponse struct {
 	Quantity    int    `json:"quantity"`
 	EquipSlot   string `json:"equipSlot,omitempty"`
 	VisualKey   string `json:"visualKey,omitempty"`
+	IconKey     string `json:"iconKey,omitempty"`
+	MaxStack    int    `json:"maxStack,omitempty"`
+	Category    string `json:"category,omitempty"`
 	Equipped    bool   `json:"equipped"`
 }
 
@@ -47,6 +50,9 @@ func LoadStudent(ctx context.Context, querier Loader, userID int64) (StudentResp
 				coalesce(sii.quantity, 0) as quantity,
 				coalesce(iit.equip_slot, '') as equip_slot,
 				coalesce(iit.visual_key, '') as visual_key,
+				coalesce(iit.icon_key, '') as icon_key,
+				coalesce(iit.max_stack, 0) as max_stack,
+				coalesce(iit.category, '') as category,
 				sei.app_user_id is not null as equipped
 			from inventory_item_type iit
 			join student_inventory_item sii on sii.item_type_id = iit.id
@@ -73,6 +79,9 @@ func LoadStudent(ctx context.Context, querier Loader, userID int64) (StudentResp
 			&item.Quantity,
 			&item.EquipSlot,
 			&item.VisualKey,
+			&item.IconKey,
+			&item.MaxStack,
+			&item.Category,
 			&item.Equipped,
 		); err != nil {
 			return StudentResponse{}, err

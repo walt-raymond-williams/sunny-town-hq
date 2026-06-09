@@ -23,8 +23,13 @@ Important columns:
 - `description`: display text.
 - `equip_slot`: nullable equipment slot. Current values are `gear`, `accessory`, and `tool`.
 - `visual_key`: nullable Sunny Town render key.
+- `icon_key`: nullable inventory/UI icon or asset key. Current seeded values match existing frontend icon suffixes.
+- `max_stack`: nullable maximum stack size for future slotted inventory behavior.
+- `category`: nullable inventory category. Current values include `consumable`, `gear`, `tool`, `resource`, and `building`.
 
 If `equip_slot` is null, the item is not equippable.
+
+`visual_key` is reserved for avatar/equipment rendering. Inventory UI should use `icon_key` for item icons instead of overloading `visual_key`.
 
 Current seeded item types:
 
@@ -246,6 +251,8 @@ Current recipes:
 ### `GET /api/student/crafting/recipes`
 
 Returns all known recipes with current ingredient ownership and `canCraft`.
+
+Recipe outputs and ingredients include item display metadata (`iconKey`, stack metadata, and category) so future slot UI can render recipe items without hard-coded catalog lookups.
 
 ### `POST /api/student/crafting/craft`
 
