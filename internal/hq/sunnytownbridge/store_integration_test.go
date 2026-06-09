@@ -889,6 +889,9 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			description text not null default '',
 			equip_slot text null,
 			visual_key text null,
+			icon_key text null,
+			max_stack integer null,
+			category text null,
 			created_at timestamptz not null default now(),
 			updated_at timestamptz not null default now()
 		)`,
@@ -900,6 +903,15 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
 				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
 				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
+		`update inventory_item_type
+			set icon_key = key,
+				max_stack = case when key = 'pickaxe' then 1 else 64 end,
+				category = case
+					when key = 'cookie' then 'consumable'
+					when key in ('rock', 'crystal') then 'resource'
+					when key = 'stone_block' then 'building'
+					else category
+				end`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
@@ -908,6 +920,22 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (app_user_id, item_type_id),
 			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table student_inventory_slot (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			slot_index integer not null,
+			item_type_id bigint null references inventory_item_type(id) on delete restrict,
+			quantity integer null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, slot_index),
+			constraint student_inventory_slot_index_check check (slot_index >= 0 and slot_index < 30),
+			constraint student_inventory_slot_quantity_check check (quantity is null or quantity > 0),
+			constraint student_inventory_slot_empty_or_occupied_check check (
+				(item_type_id is null and quantity is null)
+				or
+				(item_type_id is not null and quantity is not null)
+			)
 		)`,
 		`create table student_inventory_ledger (
 			id bigserial primary key,

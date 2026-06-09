@@ -47,6 +47,14 @@ func TestHTTPHandlerRejectsWrongMethods(t *testing.T) {
 			},
 		},
 		{
+			name:   "inventory slots only allows get",
+			method: http.MethodPost,
+			path:   "/api/student/inventory/slots",
+			handle: func(handler HTTPHandler, w http.ResponseWriter, r *http.Request) {
+				handler.HandleStudentInventorySlots(w, r)
+			},
+		},
+		{
 			name:   "crafting recipes only allows get",
 			method: http.MethodPost,
 			path:   "/api/student/crafting/recipes",

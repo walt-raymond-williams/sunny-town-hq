@@ -13,6 +13,7 @@ Current route groups:
 - `/api/teacher/...`
 - `/api/student/profile`
 - `/api/student/inventory`
+- `/api/student/inventory/slots`
 - `/api/student/hotbar`
 - `/api/student/crafting/...`
 - `/api/student/equipment/...`
@@ -58,6 +59,44 @@ Inventory item payloads returned by student inventory, hotbar, equipment, and cr
 ```
 
 `visualKey` remains the Sunny Town avatar/equipment render key. Inventory icons should use `iconKey`.
+
+`GET /api/student/inventory/slots` returns the durable player inventory grid while preserving an aggregate summary for compatibility:
+
+```json
+{
+  "slotCount": 30,
+  "slots": [
+    {
+      "slotIndex": 0,
+      "item": {
+        "key": "rock",
+        "name": "Rock",
+        "description": "A sturdy rock from Forest Crossing.",
+        "quantity": 12,
+        "iconKey": "rock",
+        "maxStack": 64,
+        "category": "resource"
+      }
+    },
+    {
+      "slotIndex": 1,
+      "item": null
+    }
+  ],
+  "items": [
+    {
+      "key": "rock",
+      "name": "Rock",
+      "description": "A sturdy rock from Forest Crossing.",
+      "quantity": 12,
+      "iconKey": "rock",
+      "maxStack": 64,
+      "category": "resource",
+      "equipped": false
+    }
+  ]
+}
+```
 
 ## Internal Service APIs
 

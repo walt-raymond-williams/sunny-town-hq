@@ -53,6 +53,28 @@ func (handler HTTPHandler) HandleStudentInventory(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, inventory)
 }
 
+func (handler HTTPHandler) HandleStudentInventorySlots(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	inventory, err := LoadStudentSlots(r.Context(), handler.store, user.ID)
+	if err != nil {
+		log.Printf("load student inventory slots: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "inventory slots could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, inventory)
+}
+
 func (handler HTTPHandler) HandleStudentHotbar(w http.ResponseWriter, r *http.Request) {
 	user, ok := handler.requireRole(w, r, "student")
 	if !ok {

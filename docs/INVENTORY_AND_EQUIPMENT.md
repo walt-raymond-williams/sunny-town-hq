@@ -40,7 +40,7 @@ Current seeded item types:
 
 ### `student_inventory_item`
 
-This table stores per-student item quantities.
+This table stores per-student aggregate item quantities.
 
 Primary key:
 
@@ -52,6 +52,24 @@ Rules:
 - API responses only show inventory rows with quantity greater than zero.
 - Equippable items are not consumed when equipped.
 - Cookies are consumed by pet feeding.
+- This remains the aggregate compatibility table while slotted inventory rolls out.
+
+### `student_inventory_slot`
+
+This table stores the durable player inventory grid.
+
+Primary key:
+
+- `(app_user_id, slot_index)`
+
+Rules:
+
+- Current player inventory has 30 slots.
+- Slot indexes are zero-based: `0` through `29`.
+- Occupied slots store `item_type_id` and positive `quantity`.
+- Empty slots are returned by the slot API even when empty rows are not stored.
+- The same item type may appear in multiple slots as separate stacks.
+- Inventory mutation helpers update this table and `student_inventory_item` together so current aggregate quantity flows remain compatible.
 
 ### `student_equipped_item`
 
@@ -132,6 +150,43 @@ Notes:
 - Non-equippable items have no `equipSlot` or `visualKey`.
 - `equipped` is true when the item is currently equipped in any slot.
 - Items with quantity zero are omitted.
+
+### `GET /api/student/inventory/slots`
+
+Student-authenticated endpoint.
+
+Returns all 30 player inventory slots plus the current aggregate item summary:
+
+```json
+{
+  "slotCount": 30,
+  "slots": [
+    {
+      "slotIndex": 0,
+      "item": {
+        "key": "rock",
+        "name": "Rock",
+        "description": "A sturdy rock from Forest Crossing.",
+        "quantity": 12,
+        "iconKey": "rock",
+        "maxStack": 64,
+        "category": "resource"
+      }
+    },
+    {
+      "slotIndex": 1,
+      "item": null
+    }
+  ],
+  "items": []
+}
+```
+
+Notes:
+
+- Empty slots have `item: null`.
+- Slot rows use zero-based `slotIndex`.
+- `items` follows the same aggregate item shape as `GET /api/student/inventory`.
 
 ### `GET /api/student/equipment`
 

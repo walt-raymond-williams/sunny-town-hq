@@ -35,6 +35,7 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_star_ledger`: idempotent star reward and spend records
 - `inventory_item_type`: inventory catalog
 - `student_inventory_item`: current per-student item quantities
+- `student_inventory_slot`: durable per-student inventory slot layout
 - `student_inventory_ledger`: idempotent resource and inventory event records
 - `shop_input_storage_item`: durable shop-owned ingredient/input storage quantities
 - `student_equipped_item`: current gear/accessory/tool equipment
@@ -68,6 +69,8 @@ deploy/postgres/migrations/
   0012_cookie_recipe_inputs.sql
   0013_npc_job_production_blocked.sql
   0014_seed_cookie_keeper_input_storage.sql
+  0015_inventory_item_metadata.sql
+  0016_student_inventory_slots.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.
@@ -132,3 +135,17 @@ The Postgres init entrypoint only runs on an empty database volume. Existing vol
 - `category`: item grouping for inventory UI and validation, currently `consumable`, `gear`, `tool`, `resource`, or `building`.
 
 Current seeded items use `max_stack = 1` for starter equipment/tools and `max_stack = 64` for stackable consumables, resources, and placed blocks.
+
+## Slotted Student Inventory
+
+`student_inventory_slot` stores the durable player inventory grid for Sunny Town.
+
+Current rules:
+
+- Player inventory has 30 slots.
+- Slot indexes are zero-based: `0` through `29`.
+- Occupied slots store `item_type_id` and positive `quantity`.
+- Empty slots are represented in API responses; empty rows do not need to be stored.
+- The same item type may exist in multiple slots.
+- `student_inventory_item` remains as an aggregate compatibility table while existing crafting, equipment, hotbar, pet, placement, and Sunny Town quantity flows are migrated safely.
+- Inventory mutation helpers update slot rows and aggregate rows in the same transaction.

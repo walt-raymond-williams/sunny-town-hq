@@ -38,6 +38,7 @@ func (app *app) routes(webRoot string) http.Handler {
 		RequireRole: hqauth.RequireRole,
 	})
 	apiMux.HandleFunc("/api/student/inventory", inventoryHandlers.HandleStudentInventory)
+	apiMux.HandleFunc("/api/student/inventory/slots", inventoryHandlers.HandleStudentInventorySlots)
 	apiMux.HandleFunc("/api/student/hotbar", inventoryHandlers.HandleStudentHotbar)
 	apiMux.HandleFunc("/api/student/crafting/recipes", inventoryHandlers.HandleStudentCraftingRecipes)
 	apiMux.HandleFunc("/api/student/crafting/craft", inventoryHandlers.HandleCraftStudentRecipe)

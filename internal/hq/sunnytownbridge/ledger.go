@@ -5,6 +5,8 @@ import (
 	"errors"
 	"strings"
 
+	hqinventory "hq/internal/hq/inventory"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -89,7 +91,6 @@ func CommitStudentInventoryLedgerDelta(ctx context.Context, querier rowQuerier, 
 	}
 
 	var inserted bool
-	var quantity int
 	err := querier.QueryRow(
 		ctx,
 		`
@@ -112,27 +113,9 @@ func CommitStudentInventoryLedgerDelta(ctx context.Context, querier rowQuerier, 
 				select $1, $2, $3, id, $5, nullif($6, ''), nullif($7, ''), nullif($8, '')
 				from item_type
 				on conflict (event_id) do nothing
-				returning app_user_id, item_type_id, delta
-			),
-			updated_inventory as (
-				insert into student_inventory_item (app_user_id, item_type_id, quantity)
-				select app_user_id, item_type_id, delta from inserted
-				on conflict (app_user_id, item_type_id) do update
-				set quantity = student_inventory_item.quantity + excluded.quantity,
-					updated_at = now()
-				returning quantity
+				returning true
 			)
-			select exists(select 1 from inserted) as inserted,
-				coalesce(
-					(select quantity from updated_inventory),
-					(
-						select sii.quantity
-						from student_inventory_item sii
-						join item_type on item_type.id = sii.item_type_id
-						where sii.app_user_id = $1
-					),
-					0
-				) as quantity
+			select exists(select 1 from inserted) as inserted
 		`,
 		request.AppUserID,
 		request.EventID,
@@ -142,7 +125,20 @@ func CommitStudentInventoryLedgerDelta(ctx context.Context, querier rowQuerier, 
 		request.RoomID,
 		request.MapID,
 		request.NodeID,
-	).Scan(&inserted, &quantity)
+	).Scan(&inserted)
+	if err != nil {
+		return false, 0, err
+	}
+	if inserted {
+		mutator, ok := querier.(hqinventory.Querier)
+		if !ok {
+			return false, 0, errors.New("inventory ledger commit requires inventory mutation support")
+		}
+		if err := hqinventory.IncrementStudentItem(ctx, mutator, request.AppUserID, request.ItemKey, request.Delta); err != nil {
+			return false, 0, err
+		}
+	}
+	quantity, err := LoadStudentInventoryQuantity(ctx, querier, request.AppUserID, request.ItemKey)
 	return inserted, quantity, err
 }
 

@@ -88,6 +88,7 @@ func TestRunMigrationsIntegration(t *testing.T) {
 					'student_star_ledger',
 					'inventory_item_type',
 					'student_inventory_item',
+					'student_inventory_slot',
 					'student_inventory_ledger',
 					'student_equipped_item',
 					'student_hotbar_slot',
@@ -105,8 +106,8 @@ func TestRunMigrationsIntegration(t *testing.T) {
 	).Scan(&tableCount); err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if tableCount != 22 {
-		t.Fatalf("table count = %d, want 22", tableCount)
+	if tableCount != 23 {
+		t.Fatalf("table count = %d, want 23", tableCount)
 	}
 
 	var iconKey string

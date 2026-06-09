@@ -76,6 +76,12 @@ Tables, constraints, and indexes:
 - `inventory_item_type_max_stack_check`
 - `inventory_item_type_category_check`
 - `student_inventory_item`
+- `student_inventory_slot`
+- `student_inventory_slot_index_check`
+- `student_inventory_slot_quantity_check`
+- `student_inventory_slot_empty_or_occupied_check`
+- `student_inventory_slot_app_user_id_idx`
+- `student_inventory_slot_item_type_id_idx`
 - `student_inventory_ledger`
 - `student_inventory_ledger_app_user_id_idx`
 - `student_equipped_item`
@@ -96,7 +102,7 @@ Tables, constraints, and indexes:
 - `shop_input_storage_item_shop_id_check`
 - `shop_input_storage_item_quantity_nonnegative`
 
-Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`, `0012_cookie_recipe_inputs.sql`, `0014_seed_cookie_keeper_input_storage.sql`
+Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`, `0012_cookie_recipe_inputs.sql`, `0014_seed_cookie_keeper_input_storage.sql`, `0015_inventory_item_metadata.sql`, `0016_student_inventory_slots.sql`
 
 ### Pet
 
