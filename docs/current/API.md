@@ -118,6 +118,10 @@ Supported first-slice modes:
 
 The response is the updated slotted inventory payload. Stack splitting is still deferred.
 
+`GET /api/student/crafting/recipes` returns student-visible recipes with ingredient ownership derived from `student_inventory_slot` totals. During the slotted-inventory transition, the aggregate `student_inventory_item` table is still maintained for compatibility, but crafting availability uses the same slot authority as crafting execution.
+
+`POST /api/student/crafting/craft` consumes ingredients and produces output through the slotted inventory mutation helpers. Successful responses return the updated slotted inventory payload shape (`slotCount`, `slots`, and aggregate `items`) plus refreshed recipe availability, so the Sunny Town inventory grid can update without reconstructing or reordering slots from aggregate item totals. If there is no compatible stack or empty slot for the output, the endpoint returns `not enough room in inventory`.
+
 ## Internal Service APIs
 
 Sunny Town calls HQ through service-authenticated internal endpoints using `X-HQ-Service-Secret`.

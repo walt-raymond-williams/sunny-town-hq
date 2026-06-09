@@ -788,8 +788,91 @@ func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 	if quantities["rock"] != 1 || quantities["stone_block"] != 1 {
 		t.Fatalf("inventory quantities = %#v, want rock=1 stone_block=1", quantities)
 	}
+	if response.Inventory.SlotCount != StudentInventorySlotCount {
+		t.Fatalf("craft response slot count = %d, want %d", response.Inventory.SlotCount, StudentInventorySlotCount)
+	}
+	if response.Inventory.Slots[0].Item == nil || response.Inventory.Slots[0].Item.Key != "rock" || response.Inventory.Slots[0].Item.Quantity != 1 {
+		t.Fatalf("craft response slot 0 = %#v, want 1 rock", response.Inventory.Slots[0])
+	}
+	if response.Inventory.Slots[1].Item == nil || response.Inventory.Slots[1].Item.Key != "stone_block" || response.Inventory.Slots[1].Item.Quantity != 1 {
+		t.Fatalf("craft response slot 1 = %#v, want 1 stone_block", response.Inventory.Slots[1])
+	}
 	if len(response.Recipes) != 1 || response.Recipes[0].CanCraft {
 		t.Fatalf("recipes after craft = %#v, want stone_block not craftable", response.Recipes)
+	}
+}
+
+func TestCraftingRecipesUseSlotTotalsWhenAggregateDiverges(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if _, err := db.Exec(ctx, "update student_inventory_slot set quantity = 3 where app_user_id = 123 and slot_index = 0"); err != nil {
+		t.Fatalf("diverge slot quantity: %v", err)
+	}
+
+	recipes, err := LoadCraftingRecipes(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load recipes: %v", err)
+	}
+	if len(recipes.Recipes) != 1 || recipes.Recipes[0].CanCraft {
+		t.Fatalf("recipes = %#v, want stone_block not craftable from slot quantity", recipes)
+	}
+	if got := recipes.Recipes[0].Ingredients[0].Owned; got != 3 {
+		t.Fatalf("ingredient owned = %d, want slot total 3", got)
+	}
+
+	_, err = CraftStudentRecipe(ctx, db, 123, CraftRecipeRequest{RecipeKey: "stone_block"})
+	if !errors.Is(err, ErrInsufficientIngredient) {
+		t.Fatalf("craft recipe error = %v, want ErrInsufficientIngredient", err)
+	}
+}
+
+func TestCraftStudentRecipeReportsFullInventoryOutput(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into student_inventory_slot (app_user_id, slot_index, item_type_id, quantity)
+			select 123, slots.slot_index, iit.id, 64
+			from generate_series(1, 29) as slots(slot_index)
+			join inventory_item_type iit on iit.key = 'crystal'
+				on conflict (app_user_id, slot_index) do update
+				set item_type_id = excluded.item_type_id,
+					quantity = excluded.quantity
+		`,
+	); err != nil {
+		t.Fatalf("fill inventory slots: %v", err)
+	}
+
+	_, err := CraftStudentRecipe(ctx, db, 123, CraftRecipeRequest{RecipeKey: "stone_block"})
+	if !errors.Is(err, ErrInventoryFull) {
+		t.Fatalf("craft recipe error = %v, want ErrInventoryFull", err)
+	}
+	if message := CraftingErrorMessage(err); message != "not enough room in inventory" {
+		t.Fatalf("CraftingErrorMessage = %q, want not enough room in inventory", message)
+	}
+
+	slots, err := LoadStudentSlots(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load slots after failed craft: %v", err)
+	}
+	if slots.Slots[0].Item == nil || slots.Slots[0].Item.Key != "rock" || slots.Slots[0].Item.Quantity != 5 {
+		t.Fatalf("slot 0 after failed craft = %#v, want rollback to 5 rocks", slots.Slots[0])
+	}
+	for _, slot := range slots.Slots {
+		if slot.Item != nil && slot.Item.Key == "stone_block" {
+			t.Fatalf("slot %d = %#v, want no stone block after failed craft", slot.SlotIndex, slot)
+		}
 	}
 }
 

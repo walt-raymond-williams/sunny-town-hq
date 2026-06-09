@@ -86,7 +86,7 @@ export interface CraftingRecipe {
 }
 
 export interface CraftRecipeResult {
-  inventory: StudentInventory
+  inventory: StudentInventorySlots
   recipes: CraftingRecipe[]
 }
 

@@ -1,6 +1,6 @@
 import { authJson, jsonOptions } from './http'
 import type { CraftRecipeResult, CraftingIngredient, CraftingRecipe } from '../types/inventory'
-import { normalizeInventoryItem, type StudentInventoryResponse } from './inventoryApi'
+import { normalizeStudentInventorySlots, type StudentInventorySlotsResponse } from './inventoryApi'
 
 interface CraftingIngredientResponse {
   itemKey?: string
@@ -32,7 +32,7 @@ interface CraftingRecipesResponse {
 }
 
 interface CraftRecipeResponse {
-  inventory?: StudentInventoryResponse
+  inventory?: StudentInventorySlotsResponse
   recipes?: CraftingRecipeResponse[]
 }
 
@@ -47,9 +47,7 @@ export async function craftStudentRecipe(recipeKey: string): Promise<CraftRecipe
     jsonOptions('POST', { recipeKey }),
   )
   return {
-    inventory: {
-      items: (response.inventory?.items || []).map(normalizeInventoryItem).filter((item) => item.quantity > 0),
-    },
+    inventory: normalizeStudentInventorySlots(response.inventory || {}),
     recipes: (response.recipes || []).map(normalizeCraftingRecipe),
   }
 }

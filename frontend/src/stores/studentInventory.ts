@@ -417,13 +417,8 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
 
       try {
         const result = await craftStudentRecipe(recipeKey)
-        this.items = result.inventory.items
-        this.inventorySlots = slotsFromItems(this.items, this.inventorySlotCount || 30)
-        this.inventorySlotCount = this.inventorySlots.length
+        this.setInventorySlots(result.inventory)
         this.craftingRecipes = withKnownCraftingRecipes(result.recipes, this.items)
-        this.markEquippedItems()
-        this.syncSlotEquippedFlags()
-        this.syncHotbarQuantities()
       } catch (error) {
         this.craftingError = error instanceof Error ? error.message : String(error)
         throw error

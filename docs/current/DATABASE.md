@@ -147,5 +147,6 @@ Current rules:
 - Occupied slots store `item_type_id` and positive `quantity`.
 - Empty slots are represented in API responses; empty rows do not need to be stored.
 - The same item type may exist in multiple slots.
-- `student_inventory_item` remains as an aggregate compatibility table while existing crafting, equipment, hotbar, pet, placement, and Sunny Town quantity flows are migrated safely.
+- `student_inventory_item` remains as an aggregate compatibility table while equipment, hotbar, pet, placement, and Sunny Town quantity flows are migrated safely.
+- Student crafting recipe availability and execution use `student_inventory_slot` as the authoritative quantity source.
 - Inventory mutation helpers update slot rows and aggregate rows in the same transaction.

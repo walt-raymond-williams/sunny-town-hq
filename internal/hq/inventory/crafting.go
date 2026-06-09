@@ -54,8 +54,8 @@ type CraftingRecipesResponse struct {
 }
 
 type CraftRecipeResponse struct {
-	Inventory StudentResponse          `json:"inventory"`
-	Recipes   []CraftingRecipeResponse `json:"recipes"`
+	Inventory StudentInventorySlotsResponse `json:"inventory"`
+	Recipes   []CraftingRecipeResponse      `json:"recipes"`
 }
 
 type RecipeDefinition struct {
@@ -185,7 +185,7 @@ func CraftStudentRecipe(ctx context.Context, db *pgxpool.Pool, userID int64, req
 		return CraftRecipeResponse{}, err
 	}
 
-	inventory, err := LoadStudent(ctx, tx, userID)
+	inventory, err := LoadStudentSlots(ctx, tx, userID)
 	if err != nil {
 		return CraftRecipeResponse{}, err
 	}
@@ -209,6 +209,8 @@ func CraftingErrorMessage(err error) string {
 		return "recipe not found"
 	case errors.Is(err, ErrInsufficientIngredient):
 		return "not enough ingredients"
+	case errors.Is(err, ErrInventoryFull):
+		return "not enough room in inventory"
 	default:
 		return "crafting could not be completed"
 	}
@@ -291,10 +293,14 @@ func loadCraftingItemMetadata(ctx context.Context, querier Loader, userID int64,
 				coalesce(iit.icon_key, '') as icon_key,
 				coalesce(iit.max_stack, 0) as max_stack,
 				coalesce(iit.category, '') as category,
-				coalesce(sii.quantity, 0) as quantity
+				coalesce(slot_totals.quantity, 0) as quantity
 			from inventory_item_type iit
-			left join student_inventory_item sii on sii.item_type_id = iit.id
-				and sii.app_user_id = $1
+			left join (
+				select item_type_id, coalesce(sum(quantity), 0)::integer as quantity
+				from student_inventory_slot
+				where app_user_id = $1
+				group by item_type_id
+			) slot_totals on slot_totals.item_type_id = iit.id
 			where iit.key = any($2)
 		`,
 		userID,

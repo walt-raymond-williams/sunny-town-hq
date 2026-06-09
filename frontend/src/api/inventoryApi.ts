@@ -49,7 +49,7 @@ export async function moveStudentInventoryStack(request: InventoryMoveRequest): 
   return normalizeStudentInventorySlots(response)
 }
 
-function normalizeStudentInventorySlots(response: StudentInventorySlotsResponse): StudentInventorySlots {
+export function normalizeStudentInventorySlots(response: StudentInventorySlotsResponse): StudentInventorySlots {
   const slotCount = response.slotCount ?? 0
   const slots = normalizeInventorySlots(response.slots || [], slotCount)
   return {
