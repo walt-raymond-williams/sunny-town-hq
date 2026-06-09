@@ -48,6 +48,7 @@ For broad new features or redesigns, do discovery before implementation:
 - Once a GitHub issue exists for the work, treat the issue as the active task contract.
 - Agents assigned to a GitHub issue should work from the issue, read the linked repo docs for context, and update docs only when decisions or current-state architecture change.
 - Prefer small tickets that one agent can complete and verify. Split design/schema decisions from implementation when the implementation depends on unresolved architecture.
+- For multi-ticket features, use `docs/GITHUB_TRACKING_DOC_GUIDE.md` to create tracking docs and per-issue handoff docs.
 
 ## GitHub Issue Workflow
 
