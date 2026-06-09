@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09.
+Snapshot refreshed: 2026-06-09 after issue #16 creation.
 
 ### Closed
 
@@ -41,32 +41,35 @@ Snapshot refreshed: 2026-06-09.
 - #13 Render Sunny Town inventory as a grid  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/13
 
+- #15 Add inventory drag/drop state and API integration  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/15
+
 ### Open
 
-- #15 Add inventory drag/drop state and API integration  
+- #16 Replace hotbar assignment buttons with drop targets  
   Status: `status:ready`  
-  Blocked by: #11 and #13, both closed  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/15
+  Blocked by: #15, closed  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/16
 
 ## Recommended Next Management Step
 
-Start issue #15:
+Start issue #16:
 
-`Add inventory drag/drop state and API integration`
+`Replace hotbar assignment buttons with drop targets`
 
 Why:
 
-- The first inventory grid foundation slice is complete.
-- The HQ move/swap/merge API exists.
-- The frontend renders slotted inventory but still behaves like a click-selected grid with legacy buttons.
-- Drag/drop is the next bridge toward hotbar and equipment drop targets.
-- Handoff: `docs/SUNNY_TOWN_INVENTORY_DRAG_DROP_HANDOFF.md`.
+- The first inventory grid foundation slice and slot-to-slot drag/drop are complete.
+- Hotbar assignment already has a durable backend API.
+- This is the smallest next direct-manipulation slice.
+- It removes the most awkward `Slot N` hotbar assignment path from the critical player workflow.
+- Handoff: `docs/SUNNY_TOWN_HOTBAR_DROP_TARGET_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 15 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 16 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -82,3 +85,4 @@ git pull
 - `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_HANDOFF.md`
 - `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`
 - `docs/SUNNY_TOWN_INVENTORY_DRAG_DROP_HANDOFF.md`
+- `docs/SUNNY_TOWN_HOTBAR_DROP_TARGET_HANDOFF.md`
