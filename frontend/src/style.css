@@ -1049,6 +1049,26 @@ h2 {
   padding-top: 12px;
 }
 
+.sunny-town-inventory-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, 64px);
+  justify-content: start;
+  margin-bottom: 12px;
+}
+
+.sunny-town-selected-item {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 72px;
+  padding: 10px;
+}
+
 .sunny-town-inventory__item-actions {
   align-items: center;
   display: flex;
@@ -1145,6 +1165,14 @@ h2 {
     max-height: none;
     overflow-y: visible;
     width: 100%;
+  }
+
+  .sunny-town-inventory-grid {
+    grid-template-columns: repeat(auto-fit, 58px);
+  }
+
+  .sunny-town-selected-item {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .sunny-town-crafting {

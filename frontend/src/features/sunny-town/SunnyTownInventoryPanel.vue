@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { EquipmentSlot } from '../../types/inventory'
+import SunnyTownInventorySlot from './SunnyTownInventorySlot.vue'
 
 const props = defineProps<{
   craftingPanelOpen: boolean
@@ -21,7 +22,15 @@ const emit = defineEmits<{
 }>()
 
 const inventoryStore = useStudentInventoryStore()
+const selectedInventorySlotIndex = ref<number | null>(null)
 const selectedHotbarItem = computed(() => inventoryStore.hotbarSlots[props.selectedHotbarIndex]?.item || null)
+const selectedInventorySlot = computed(() => {
+  if (selectedInventorySlotIndex.value === null) {
+    return inventoryStore.inventorySlots.find((slot) => slot.item) || null
+  }
+  return inventoryStore.inventorySlots.find((slot) => slot.slotIndex === selectedInventorySlotIndex.value) || null
+})
+const selectedInventoryItem = computed(() => selectedInventorySlot.value?.item || null)
 const visibleCraftingRecipes = computed(() => (
   props.showAllCraftingRecipes ? inventoryStore.knownCraftingRecipes : inventoryStore.craftableRecipes
 ))
@@ -123,21 +132,32 @@ const visibleCraftingRecipes = computed(() => (
           </v-btn>
         </div>
       </section>
-      <div class="inventory-list inventory-list--compact">
-        <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item inventory-item--dark">
-          <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
+      <div class="sunny-town-inventory-grid" aria-label="Inventory slots">
+        <SunnyTownInventorySlot
+          v-for="slot in inventoryStore.inventorySlots"
+          :key="slot.slotIndex"
+          :item="slot.item"
+          :quantity="slot.item?.quantity"
+          :selected="selectedInventorySlot?.slotIndex === slot.slotIndex"
+          :slot-label="String(slot.slotIndex + 1)"
+          @select="selectedInventorySlotIndex = slot.slotIndex"
+        />
+      </div>
+      <section class="sunny-town-selected-item" aria-label="Selected inventory item">
+        <template v-if="selectedInventoryItem">
+          <span class="inventory-item__icon" :class="`inventory-item__icon--${selectedInventoryItem.iconKey || selectedInventoryItem.key}`" aria-hidden="true" />
           <div>
-            <p class="inventory-item__name">{{ item.name }}</p>
-            <p class="inventory-item__description">{{ item.description }}</p>
+            <p class="inventory-item__name">{{ selectedInventoryItem.name }}</p>
+            <p class="inventory-item__description">{{ selectedInventoryItem.description }}</p>
           </div>
           <div class="sunny-town-inventory__item-actions">
             <v-btn
-              v-if="item.equipSlot && !item.equipped"
+              v-if="selectedInventoryItem.equipSlot && !selectedInventoryItem.equipped"
               :loading="inventoryStore.isUpdatingEquipment"
               color="primary"
               size="x-small"
               variant="flat"
-              @click="emit('equipItem', item.key, item.equipSlot)"
+              @click="emit('equipItem', selectedInventoryItem.key, selectedInventoryItem.equipSlot)"
             >
               Wear
             </v-btn>
@@ -146,14 +166,15 @@ const visibleCraftingRecipes = computed(() => (
               color="warning"
               size="x-small"
               variant="tonal"
-              @click="emit('assignHotbar', item.key)"
+              @click="emit('assignHotbar', selectedInventoryItem.key)"
             >
               Slot {{ selectedHotbarIndex + 1 }}
             </v-btn>
-            <strong class="inventory-item__quantity">{{ item.quantity }}</strong>
+            <strong class="inventory-item__quantity">{{ selectedInventoryItem.quantity }}</strong>
           </div>
-        </div>
-      </div>
+        </template>
+        <p v-else class="inventory-item__description">Select an item slot.</p>
+      </section>
       <section class="sunny-town-hotbar-editor" aria-label="Selected hotbar slot">
         <div>
           <p class="inventory-item__name">Slot {{ selectedHotbarIndex + 1 }}</p>

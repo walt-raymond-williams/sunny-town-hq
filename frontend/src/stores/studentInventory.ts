@@ -2,12 +2,14 @@ import { defineStore } from 'pinia'
 import { craftStudentRecipe, getCraftingRecipes } from '../api/craftingApi'
 import { equipStudentItem, getStudentEquipment, unequipStudentItem } from '../api/equipmentApi'
 import { getStudentHotbar, setStudentHotbarSlot } from '../api/hotbarApi'
-import { getStudentInventory } from '../api/inventoryApi'
+import { getStudentInventorySlots } from '../api/inventoryApi'
 import { withKnownCraftingRecipes } from './craftingRecipes'
-import type { CraftingRecipe, EquippedSlot, EquipmentSlot, HotbarSlot, InventoryItem, StudentHotbar, StudentInventory } from '../types/inventory'
+import type { CraftingRecipe, EquippedSlot, EquipmentSlot, HotbarSlot, InventoryItem, InventorySlot, StudentHotbar, StudentInventory, StudentInventorySlots } from '../types/inventory'
 
 interface StudentInventoryState {
   items: InventoryItem[]
+  inventorySlotCount: number
+  inventorySlots: InventorySlot[]
   craftingRecipes: CraftingRecipe[]
   equipmentSlots: EquippedSlot[]
   hotbarSlots: HotbarSlot[]
@@ -34,6 +36,8 @@ const defaultHotbarSlots: HotbarSlot[] = Array.from({ length: 5 }, (_, index) =>
 export const useStudentInventoryStore = defineStore('studentInventory', {
   state: (): StudentInventoryState => ({
     items: [],
+    inventorySlotCount: 0,
+    inventorySlots: [],
     craftingRecipes: [],
     equipmentSlots: defaultEquipmentSlots,
     hotbarSlots: defaultHotbarSlots,
@@ -57,7 +61,18 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
   actions: {
     setItems(items: InventoryItem[]) {
       this.items = items
+      this.inventorySlots = slotsFromItems(items, this.inventorySlotCount || 30)
+      this.inventorySlotCount = this.inventorySlots.length
       this.markEquippedItems()
+      this.syncHotbarQuantities()
+      this.error = ''
+    },
+    setInventorySlots(inventory: StudentInventorySlots) {
+      this.items = inventory.items
+      this.inventorySlotCount = inventory.slotCount
+      this.inventorySlots = inventory.slots
+      this.markEquippedItems()
+      this.syncSlotEquippedFlags()
       this.syncHotbarQuantities()
       this.error = ''
     },
@@ -68,6 +83,8 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
     },
     setSessionInventory(inventory: StudentInventory, hotbar: StudentHotbar) {
       this.items = inventory.items
+      this.inventorySlots = slotsFromItems(inventory.items, this.inventorySlotCount || 30)
+      this.inventorySlotCount = this.inventorySlots.length
       this.equipmentSlots = mergeEquipmentSlots(this.equipmentSlots)
       this.hotbarSlots = mergeHotbarSlots(hotbar.slots)
       this.markEquippedItems()
@@ -77,7 +94,11 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
     setItemQuantity(itemKey: string, quantity: number) {
       if (quantity <= 0) {
         this.items = this.items.filter((item) => item.key !== itemKey)
+        this.inventorySlots = this.inventorySlots.map((slot) => (
+          slot.item?.key === itemKey ? { ...slot, item: null } : slot
+        ))
         this.markEquippedItems()
+        this.syncSlotEquippedFlags()
         this.syncHotbarQuantities()
         return
       }
@@ -86,7 +107,9 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.items = this.items.map((item) => (
           item.key === itemKey ? { ...item, quantity } : item
         ))
+        this.syncItemSlots(itemKey, quantity, existing)
         this.markEquippedItems()
+        this.syncSlotEquippedFlags()
         this.syncHotbarQuantities()
         return
       }
@@ -112,7 +135,9 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
           equipped: false,
         },
       ]
+      this.syncItemSlots(itemKey, quantity, this.items.find((item) => item.key === itemKey) || null)
       this.markEquippedItems()
+      this.syncSlotEquippedFlags()
       this.syncHotbarQuantities()
     },
     setEquipmentSlots(slots: EquippedSlot[]) {
@@ -126,12 +151,15 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
 
       try {
         const [inventory, equipment] = await Promise.all([
-          getStudentInventory(),
+          getStudentInventorySlots(),
           getStudentEquipment(),
         ])
         this.items = inventory.items
+        this.inventorySlotCount = inventory.slotCount
+        this.inventorySlots = inventory.slots
         this.equipmentSlots = mergeEquipmentSlots(equipment.slots)
         this.markEquippedItems()
+        this.syncSlotEquippedFlags()
         this.syncHotbarQuantities()
       } catch (error) {
         this.error = error instanceof Error ? error.message : String(error)
@@ -187,8 +215,11 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       try {
         const result = await craftStudentRecipe(recipeKey)
         this.items = result.inventory.items
+        this.inventorySlots = slotsFromItems(this.items, this.inventorySlotCount || 30)
+        this.inventorySlotCount = this.inventorySlots.length
         this.craftingRecipes = withKnownCraftingRecipes(result.recipes, this.items)
         this.markEquippedItems()
+        this.syncSlotEquippedFlags()
         this.syncHotbarQuantities()
       } catch (error) {
         this.craftingError = error instanceof Error ? error.message : String(error)
@@ -238,6 +269,61 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         equipped: equippedKeys.has(item.key),
       }))
     },
+    syncSlotEquippedFlags() {
+      const byKey = new Map(this.items.map((item) => [item.key, item]))
+      this.inventorySlots = this.inventorySlots.map((slot) => ({
+        ...slot,
+        item: slot.item ? { ...slot.item, equipped: byKey.get(slot.item.key)?.equipped ?? slot.item.equipped } : null,
+      }))
+    },
+    syncItemSlots(itemKey: string, quantity: number, metadataSource: InventoryItem | null) {
+      const slotCount = this.inventorySlotCount || 30
+      let remaining = quantity
+      let metadata = metadataSource || this.items.find((item) => item.key === itemKey) || null
+      if (!metadata) {
+        const fallback = fallbackItemMetadata(itemKey)
+        metadata = {
+          key: itemKey,
+          name: itemKey,
+          description: '',
+          quantity: 0,
+          equipSlot: '',
+          visualKey: '',
+          iconKey: fallback.iconKey,
+          maxStack: fallback.maxStack,
+          category: fallback.category,
+          equipped: false,
+        }
+      }
+      const maxStack = metadata.maxStack > 0 ? metadata.maxStack : quantity
+      const nextSlots = ensureSlotCount(this.inventorySlots, slotCount).map((slot) => {
+        if (slot.item?.key !== itemKey) {
+          return slot
+        }
+        if (remaining <= 0) {
+          return { ...slot, item: null }
+        }
+        const slotQuantity = Math.min(remaining, maxStack)
+        remaining -= slotQuantity
+        return {
+          ...slot,
+          item: { ...metadata, quantity: slotQuantity },
+        }
+      })
+      for (const slot of nextSlots) {
+        if (remaining <= 0) {
+          break
+        }
+        if (slot.item) {
+          continue
+        }
+        const slotQuantity = Math.min(remaining, maxStack)
+        slot.item = { ...metadata, quantity: slotQuantity }
+        remaining -= slotQuantity
+      }
+      this.inventorySlots = nextSlots
+      this.inventorySlotCount = nextSlots.length
+    },
     syncHotbarQuantities() {
       const byKey = new Map(this.items.map((item) => [item.key, item]))
       this.hotbarSlots = mergeHotbarSlots(this.hotbarSlots).map((slot) => {
@@ -264,6 +350,33 @@ function mergeHotbarSlots(slots: HotbarSlot[]): HotbarSlot[] {
   return defaultHotbarSlots.map((defaultSlot) => {
     const slot = slots.find((candidate) => candidate.slot === defaultSlot.slot)
     return slot ? { slot: slot.slot, item: slot.item ? { ...slot.item } : null } : { ...defaultSlot }
+  })
+}
+
+function slotsFromItems(items: InventoryItem[], slotCount: number): InventorySlot[] {
+  const slots = ensureSlotCount([], slotCount)
+  let slotIndex = 0
+  for (const item of items) {
+    let remaining = item.quantity
+    const maxStack = item.maxStack > 0 ? item.maxStack : item.quantity
+    while (remaining > 0 && slotIndex < slots.length) {
+      const quantity = Math.min(remaining, maxStack)
+      slots[slotIndex] = {
+        slotIndex,
+        item: { ...item, quantity },
+      }
+      remaining -= quantity
+      slotIndex += 1
+    }
+  }
+  return slots
+}
+
+function ensureSlotCount(slots: InventorySlot[], slotCount: number): InventorySlot[] {
+  const count = Math.max(slotCount, slots.length, 0)
+  return Array.from({ length: count }, (_, slotIndex) => {
+    const slot = slots.find((candidate) => candidate.slotIndex === slotIndex)
+    return slot ? { slotIndex, item: slot.item ? { ...slot.item } : null } : { slotIndex, item: null }
   })
 }
 

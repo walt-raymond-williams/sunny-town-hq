@@ -15,6 +15,17 @@ export interface StudentInventory {
   items: InventoryItem[]
 }
 
+export interface InventorySlot {
+  slotIndex: number
+  item: InventoryItem | null
+}
+
+export interface StudentInventorySlots {
+  slotCount: number
+  slots: InventorySlot[]
+  items: InventoryItem[]
+}
+
 export interface InventorySlotItem {
   key: string
   name: string
