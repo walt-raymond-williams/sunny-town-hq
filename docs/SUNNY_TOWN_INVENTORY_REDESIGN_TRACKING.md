@@ -30,7 +30,7 @@ Workflow:
 ### Open
 
 - #9 Design slotted player inventory schema and compatibility plan  
-  Status: `status:needs-design`  
+  Status: `status:in-progress`  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/9
 
 - #10 Implement slotted player inventory persistence  
@@ -50,7 +50,7 @@ Workflow:
 
 ## Recommended Next Management Step
 
-Start or hand off issue #9:
+Complete issue #9:
 
 `Design slotted player inventory schema and compatibility plan`
 
@@ -59,13 +59,13 @@ Why:
 - It unblocks the backend implementation path.
 - #13 remains blocked until slotted inventory persistence exists.
 - #12 is closed, so the frontend component foundation is available or expected to be available on the integration branch.
+- #9 is now in progress and should produce `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 9 --comments
-& 'C:\Program Files\GitHub CLI\gh.exe' issue edit 9 --remove-label "status:needs-design" --add-label "status:in-progress"
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -78,3 +78,4 @@ git pull
 - `docs/SUNNY_TOWN_INVENTORY_REDESIGN_TICKETS.md`
 - `docs/SUNNY_TOWN_INVENTORY_METADATA_HANDOFF.md`
 - `docs/SUNNY_TOWN_INVENTORY_SLOT_COMPONENT_HANDOFF.md`
+- `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_HANDOFF.md`
