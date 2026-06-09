@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after issue #19 creation.
+Snapshot refreshed: 2026-06-09 after issue #20 creation.
 
 ### Closed
 
@@ -71,32 +71,36 @@ Snapshot refreshed: 2026-06-09 after issue #19 creation.
 - #18 Remove legacy button-based inventory assignment UI  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/18
 
+- #19 Add character preview shell  
+  Completed in `20bac63`.  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/19
+
 ### Open
 
-- #19 Add character preview shell  
+- #20 Add stats-ready character panel  
   Status: `status:ready`  
-  Blocked by: #17 and #18, both closed  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/19
+  Blocked by: #19, closed  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/20
 
 ## Recommended Next Management Step
 
-Start issue #19:
+Start issue #20:
 
-`Add character preview shell`
+`Add stats-ready character panel`
 
 Why:
 
-- Inventory slot movement, hotbar drops, equipment drops, and legacy assignment cleanup are complete.
-- Equipment slots are now stable visual anchors.
-- The preview gives players immediate visual payoff when equipment changes.
-- This lays out space for a later stats-ready panel without implementing fake stats.
-- Handoff: `docs/SUNNY_TOWN_CHARACTER_PREVIEW_HANDOFF.md`.
+- The character preview shell landed and is verified.
+- The stats-ready panel directly follows the preview work.
+- This preserves room for future activity-driven progression without adding fake stats or manual point allocation.
+- It is a small frontend slice before larger crafting, container, and tabbed-menu work.
+- Handoff: `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 19 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 20 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -116,3 +120,4 @@ git pull
 - `docs/SUNNY_TOWN_EQUIPMENT_DROP_TARGET_HANDOFF.md`
 - `docs/SUNNY_TOWN_LEGACY_INVENTORY_BUTTON_REMOVAL_HANDOFF.md`
 - `docs/SUNNY_TOWN_CHARACTER_PREVIEW_HANDOFF.md`
+- `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`
