@@ -15,6 +15,16 @@ export interface StudentInventory {
   items: InventoryItem[]
 }
 
+export interface InventorySlotItem {
+  key: string
+  name: string
+  description: string
+  iconKey: string
+  quantity?: number
+  maxStack?: number
+  category?: string
+}
+
 export interface HotbarSlot {
   slot: number
   item: InventoryItem | null
