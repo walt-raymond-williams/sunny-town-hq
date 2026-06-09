@@ -86,17 +86,21 @@ func TestRunMigrationsIntegration(t *testing.T) {
 					'student_inventory_ledger',
 					'student_equipped_item',
 					'student_hotbar_slot',
+					'shop_stock_item',
+					'shop_stock_ledger',
+					'shop_input_storage_item',
 					'student_sunny_town_position',
 					'sunny_town_map_object',
 					'sunny_town_character',
 					'sunny_town_npc_character',
-					'sunny_town_npc_job_production_ledger'
+					'sunny_town_npc_job_production_ledger',
+					'sunny_town_npc_job_production_blocked_ledger'
 				)
 		`,
 	).Scan(&tableCount); err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if tableCount != 18 {
-		t.Fatalf("table count = %d, want 18", tableCount)
+	if tableCount != 22 {
+		t.Fatalf("table count = %d, want 22", tableCount)
 	}
 }

@@ -140,6 +140,12 @@ func TestCommitNPCJobProductionIdempotent(t *testing.T) {
 		t.Fatalf("ensure npc error = %v", err)
 	}
 	characterID := ensured.NPCs[0].CharacterID
+	if accepted, _, err := hqinventory.IncrementShopInputStorageItem(ctx, db, hqinventory.CookieKeeperShopID, hqinventory.FlourKey, 1); err != nil || !accepted {
+		t.Fatalf("seed flour input accepted=%v err=%v, want accepted", accepted, err)
+	}
+	if accepted, _, err := hqinventory.IncrementShopInputStorageItem(ctx, db, hqinventory.CookieKeeperShopID, hqinventory.SugarKey, 1); err != nil || !accepted {
+		t.Fatalf("seed sugar input accepted=%v err=%v, want accepted", accepted, err)
+	}
 	request := NPCJobProductionRequest{
 		EventID:     "sunny-town-main:cookie-keeper:shopkeeper_stock:cookie-keeper-counter:1",
 		CharacterID: characterID,
@@ -169,10 +175,14 @@ func TestCommitNPCJobProductionIdempotent(t *testing.T) {
 	}
 
 	var rows int
+	var blockedRows int
 	var stockQuantity int
 	var stockLedgerRows int
 	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_job_production_ledger where character_id = $1", characterID).Scan(&rows); err != nil {
 		t.Fatalf("count production ledger rows: %v", err)
+	}
+	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_job_production_blocked_ledger where character_id = $1", characterID).Scan(&blockedRows); err != nil {
+		t.Fatalf("count blocked production ledger rows: %v", err)
 	}
 	if err := db.QueryRow(
 		ctx,
@@ -190,8 +200,145 @@ func TestCommitNPCJobProductionIdempotent(t *testing.T) {
 	if err := db.QueryRow(ctx, "select count(*) from shop_stock_ledger").Scan(&stockLedgerRows); err != nil {
 		t.Fatalf("count shop stock ledger rows: %v", err)
 	}
-	if rows != 1 || stockQuantity != 1 || stockLedgerRows != 1 {
-		t.Fatalf("productionRows=%d stockQuantity=%d stockLedgerRows=%d, want 1, 1, 1", rows, stockQuantity, stockLedgerRows)
+	if rows != 1 || blockedRows != 0 || stockQuantity != 1 || stockLedgerRows != 1 {
+		t.Fatalf("productionRows=%d blockedRows=%d stockQuantity=%d stockLedgerRows=%d, want 1, 0, 1, 1", rows, blockedRows, stockQuantity, stockLedgerRows)
+	}
+}
+
+func TestCommitNPCJobProductionBlocksWhenCookieInputsAreMissing(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	ensured, err := store.EnsureNPCCharacters(ctx, EnsureNPCCharactersRequest{
+		RoomID: "sunny-town-main",
+		NPCs: []EnsureNPCCharacterInput{{
+			NPCKey:      "cookie-keeper",
+			DisplayName: "Cookie Keeper",
+			AvatarID:    "keeper",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ensure npc error = %v", err)
+	}
+	if accepted, _, err := hqinventory.IncrementShopInputStorageItem(ctx, db, hqinventory.CookieKeeperShopID, hqinventory.FlourKey, 1); err != nil || !accepted {
+		t.Fatalf("seed flour input accepted=%v err=%v, want accepted", accepted, err)
+	}
+	request := NPCJobProductionRequest{
+		EventID:     "sunny-town-main:cookie-keeper:shopkeeper_stock:cookie-keeper-counter:missing-inputs",
+		CharacterID: ensured.NPCs[0].CharacterID,
+		RoomID:      "sunny-town-main",
+		MapID:       "sunny-town-house-1",
+		NPCKey:      "cookie-keeper",
+		JobKey:      "shopkeeper_stock",
+		LocationID:  "cookie-keeper-counter",
+		OutputKey:   "shop_stock_progress",
+		Amount:      1,
+	}
+
+	first, err := store.CommitNPCJobProduction(ctx, request)
+	if err != nil {
+		t.Fatalf("first production commit error = %v", err)
+	}
+	if !first.Accepted || first.Duplicate || !first.Blocked || first.BlockedReason != npcJobProductionBlockedMissingInputs {
+		t.Fatalf("first production commit = %#v, want accepted blocked missing_inputs", first)
+	}
+
+	second, err := store.CommitNPCJobProduction(ctx, request)
+	if err != nil {
+		t.Fatalf("second production commit error = %v", err)
+	}
+	if !second.Accepted || !second.Duplicate || !second.Blocked || second.BlockedReason != npcJobProductionBlockedMissingInputs {
+		t.Fatalf("second production commit = %#v, want duplicate blocked missing_inputs", second)
+	}
+
+	var productionRows int
+	var blockedRows int
+	var stockRows int
+	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_job_production_ledger").Scan(&productionRows); err != nil {
+		t.Fatalf("count production rows: %v", err)
+	}
+	if err := db.QueryRow(ctx, "select count(*) from sunny_town_npc_job_production_blocked_ledger").Scan(&blockedRows); err != nil {
+		t.Fatalf("count blocked rows: %v", err)
+	}
+	if err := db.QueryRow(ctx, "select count(*) from shop_stock_item").Scan(&stockRows); err != nil {
+		t.Fatalf("count stock rows: %v", err)
+	}
+	if productionRows != 0 || blockedRows != 1 || stockRows != 0 {
+		t.Fatalf("productionRows=%d blockedRows=%d stockRows=%d, want 0, 1, 0", productionRows, blockedRows, stockRows)
+	}
+
+	inputStorage, err := hqinventory.LoadShopInputStorage(ctx, db, hqinventory.CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load input storage: %v", err)
+	}
+	if len(inputStorage.Items) != 1 || inputStorage.Items[0].ItemKey != hqinventory.FlourKey || inputStorage.Items[0].Quantity != 1 {
+		t.Fatalf("input storage = %#v, want flour unchanged after blocked production", inputStorage)
+	}
+}
+
+func TestCommitNPCJobProductionBlocksWhenCookieOutputIsFull(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	store := Store{DB: db}
+	ensured, err := store.EnsureNPCCharacters(ctx, EnsureNPCCharactersRequest{
+		RoomID: "sunny-town-main",
+		NPCs: []EnsureNPCCharacterInput{{
+			NPCKey:      "cookie-keeper",
+			DisplayName: "Cookie Keeper",
+			AvatarID:    "keeper",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ensure npc error = %v", err)
+	}
+	if _, _, err := hqinventory.CommitShopStockDelta(ctx, db, hqinventory.ShopStockEventRequest{
+		EventID: "seed-full-output",
+		Source:  "test",
+		ShopID:  hqinventory.CookieKeeperShopID,
+		ItemKey: hqinventory.CookieKey,
+		Delta:   hqinventory.CookieKeeperCookieStockCapacity,
+	}); err != nil {
+		t.Fatalf("seed full output stock: %v", err)
+	}
+	if accepted, _, err := hqinventory.IncrementShopInputStorageItem(ctx, db, hqinventory.CookieKeeperShopID, hqinventory.FlourKey, 1); err != nil || !accepted {
+		t.Fatalf("seed flour input accepted=%v err=%v, want accepted", accepted, err)
+	}
+	if accepted, _, err := hqinventory.IncrementShopInputStorageItem(ctx, db, hqinventory.CookieKeeperShopID, hqinventory.SugarKey, 1); err != nil || !accepted {
+		t.Fatalf("seed sugar input accepted=%v err=%v, want accepted", accepted, err)
+	}
+
+	response, err := store.CommitNPCJobProduction(ctx, NPCJobProductionRequest{
+		EventID:     "sunny-town-main:cookie-keeper:shopkeeper_stock:cookie-keeper-counter:output-full",
+		CharacterID: ensured.NPCs[0].CharacterID,
+		RoomID:      "sunny-town-main",
+		MapID:       "sunny-town-house-1",
+		NPCKey:      "cookie-keeper",
+		JobKey:      "shopkeeper_stock",
+		LocationID:  "cookie-keeper-counter",
+		OutputKey:   "shop_stock_progress",
+		Amount:      1,
+	})
+	if err != nil {
+		t.Fatalf("production commit error = %v", err)
+	}
+	if !response.Accepted || response.Duplicate || !response.Blocked || response.BlockedReason != npcJobProductionBlockedOutputFull {
+		t.Fatalf("production commit = %#v, want accepted blocked output_full", response)
+	}
+
+	inputStorage, err := hqinventory.LoadShopInputStorage(ctx, db, hqinventory.CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load input storage: %v", err)
+	}
+	quantities := map[string]int{}
+	for _, item := range inputStorage.Items {
+		quantities[item.ItemKey] = item.Quantity
+	}
+	if quantities[hqinventory.FlourKey] != 1 || quantities[hqinventory.SugarKey] != 1 {
+		t.Fatalf("input storage = %#v, want flour and sugar unchanged", inputStorage)
 	}
 }
 
@@ -214,6 +361,12 @@ func TestLoadNPCJobProductionProgressAggregatesLedger(t *testing.T) {
 	characterIDs := map[string]int64{}
 	for _, npc := range ensured.NPCs {
 		characterIDs[npc.NPCKey] = npc.CharacterID
+	}
+	if accepted, _, err := hqinventory.IncrementShopInputStorageItem(ctx, db, hqinventory.CookieKeeperShopID, hqinventory.FlourKey, 3); err != nil || !accepted {
+		t.Fatalf("seed flour input accepted=%v err=%v, want accepted", accepted, err)
+	}
+	if accepted, _, err := hqinventory.IncrementShopInputStorageItem(ctx, db, hqinventory.CookieKeeperShopID, hqinventory.SugarKey, 3); err != nil || !accepted {
+		t.Fatalf("seed sugar input accepted=%v err=%v, want accepted", accepted, err)
 	}
 
 	requests := []NPCJobProductionRequest{
@@ -694,6 +847,21 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			metadata jsonb not null default '{}'::jsonb,
 			created_at timestamptz not null default now()
 		)`,
+		`create table sunny_town_npc_job_production_blocked_ledger (
+			id bigserial primary key,
+			event_id text not null unique,
+			character_id bigint not null references sunny_town_character(id) on delete cascade,
+			room_id text not null,
+			map_id text not null,
+			npc_key text not null,
+			job_key text not null,
+			location_id text not null,
+			output_key text not null,
+			amount integer not null,
+			reason text not null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now()
+		)`,
 		`create table student_wallet (
 			app_user_id bigint primary key references app_user(id) on delete cascade,
 			star_balance integer not null default 0,
@@ -727,6 +895,8 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 		`insert into inventory_item_type (key, name, description)
 			values
 				('cookie', 'Cookie', 'A treat for your pet.'),
+				('flour', 'Flour', 'A basic baking ingredient.'),
+				('sugar', 'Sugar', 'A sweet baking ingredient.'),
 				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
 				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
 				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
@@ -772,6 +942,15 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			metadata jsonb not null default '{}'::jsonb,
 			created_at timestamptz not null default now(),
 			constraint shop_stock_ledger_delta_nonzero check (delta <> 0)
+		)`,
+		`create table shop_input_storage_item (
+			shop_id text not null,
+			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
+			quantity integer not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (shop_id, item_type_id),
+			constraint shop_input_storage_item_quantity_nonnegative check (quantity >= 0)
 		)`,
 		`create table student_sunny_town_position (
 			app_user_id bigint primary key references app_user(id) on delete cascade,

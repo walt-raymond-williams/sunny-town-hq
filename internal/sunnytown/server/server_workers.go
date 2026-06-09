@@ -107,6 +107,10 @@ func (srv *Server) RunNPCJobProductionWorker(ctx context.Context) {
 				log.Printf("npc job production commit failed event=%s npc=%s character=%d: %v", event.eventID, event.npcKey, event.characterID, err)
 				continue
 			}
+			if response.Blocked {
+				log.Printf("npc job production blocked event=%s npc=%s character=%d duplicate=%v reason=%s", event.eventID, event.npcKey, event.characterID, response.Duplicate, response.BlockedReason)
+				continue
+			}
 			log.Printf("npc job production commit success event=%s npc=%s character=%d duplicate=%v", event.eventID, event.npcKey, event.characterID, response.Duplicate)
 		}
 	}

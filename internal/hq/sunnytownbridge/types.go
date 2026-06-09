@@ -66,8 +66,10 @@ type NPCJobProductionRequest struct {
 }
 
 type NPCJobProductionResponse struct {
-	Accepted  bool `json:"accepted"`
-	Duplicate bool `json:"duplicate"`
+	Accepted      bool   `json:"accepted"`
+	Duplicate     bool   `json:"duplicate"`
+	Blocked       bool   `json:"blocked,omitempty"`
+	BlockedReason string `json:"blocked_reason,omitempty"`
 }
 
 type NPCJobProductionProgressRequest struct {
@@ -201,6 +203,19 @@ type NPCJobProductionLedgerRequest struct {
 	LocationID  string
 	OutputKey   string
 	Amount      int
+}
+
+type NPCJobProductionBlockedLedgerRequest struct {
+	EventID     string
+	CharacterID int64
+	RoomID      string
+	MapID       string
+	NPCKey      string
+	JobKey      string
+	LocationID  string
+	OutputKey   string
+	Amount      int
+	Reason      string
 }
 
 type Store struct {

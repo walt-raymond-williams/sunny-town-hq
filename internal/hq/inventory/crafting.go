@@ -11,6 +11,13 @@ import (
 var (
 	ErrUnknownRecipe          = errors.New("unknown recipe")
 	ErrInsufficientIngredient = errors.New("not enough ingredients")
+	ErrRecipeOutputFull       = errors.New("recipe output storage is full")
+)
+
+const (
+	CookieRecipeKey = "cookie"
+	FlourKey        = "flour"
+	SugarKey        = "sugar"
 )
 
 type CraftRecipeRequest struct {
@@ -46,10 +53,11 @@ type CraftRecipeResponse struct {
 }
 
 type RecipeDefinition struct {
-	Key         string
-	OutputKey   string
-	Quantity    int
-	Ingredients []RecipeIngredient
+	Key                  string
+	OutputKey            string
+	Quantity             int
+	Ingredients          []RecipeIngredient
+	AvailableToStudentUI bool
 }
 
 type RecipeIngredient struct {
@@ -62,6 +70,10 @@ type recipeStorage interface {
 	ProduceRecipeItem(ctx context.Context, itemKey string, quantity int) error
 }
 
+type recipePreparingStorage interface {
+	PrepareRecipe(ctx context.Context, recipe RecipeDefinition) error
+}
+
 type studentRecipeStorage struct {
 	querier Querier
 	userID  int64
@@ -69,11 +81,21 @@ type studentRecipeStorage struct {
 
 var recipeCatalog = []RecipeDefinition{
 	{
-		Key:       "stone_block",
-		OutputKey: "stone_block",
-		Quantity:  1,
+		Key:                  "stone_block",
+		OutputKey:            "stone_block",
+		Quantity:             1,
+		AvailableToStudentUI: true,
 		Ingredients: []RecipeIngredient{
 			{ItemKey: "rock", Quantity: 4},
+		},
+	},
+	{
+		Key:       CookieRecipeKey,
+		OutputKey: CookieKey,
+		Quantity:  1,
+		Ingredients: []RecipeIngredient{
+			{ItemKey: FlourKey, Quantity: 1},
+			{ItemKey: SugarKey, Quantity: 1},
 		},
 	},
 }
@@ -81,6 +103,9 @@ var recipeCatalog = []RecipeDefinition{
 func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (CraftingRecipesResponse, error) {
 	itemKeys := map[string]bool{}
 	for _, recipe := range recipeCatalog {
+		if !recipe.AvailableToStudentUI {
+			continue
+		}
 		itemKeys[recipe.OutputKey] = true
 		for _, ingredient := range recipe.Ingredients {
 			itemKeys[ingredient.ItemKey] = true
@@ -94,6 +119,9 @@ func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (Cra
 
 	response := CraftingRecipesResponse{Recipes: []CraftingRecipeResponse{}}
 	for _, recipe := range recipeCatalog {
+		if !recipe.AvailableToStudentUI {
+			continue
+		}
 		output := ownedItems[recipe.OutputKey]
 		recipeResponse := CraftingRecipeResponse{
 			Key:         recipe.Key,
@@ -184,6 +212,12 @@ func recipeByKey(key string) (RecipeDefinition, bool) {
 }
 
 func executeRecipe(ctx context.Context, recipe RecipeDefinition, storage recipeStorage) error {
+	if preparingStorage, ok := storage.(recipePreparingStorage); ok {
+		if err := preparingStorage.PrepareRecipe(ctx, recipe); err != nil {
+			return err
+		}
+	}
+
 	for _, ingredient := range recipe.Ingredients {
 		consumed, err := storage.ConsumeRecipeItem(ctx, ingredient.ItemKey, ingredient.Quantity)
 		if err != nil {
@@ -195,6 +229,22 @@ func executeRecipe(ctx context.Context, recipe RecipeDefinition, storage recipeS
 	}
 
 	return storage.ProduceRecipeItem(ctx, recipe.OutputKey, recipe.Quantity)
+}
+
+func scaledRecipe(recipe RecipeDefinition, amount int) RecipeDefinition {
+	if amount <= 1 {
+		return recipe
+	}
+	scaled := recipe
+	scaled.Quantity = recipe.Quantity * amount
+	scaled.Ingredients = make([]RecipeIngredient, 0, len(recipe.Ingredients))
+	for _, ingredient := range recipe.Ingredients {
+		scaled.Ingredients = append(scaled.Ingredients, RecipeIngredient{
+			ItemKey:  ingredient.ItemKey,
+			Quantity: ingredient.Quantity * amount,
+		})
+	}
+	return scaled
 }
 
 func (storage studentRecipeStorage) ConsumeRecipeItem(ctx context.Context, itemKey string, quantity int) (bool, error) {

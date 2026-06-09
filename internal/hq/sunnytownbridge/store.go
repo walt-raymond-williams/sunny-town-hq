@@ -18,6 +18,11 @@ var (
 	supportedNPCOutputKeys = []string{"shop_stock_progress", "lesson_prep_progress"}
 )
 
+const (
+	npcJobProductionBlockedMissingInputs = "missing_inputs"
+	npcJobProductionBlockedOutputFull    = "output_full"
+)
+
 func (store Store) CommitReward(ctx context.Context, request RewardEventRequest) (RewardEventResponse, error) {
 	request.EventID = strings.TrimSpace(request.EventID)
 	request.RoomID = strings.TrimSpace(request.RoomID)
@@ -111,7 +116,21 @@ func (store Store) CommitNPCJobProduction(ctx context.Context, request NPCJobPro
 	}
 	defer tx.Rollback(ctx)
 
-	inserted, err := CommitNPCJobProductionLedger(ctx, tx, NPCJobProductionLedgerRequest{
+	if err := lockNPCJobProductionEvent(ctx, tx, request.EventID); err != nil {
+		return NPCJobProductionResponse{}, err
+	}
+	found, blocked, blockedReason, err := loadNPCJobProductionEventOutcome(ctx, tx, request.EventID)
+	if err != nil {
+		return NPCJobProductionResponse{}, err
+	}
+	if found {
+		if err := tx.Commit(ctx); err != nil {
+			return NPCJobProductionResponse{}, err
+		}
+		return NPCJobProductionResponse{Accepted: true, Duplicate: true, Blocked: blocked, BlockedReason: blockedReason}, nil
+	}
+
+	ledgerRequest := NPCJobProductionLedgerRequest{
 		EventID:     request.EventID,
 		CharacterID: request.CharacterID,
 		RoomID:      request.RoomID,
@@ -121,26 +140,98 @@ func (store Store) CommitNPCJobProduction(ctx context.Context, request NPCJobPro
 		LocationID:  request.LocationID,
 		OutputKey:   request.OutputKey,
 		Amount:      request.Amount,
-	})
-	if err != nil {
-		return NPCJobProductionResponse{}, err
 	}
-	if inserted && request.JobKey == "shopkeeper_stock" && request.OutputKey == "shop_stock_progress" {
-		if _, _, err := hqinventory.CommitShopStockDelta(ctx, tx, hqinventory.ShopStockEventRequest{
-			EventID: "npc-job-production:" + request.EventID,
-			Source:  "npc_job_production",
-			ShopID:  hqinventory.CookieKeeperShopID,
-			ItemKey: hqinventory.CookieKey,
-			Delta:   request.Amount,
-		}); err != nil {
+
+	if request.JobKey == "shopkeeper_stock" && request.OutputKey == "shop_stock_progress" {
+		err := hqinventory.CommitShopRecipeProduction(ctx, tx, hqinventory.ShopRecipeProductionRequest{
+			EventID:   "npc-job-production:" + request.EventID,
+			Source:    "npc_job_production",
+			ShopID:    hqinventory.CookieKeeperShopID,
+			RecipeKey: hqinventory.CookieRecipeKey,
+			Amount:    request.Amount,
+		})
+		if errors.Is(err, hqinventory.ErrInsufficientIngredient) || errors.Is(err, hqinventory.ErrRecipeOutputFull) {
+			reason := npcJobProductionBlockedMissingInputs
+			if errors.Is(err, hqinventory.ErrRecipeOutputFull) {
+				reason = npcJobProductionBlockedOutputFull
+			}
+			if _, err := CommitNPCJobProductionBlockedLedger(ctx, tx, NPCJobProductionBlockedLedgerRequest{
+				EventID:     request.EventID,
+				CharacterID: request.CharacterID,
+				RoomID:      request.RoomID,
+				MapID:       request.MapID,
+				NPCKey:      request.NPCKey,
+				JobKey:      request.JobKey,
+				LocationID:  request.LocationID,
+				OutputKey:   request.OutputKey,
+				Amount:      request.Amount,
+				Reason:      reason,
+			}); err != nil {
+				return NPCJobProductionResponse{}, err
+			}
+			if err := tx.Commit(ctx); err != nil {
+				return NPCJobProductionResponse{}, err
+			}
+			return NPCJobProductionResponse{Accepted: true, Blocked: true, BlockedReason: reason}, nil
+		}
+		if err != nil {
 			return NPCJobProductionResponse{}, err
 		}
+	}
+
+	inserted, err := CommitNPCJobProductionLedger(ctx, tx, ledgerRequest)
+	if err != nil {
+		return NPCJobProductionResponse{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return NPCJobProductionResponse{}, err
 	}
 
 	return NPCJobProductionResponse{Accepted: true, Duplicate: !inserted}, nil
+}
+
+func lockNPCJobProductionEvent(ctx context.Context, querier rowQuerier, eventID string) error {
+	var locked int
+	return querier.QueryRow(
+		ctx,
+		`select 1 from (select pg_advisory_xact_lock(hashtext('npc-job-production:' || $1))) as locked`,
+		eventID,
+	).Scan(&locked)
+}
+
+func loadNPCJobProductionEventOutcome(ctx context.Context, querier rowQuerier, eventID string) (bool, bool, string, error) {
+	var found bool
+	var blocked bool
+	var reason string
+	err := querier.QueryRow(
+		ctx,
+		`
+			select exists(
+					select 1
+					from sunny_town_npc_job_production_ledger
+					where event_id = $1
+				) or exists(
+					select 1
+					from sunny_town_npc_job_production_blocked_ledger
+					where event_id = $1
+				) as found,
+				exists(
+					select 1
+					from sunny_town_npc_job_production_blocked_ledger
+					where event_id = $1
+				) as blocked,
+				coalesce(
+					(
+						select reason
+						from sunny_town_npc_job_production_blocked_ledger
+						where event_id = $1
+					),
+					''
+				) as reason
+		`,
+		eventID,
+	).Scan(&found, &blocked, &reason)
+	return found, blocked, reason, err
 }
 
 func (store Store) LoadNPCJobProductionProgress(ctx context.Context, request NPCJobProductionProgressRequest) (NPCJobProductionProgressResponse, error) {

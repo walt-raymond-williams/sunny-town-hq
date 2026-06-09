@@ -46,6 +46,7 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `sunny_town_character`: shared Sunny Town character identity for player-controlled and future NPC actors
 - `sunny_town_npc_character`: durable NPC character mapping by room and NPC key
 - `sunny_town_npc_job_production_ledger`: idempotent durable NPC job production events
+- `sunny_town_npc_job_production_blocked_ledger`: idempotent durable NPC job production attempts blocked by storage/recipe state
 
 ## Migration Layout
 
@@ -64,6 +65,9 @@ deploy/postgres/migrations/
   0009_shop_stock.sql
   0010_seed_cookie_keeper_shop_stock.sql
   0011_shop_input_storage.sql
+  0012_cookie_recipe_inputs.sql
+  0013_npc_job_production_blocked.sql
+  0014_seed_cookie_keeper_input_storage.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.

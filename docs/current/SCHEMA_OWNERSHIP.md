@@ -93,7 +93,7 @@ Tables, constraints, and indexes:
 - `shop_input_storage_item_shop_id_check`
 - `shop_input_storage_item_quantity_nonnegative`
 
-Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`
+Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`, `0012_cookie_recipe_inputs.sql`, `0014_seed_cookie_keeper_input_storage.sql`
 
 ### Pet
 
@@ -129,8 +129,11 @@ Tables, constraints, and indexes:
 - `sunny_town_npc_job_production_amount_positive`
 - `sunny_town_npc_job_production_character_idx`
 - `sunny_town_npc_job_production_job_idx`
+- `sunny_town_npc_job_production_blocked_ledger`
+- `sunny_town_npc_job_production_blocked_reason_check`
+- `sunny_town_npc_job_production_blocked_room_idx`
 
-Migration targets: `0004_sunny_town_state.sql`, `0008_sunny_town_npc_job_production.sql`
+Migration targets: `0004_sunny_town_state.sql`, `0008_sunny_town_npc_job_production.sql`, `0013_npc_job_production_blocked.sql`
 
 ### Sunny Town Characters
 

@@ -518,17 +518,19 @@ Implemented notes:
 - Revised the next production architecture decision: recipes should be shared HQ-owned definitions used by player crafting, NPC/shop production, and future workstations. Do not implement a Cookie Keeper-only recipe path.
 - Implemented the shared recipe execution foundation in HQ inventory: recipe definitions are actor-agnostic, student crafting adapts the existing student inventory functions, and missing ingredients stop output production before mutation.
 - Implemented HQ-owned Cookie Shop input storage in `shop_input_storage_item`, scoped by shop ID and item type with a current `64` total-unit capacity for `cookie-keeper-shop`.
-- Deferred input ingredients: Cookie Keeper can make cookies while working in the shop for now.
+- Implemented recipe-aware Cookie Keeper production: the shared cookie recipe consumes 1 flour and 1 sugar from shop input storage and produces 1 cookie into shop output stock.
+- Added durable blocked production attempts for missing inputs or full output storage, so failed production does not inflate successful production progress.
+- Fresh databases seed 16 flour and 16 sugar into Cookie Shop input storage as a bridge until player/admin replenishment exists.
 - This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
 Next ND-10 sub-slice:
 
-- Design and implement recipe-aware shop production after blocked-production behavior is clear:
-  - Define what HQ records or returns when Cookie Keeper works but required ingredients are missing.
-  - Add a shop recipe storage adapter that consumes from `shop_input_storage_item` and produces to `shop_stock_item` in one transaction.
-  - Do not wire Cookie Keeper production directly to a one-off cookie recipe rule.
+- Implement Cookie Shop input replenishment:
+  - Add a controlled way to add ingredients to `shop_input_storage_item` without direct database edits.
+  - Prefer a narrow internal/service/debug/admin path first unless player deposit/access rules are designed in the same slice.
+  - If player deposit is implemented, validate access to `cookie-shop-input-chest` and move items from player inventory to shop input storage in one HQ-owned transaction.
   - Verify with `go test ./...`; frontend build is only needed if API response shapes change.
-- After recipe-aware production is stable:
+- After replenishment is stable:
   - Add a Cookie Shop workstation fixture, likely a stove/oven, as the future player/NPC recipe interaction point.
   - Extend player-facing crafting/storage UI only after ownership transfer and container access rules are designed.
 - Defer explicit chest actions such as withdraw/deposit until the shop sale path and ownership transfer rules are designed.

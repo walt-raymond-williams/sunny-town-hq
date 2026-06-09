@@ -78,8 +78,10 @@ type NPCJobProductionRequest struct {
 }
 
 type NPCJobProductionResponse struct {
-	Accepted  bool `json:"accepted"`
-	Duplicate bool `json:"duplicate"`
+	Accepted      bool   `json:"accepted"`
+	Duplicate     bool   `json:"duplicate"`
+	Blocked       bool   `json:"blocked,omitempty"`
+	BlockedReason string `json:"blocked_reason,omitempty"`
 }
 
 type MapObjectsResponse struct {

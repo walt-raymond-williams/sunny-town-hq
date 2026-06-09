@@ -26,6 +26,14 @@ type ShopStockEventRequest struct {
 	Delta   int
 }
 
+type ShopRecipeProductionRequest struct {
+	EventID   string
+	Source    string
+	ShopID    string
+	RecipeKey string
+	Amount    int
+}
+
 type ShopPurchaseRequest struct {
 	ShopID   string `json:"shopId"`
 	ItemKey  string `json:"itemKey"`
@@ -58,6 +66,18 @@ type ShopInputStorageResponse struct {
 	ShopID   string                         `json:"shopId"`
 	Capacity int                            `json:"capacity"`
 	Items    []ShopInputStorageItemResponse `json:"items"`
+}
+
+type shopRecipeQuerier interface {
+	Querier
+	rowQuerier
+}
+
+type shopRecipeStorage struct {
+	querier      shopRecipeQuerier
+	shopID       string
+	stockEventID string
+	source       string
 }
 
 func EnsureStudentWallet(ctx context.Context, db *pgxpool.Pool, userID int64) (int, error) {
@@ -458,4 +478,102 @@ func shopInputStorageCapacity(shopID string) int {
 		return CookieKeeperInputStorageCapacity
 	}
 	return 0
+}
+
+func CommitShopRecipeProduction(ctx context.Context, querier shopRecipeQuerier, request ShopRecipeProductionRequest) error {
+	request.EventID = strings.TrimSpace(request.EventID)
+	request.Source = strings.TrimSpace(request.Source)
+	request.ShopID = strings.TrimSpace(request.ShopID)
+	request.RecipeKey = strings.TrimSpace(request.RecipeKey)
+	if request.EventID == "" || request.Source == "" || request.ShopID == "" || request.RecipeKey == "" || request.Amount < 1 {
+		return errors.New("shop recipe production is missing required fields")
+	}
+	if request.ShopID != CookieKeeperShopID || request.RecipeKey != CookieRecipeKey {
+		return errors.New("unsupported shop recipe production")
+	}
+
+	recipe, ok := recipeByKey(request.RecipeKey)
+	if !ok {
+		return ErrUnknownRecipe
+	}
+
+	storage := shopRecipeStorage{
+		querier:      querier,
+		shopID:       request.ShopID,
+		stockEventID: request.EventID,
+		source:       request.Source,
+	}
+	return executeRecipe(ctx, scaledRecipe(recipe, request.Amount), storage)
+}
+
+func (storage shopRecipeStorage) PrepareRecipe(ctx context.Context, recipe RecipeDefinition) error {
+	var locked int
+	if err := storage.querier.QueryRow(
+		ctx,
+		`select 1 from (select pg_advisory_xact_lock(hashtext('shop-recipe-production:' || $1))) as locked`,
+		storage.shopID,
+	).Scan(&locked); err != nil {
+		return err
+	}
+
+	capacity := stockCapacityForItem(storage.shopID, recipe.OutputKey)
+	if capacity < 1 {
+		return errors.New("unsupported shop recipe output")
+	}
+
+	var currentQuantity int
+	if err := storage.querier.QueryRow(
+		ctx,
+		`
+			select coalesce(ssi.quantity, 0)
+			from inventory_item_type iit
+			left join shop_stock_item ssi on ssi.item_type_id = iit.id
+				and ssi.shop_id = $1
+			where iit.key = $2
+		`,
+		storage.shopID,
+		recipe.OutputKey,
+	).Scan(&currentQuantity); err != nil {
+		return err
+	}
+	if currentQuantity+recipe.Quantity > capacity {
+		return ErrRecipeOutputFull
+	}
+
+	for _, ingredient := range recipe.Ingredients {
+		var inputQuantity int
+		if err := storage.querier.QueryRow(
+			ctx,
+			`
+				select coalesce(sisi.quantity, 0)
+				from inventory_item_type iit
+				left join shop_input_storage_item sisi on sisi.item_type_id = iit.id
+					and sisi.shop_id = $1
+				where iit.key = $2
+			`,
+			storage.shopID,
+			ingredient.ItemKey,
+		).Scan(&inputQuantity); err != nil {
+			return err
+		}
+		if inputQuantity < ingredient.Quantity {
+			return ErrInsufficientIngredient
+		}
+	}
+	return nil
+}
+
+func (storage shopRecipeStorage) ConsumeRecipeItem(ctx context.Context, itemKey string, quantity int) (bool, error) {
+	return ConsumeShopInputStorageItem(ctx, storage.querier, storage.shopID, itemKey, quantity)
+}
+
+func (storage shopRecipeStorage) ProduceRecipeItem(ctx context.Context, itemKey string, quantity int) error {
+	_, _, err := CommitShopStockDelta(ctx, storage.querier, ShopStockEventRequest{
+		EventID: storage.stockEventID,
+		Source:  storage.source,
+		ShopID:  storage.shopID,
+		ItemKey: itemKey,
+		Delta:   quantity,
+	})
+	return err
 }
