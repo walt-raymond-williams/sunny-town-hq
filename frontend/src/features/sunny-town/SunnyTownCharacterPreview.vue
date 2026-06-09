@@ -40,10 +40,22 @@ const props = defineProps<{
       <circle cx="53" cy="66" r="5" fill="#ffffff" />
       <circle cx="75" cy="66" r="5" fill="#ffffff" />
     </svg>
-    <div class="sunny-town-character-preview__meta" aria-hidden="true">
-      <span />
-      <span />
-      <span />
+    <div class="sunny-town-character-preview__sheet" aria-label="Character growth">
+      <p class="sunny-town-character-preview__title">Character</p>
+      <div class="sunny-town-character-preview__stats" aria-label="Stats-ready character area">
+        <div class="sunny-town-character-preview__stat">
+          <span>Stats</span>
+          <span class="sunny-town-character-preview__rail" aria-hidden="true" />
+        </div>
+        <div class="sunny-town-character-preview__stat">
+          <span>Skills</span>
+          <span class="sunny-town-character-preview__rail" aria-hidden="true" />
+        </div>
+        <div class="sunny-town-character-preview__stat">
+          <span>Traits</span>
+          <span class="sunny-town-character-preview__rail" aria-hidden="true" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
