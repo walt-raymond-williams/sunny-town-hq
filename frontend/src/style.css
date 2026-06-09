@@ -1058,22 +1058,23 @@ h2 {
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(260px, 340px) minmax(300px, 360px);
+  gap: 16px;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 1.2fr);
   grid-template-rows: minmax(0, 1fr);
-  height: min(640px, calc(100vh - 72px));
-  max-height: calc(100% - 72px);
-  max-width: min(756px, calc(100% - 24px));
+  inset: 12px;
+  max-height: calc(100% - 24px);
+  max-width: none;
   overflow: hidden;
-  padding: 14px;
+  padding: 16px;
   position: absolute;
-  right: 12px;
-  top: 54px;
-  width: max-content;
+  width: auto;
   z-index: 5;
 }
 
 .sunny-town-inventory {
+  display: grid;
+  gap: 12px;
+  grid-auto-rows: max-content;
   height: 100%;
   max-height: none;
   min-height: 0;
@@ -1087,7 +1088,6 @@ h2 {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  margin-bottom: 12px;
 }
 
 .sunny-town-inventory__actions {
@@ -1102,7 +1102,6 @@ h2 {
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
-  margin-top: 12px;
   padding-top: 12px;
 }
 
@@ -1114,35 +1113,14 @@ h2 {
   display: grid;
   gap: 8px;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(5, 58px);
+  grid-template-columns: repeat(5, minmax(52px, 58px));
 }
 
 .sunny-town-inventory-grid {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(5, 64px);
+  grid-template-columns: repeat(auto-fill, 64px);
   justify-content: start;
-  margin-bottom: 12px;
-}
-
-.sunny-town-selected-item {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: 72px;
-  padding: 10px;
-}
-
-.sunny-town-inventory__item-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
 }
 
 .sunny-town-crafting {
@@ -1218,11 +1196,12 @@ h2 {
   }
 
   .sunny-town-inventory-tray {
+    inset: 10px;
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     height: auto;
-    left: 12px;
-    max-height: calc(100vh - 24px);
-    max-width: calc(100% - 24px);
+    max-height: calc(100% - 20px);
+    max-width: none;
     overflow-y: auto;
     width: auto;
   }
@@ -1246,10 +1225,6 @@ h2 {
 
   .sunny-town-character-preview__meta {
     width: 100%;
-  }
-
-  .sunny-town-selected-item {
-    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .sunny-town-crafting {

@@ -31,7 +31,6 @@ const selectedInventorySlot = computed(() => {
   }
   return inventoryStore.inventorySlots.find((slot) => slot.slotIndex === selectedInventorySlotIndex.value) || null
 })
-const selectedInventoryItem = computed(() => selectedInventorySlot.value?.item || null)
 const visibleCraftingRecipes = computed(() => (
   props.showAllCraftingRecipes ? inventoryStore.knownCraftingRecipes : inventoryStore.craftableRecipes
 ))
@@ -188,20 +187,6 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
           @select="selectedInventorySlotIndex = slot.slotIndex"
         />
       </div>
-      <section class="sunny-town-selected-item" aria-label="Selected inventory item">
-        <template v-if="selectedInventoryItem">
-          <span class="inventory-item__icon" :class="`inventory-item__icon--${selectedInventoryItem.iconKey || selectedInventoryItem.key}`" aria-hidden="true" />
-          <div>
-            <p class="inventory-item__name">{{ selectedInventoryItem.name }}</p>
-            <p class="inventory-item__description">{{ selectedInventoryItem.description }}</p>
-          </div>
-          <div class="sunny-town-inventory__item-actions">
-            <span v-if="selectedInventoryItem.equipped" class="inventory-item__status">Equipped</span>
-            <strong class="inventory-item__quantity">{{ selectedInventoryItem.quantity }}</strong>
-          </div>
-        </template>
-        <p v-else class="inventory-item__description">Select an item slot.</p>
-      </section>
       <section class="sunny-town-hotbar-editor" aria-label="Hotbar slots">
         <div class="sunny-town-hotbar-editor__summary">
           <p class="inventory-item__name">Slot {{ selectedHotbarIndex + 1 }}</p>
