@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after issue #21 creation.
+Snapshot refreshed: 2026-06-09 after issue #21 closure.
 
 ### Closed
 
@@ -75,39 +75,37 @@ Snapshot refreshed: 2026-06-09 after issue #21 creation.
   Completed in `20bac63`.  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/19
 
-### Open
-
 - #21 Expand E menu to use the play area  
-  Status: `status:ready`  
-  Blocked by: none  
-  Blocks: #20 and later crafting/tabbed menu work  
+  Completed in `985ef34`.  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/21
 
+### Open
+
 - #20 Add stats-ready character panel  
-  Status: waiting on #21  
-  Blocked by: #19, closed; #21, open  
+  Status: `status:ready`  
+  Blocked by: #19 and #21, both closed  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/20
 
 ## Recommended Next Management Step
 
-Start issue #21:
+Start issue #20:
 
-`Expand E menu to use the play area`
+`Add stats-ready character panel`
 
 Why:
 
 - The character preview shell landed and is verified.
-- The current `E` menu is too cramped for the redesigned inventory surface.
-- A larger play-area overlay should land before adding stats-ready layout, crafting polish, or tabs.
-- The selected-item detail panel at the bottom of the inventory should be removed if it only duplicates item tooltip/icon/name information.
-- This is a high-priority frontend capacity fix with no backend/schema dependency.
-- Handoff: `docs/SUNNY_TOWN_E_MENU_PLAY_AREA_HANDOFF.md`.
+- The expanded play-area E menu landed and is verified.
+- The stats-ready panel directly follows the preview work now that the menu has room.
+- This preserves room for future activity-driven progression without adding fake stats or manual point allocation.
+- It is a small frontend slice before larger crafting, container, and tabbed-menu work.
+- Handoff: `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 21 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 20 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
