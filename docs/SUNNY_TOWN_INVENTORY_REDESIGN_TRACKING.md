@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after issue #18 creation.
+Snapshot refreshed: 2026-06-09 after issue #19 creation.
 
 ### Closed
 
@@ -50,31 +50,35 @@ Snapshot refreshed: 2026-06-09 after issue #18 creation.
 - #17 Replace equipment buttons with drop targets  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/17
 
+- #18 Remove legacy button-based inventory assignment UI  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/18
+
 ### Open
 
-- #18 Remove legacy button-based inventory assignment UI  
+- #19 Add character preview shell  
   Status: `status:ready`  
-  Blocked by: #16 and #17, both closed  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/18
+  Blocked by: #17 and #18, both closed  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/19
 
 ## Recommended Next Management Step
 
-Start issue #18:
+Start issue #19:
 
-`Remove legacy button-based inventory assignment UI`
+`Add character preview shell`
 
 Why:
 
-- Inventory slot movement, hotbar drops, and equipment drops are complete.
-- The selected-item `Slot N` and `Wear` buttons are now duplicate assignment paths.
-- Removing them makes the inventory menu feel like one coherent game UI before adding character preview or crafting polish.
-- Handoff: `docs/SUNNY_TOWN_LEGACY_INVENTORY_BUTTON_REMOVAL_HANDOFF.md`.
+- Inventory slot movement, hotbar drops, equipment drops, and legacy assignment cleanup are complete.
+- Equipment slots are now stable visual anchors.
+- The preview gives players immediate visual payoff when equipment changes.
+- This lays out space for a later stats-ready panel without implementing fake stats.
+- Handoff: `docs/SUNNY_TOWN_CHARACTER_PREVIEW_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 18 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 19 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -93,3 +97,4 @@ git pull
 - `docs/SUNNY_TOWN_HOTBAR_DROP_TARGET_HANDOFF.md`
 - `docs/SUNNY_TOWN_EQUIPMENT_DROP_TARGET_HANDOFF.md`
 - `docs/SUNNY_TOWN_LEGACY_INVENTORY_BUTTON_REMOVAL_HANDOFF.md`
+- `docs/SUNNY_TOWN_CHARACTER_PREVIEW_HANDOFF.md`
