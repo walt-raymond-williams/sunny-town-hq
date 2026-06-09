@@ -188,6 +188,31 @@ Notes:
 - Slot rows use zero-based `slotIndex`.
 - `items` follows the same aggregate item shape as `GET /api/student/inventory`.
 
+### `POST /api/student/inventory/move`
+
+Student-authenticated endpoint.
+
+Moves, swaps, or merges inventory stacks transactionally.
+
+Request:
+
+```json
+{
+  "source": { "kind": "player_inventory", "slotIndex": 0 },
+  "destination": { "kind": "player_inventory", "slotIndex": 5 },
+  "mode": "move"
+}
+```
+
+Modes:
+
+- `move`: source must be occupied and destination must be empty.
+- `swap`: source and destination must both be occupied.
+- `merge`: source and destination must both be occupied by the same item type, and the destination stack must have room under `maxStack`.
+- `auto`: server chooses move, merge, or swap based on current slot state.
+
+Returns the updated slotted inventory response. Stack splitting is not part of this endpoint yet.
+
 ### `GET /api/student/equipment`
 
 Student-authenticated endpoint.

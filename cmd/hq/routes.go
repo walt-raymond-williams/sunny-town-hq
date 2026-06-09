@@ -39,6 +39,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	})
 	apiMux.HandleFunc("/api/student/inventory", inventoryHandlers.HandleStudentInventory)
 	apiMux.HandleFunc("/api/student/inventory/slots", inventoryHandlers.HandleStudentInventorySlots)
+	apiMux.HandleFunc("/api/student/inventory/move", inventoryHandlers.HandleStudentInventoryMove)
 	apiMux.HandleFunc("/api/student/hotbar", inventoryHandlers.HandleStudentHotbar)
 	apiMux.HandleFunc("/api/student/crafting/recipes", inventoryHandlers.HandleStudentCraftingRecipes)
 	apiMux.HandleFunc("/api/student/crafting/craft", inventoryHandlers.HandleCraftStudentRecipe)

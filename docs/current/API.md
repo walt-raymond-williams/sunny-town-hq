@@ -14,6 +14,7 @@ Current route groups:
 - `/api/student/profile`
 - `/api/student/inventory`
 - `/api/student/inventory/slots`
+- `/api/student/inventory/move`
 - `/api/student/hotbar`
 - `/api/student/crafting/...`
 - `/api/student/equipment/...`
@@ -97,6 +98,25 @@ Inventory item payloads returned by student inventory, hotbar, equipment, and cr
   ]
 }
 ```
+
+`POST /api/student/inventory/move` moves player inventory stacks transactionally. The request uses source and destination descriptors so later container work can extend the same shape:
+
+```json
+{
+  "source": { "kind": "player_inventory", "slotIndex": 0 },
+  "destination": { "kind": "player_inventory", "slotIndex": 5 },
+  "mode": "move"
+}
+```
+
+Supported first-slice modes:
+
+- `move`: move an occupied source stack into an empty destination slot.
+- `swap`: swap two occupied slots.
+- `merge`: merge compatible item stacks up to the destination item's `maxStack`.
+- `auto`: choose move, merge, or swap from current slot state.
+
+The response is the updated slotted inventory payload. Stack splitting is still deferred.
 
 ## Internal Service APIs
 

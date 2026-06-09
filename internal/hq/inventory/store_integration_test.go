@@ -592,6 +592,173 @@ func TestConsumeStudentItemConsumesAcrossStacksAndMaintainsAggregate(t *testing.
 	}
 }
 
+func TestMoveStudentInventoryStackMovesIntoEmptySlot(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	response, err := MoveStudentInventoryStack(ctx, db, 123, InventoryMoveRequest{
+		Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+		Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 5},
+		Mode:        "move",
+	})
+	if err != nil {
+		t.Fatalf("move stack: %v", err)
+	}
+	if response.Slots[0].Item != nil {
+		t.Fatalf("slot 0 = %#v, want empty after move", response.Slots[0])
+	}
+	if response.Slots[5].Item == nil || response.Slots[5].Item.Key != "rock" || response.Slots[5].Item.Quantity != 5 {
+		t.Fatalf("slot 5 = %#v, want 5 rocks", response.Slots[5])
+	}
+}
+
+func TestMoveStudentInventoryStackSwapsOccupiedSlots(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if err := IncrementStudentItem(ctx, db, 123, "stone_block", 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+
+	response, err := MoveStudentInventoryStack(ctx, db, 123, InventoryMoveRequest{
+		Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+		Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 1},
+		Mode:        "swap",
+	})
+	if err != nil {
+		t.Fatalf("swap stacks: %v", err)
+	}
+	if response.Slots[0].Item == nil || response.Slots[0].Item.Key != "stone_block" || response.Slots[0].Item.Quantity != 2 {
+		t.Fatalf("slot 0 = %#v, want stone blocks", response.Slots[0])
+	}
+	if response.Slots[1].Item == nil || response.Slots[1].Item.Key != "rock" || response.Slots[1].Item.Quantity != 5 {
+		t.Fatalf("slot 1 = %#v, want rocks", response.Slots[1])
+	}
+}
+
+func TestMoveStudentInventoryStackMergesCompatibleStacks(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 70); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	_, err := MoveStudentInventoryStack(ctx, db, 123, InventoryMoveRequest{
+		Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 1},
+		Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+		Mode:        "merge",
+	})
+	if !errors.Is(err, ErrInventoryStackFull) {
+		t.Fatalf("merge full stack error = %v, want ErrInventoryStackFull", err)
+	}
+
+	if _, err := db.Exec(ctx, "update student_inventory_slot set quantity = 60 where app_user_id = 123 and slot_index = 0"); err != nil {
+		t.Fatalf("make destination partially full: %v", err)
+	}
+	if _, err := db.Exec(
+		ctx,
+		`
+			update student_inventory_item sii
+			set quantity = 66
+			from inventory_item_type iit
+			where sii.item_type_id = iit.id
+				and sii.app_user_id = 123
+				and iit.key = 'rock'
+		`,
+	); err != nil {
+		t.Fatalf("keep aggregate consistent: %v", err)
+	}
+	response, err := MoveStudentInventoryStack(ctx, db, 123, InventoryMoveRequest{
+		Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 1},
+		Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+		Mode:        "merge",
+	})
+	if err != nil {
+		t.Fatalf("merge partial stacks: %v", err)
+	}
+	if response.Slots[0].Item == nil || response.Slots[0].Item.Quantity != 64 {
+		t.Fatalf("slot 0 = %#v, want full merged stack", response.Slots[0])
+	}
+	if response.Slots[1].Item == nil || response.Slots[1].Item.Quantity != 2 {
+		t.Fatalf("slot 1 = %#v, want two rocks remaining", response.Slots[1])
+	}
+}
+
+func TestMoveStudentInventoryStackRejectsInvalidOperations(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if err := IncrementStudentItem(ctx, db, 123, "stone_block", 2); err != nil {
+		t.Fatalf("seed stone block inventory: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		request InventoryMoveRequest
+		wantErr error
+	}{
+		{
+			name: "invalid slot",
+			request: InventoryMoveRequest{
+				Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: -1},
+				Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+				Mode:        "move",
+			},
+			wantErr: ErrInvalidInventorySlot,
+		},
+		{
+			name: "empty source",
+			request: InventoryMoveRequest{
+				Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 5},
+				Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 6},
+				Mode:        "move",
+			},
+			wantErr: ErrInventorySourceEmpty,
+		},
+		{
+			name: "move to occupied destination",
+			request: InventoryMoveRequest{
+				Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+				Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 1},
+				Mode:        "move",
+			},
+			wantErr: ErrInventoryDestinationOccupied,
+		},
+		{
+			name: "incompatible merge",
+			request: InventoryMoveRequest{
+				Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+				Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 1},
+				Mode:        "merge",
+			},
+			wantErr: ErrInventoryIncompatibleMerge,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := MoveStudentInventoryStack(ctx, db, 123, test.request)
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("move error = %v, want %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
