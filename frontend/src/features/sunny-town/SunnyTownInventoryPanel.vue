@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { EquipmentSlot } from '../../types/inventory'
+import SunnyTownCharacterPreview from './SunnyTownCharacterPreview.vue'
 import SunnyTownInventorySlot from './SunnyTownInventorySlot.vue'
 
 const props = defineProps<{
@@ -136,34 +137,37 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
         {{ inventoryStore.error }}
       </v-alert>
       <section class="equipment-panel equipment-panel--dark" aria-label="Equipment">
-        <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
-          <SunnyTownInventorySlot
-            :draggable-enabled="false"
-            :item="slot.item"
-            :invalid-drop="inventoryStore.invalidEquipmentDropSlot === slot.slot"
-            :pending="inventoryStore.pendingEquipmentDropSlot === slot.slot"
-            :slot-label="slot.slot.slice(0, 1).toUpperCase()"
-            :tooltip="false"
-            variant="compact"
-            @drag-end="inventoryStore.cancelInventorySlotDrag()"
-            @drag-leave="inventoryStore.clearEquipmentDropTarget(slot.slot)"
-            @drag-over="inventoryStore.setEquipmentDropTarget(slot.slot)"
-            @drop="handleEquipmentSlotDrop(slot.slot)"
-          />
-          <div class="equipment-slot__summary">
-            <p class="summary-category">{{ slot.slot }}</p>
-            <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
+        <SunnyTownCharacterPreview :equipment="inventoryStore.equippedVisuals" />
+        <div class="equipment-panel__slots">
+          <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
+            <SunnyTownInventorySlot
+              :draggable-enabled="false"
+              :item="slot.item"
+              :invalid-drop="inventoryStore.invalidEquipmentDropSlot === slot.slot"
+              :pending="inventoryStore.pendingEquipmentDropSlot === slot.slot"
+              :slot-label="slot.slot.slice(0, 1).toUpperCase()"
+              :tooltip="false"
+              variant="compact"
+              @drag-end="inventoryStore.cancelInventorySlotDrag()"
+              @drag-leave="inventoryStore.clearEquipmentDropTarget(slot.slot)"
+              @drag-over="inventoryStore.setEquipmentDropTarget(slot.slot)"
+              @drop="handleEquipmentSlotDrop(slot.slot)"
+            />
+            <div class="equipment-slot__summary">
+              <p class="summary-category">{{ slot.slot }}</p>
+              <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
+            </div>
+            <v-btn
+              v-if="slot.item"
+              :loading="inventoryStore.isUpdatingEquipment"
+              color="primary"
+              size="x-small"
+              variant="flat"
+              @click="emit('unequipSlot', slot.slot)"
+            >
+              Unequip
+            </v-btn>
           </div>
-          <v-btn
-            v-if="slot.item"
-            :loading="inventoryStore.isUpdatingEquipment"
-            color="primary"
-            size="x-small"
-            variant="flat"
-            @click="emit('unequipSlot', slot.slot)"
-          >
-            Unequip
-          </v-btn>
         </div>
       </section>
       <div class="sunny-town-inventory-grid" aria-label="Inventory slots">

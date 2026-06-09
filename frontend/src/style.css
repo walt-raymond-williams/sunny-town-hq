@@ -599,6 +599,11 @@ h2 {
   gap: 10px;
 }
 
+.equipment-panel__slots {
+  display: grid;
+  gap: 10px;
+}
+
 .equipment-slot {
   align-items: center;
   background: #f3f7f8;
@@ -626,6 +631,46 @@ h2 {
 
 .equipment-panel--dark .summary-category {
   color: rgba(255, 255, 255, 0.66);
+}
+
+.sunny-town-character-preview {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 132px minmax(0, 1fr);
+  min-height: 146px;
+  padding: 8px 10px;
+}
+
+.sunny-town-character-preview__avatar {
+  display: block;
+  height: 136px;
+  width: 128px;
+}
+
+.sunny-town-character-preview__tool {
+  transform-origin: 94px 94px;
+}
+
+.sunny-town-character-preview__meta {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sunny-town-character-preview__meta span {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  display: block;
+  height: 18px;
+}
+
+.sunny-town-character-preview__meta span:first-child {
+  width: 72%;
 }
 
 .game-overlay {
@@ -1192,6 +1237,15 @@ h2 {
 
   .sunny-town-inventory-grid {
     grid-template-columns: repeat(auto-fit, 58px);
+  }
+
+  .sunny-town-character-preview {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .sunny-town-character-preview__meta {
+    width: 100%;
   }
 
   .sunny-town-selected-item {
