@@ -16,6 +16,7 @@ const emit = defineEmits<{
   close: []
   craftRecipe: [recipeKey: string]
   equipItem: [itemKey: string, slot: EquipmentSlot | '']
+  selectHotbarSlot: [index: number]
   toggleCraftingPanel: []
   unequipSlot: [slot: EquipmentSlot]
   updateShowAllCraftingRecipes: [value: boolean]
@@ -46,6 +47,10 @@ async function handleInventorySlotDrop(slotIndex: number) {
   if (moved) {
     selectedInventorySlotIndex.value = slotIndex
   }
+}
+
+async function handleHotbarSlotDrop(slot: number) {
+  await inventoryStore.dropInventorySlotOnHotbar(slot)
 }
 </script>
 
@@ -195,10 +200,30 @@ async function handleInventorySlotDrop(slotIndex: number) {
         </template>
         <p v-else class="inventory-item__description">Select an item slot.</p>
       </section>
-      <section class="sunny-town-hotbar-editor" aria-label="Selected hotbar slot">
-        <div>
+      <section class="sunny-town-hotbar-editor" aria-label="Hotbar slots">
+        <div class="sunny-town-hotbar-editor__summary">
           <p class="inventory-item__name">Slot {{ selectedHotbarIndex + 1 }}</p>
           <p class="inventory-item__description">{{ selectedHotbarItem?.name || 'Empty' }}</p>
+        </div>
+        <div class="sunny-town-hotbar-editor__slots">
+          <SunnyTownInventorySlot
+            v-for="(slot, index) in inventoryStore.hotbarSlots"
+            :key="slot.slot"
+            :draggable-enabled="false"
+            :item="slot.item"
+            :invalid-drop="inventoryStore.invalidHotbarDropSlot === slot.slot"
+            :pending="inventoryStore.pendingHotbarDropSlot === slot.slot"
+            :quantity="slot.item?.quantity"
+            :selected="selectedHotbarIndex === index"
+            :slot-label="String(slot.slot)"
+            :tooltip="false"
+            variant="compact"
+            @click="emit('selectHotbarSlot', index)"
+            @drag-end="inventoryStore.cancelInventorySlotDrag()"
+            @drag-leave="inventoryStore.clearHotbarDropTarget(slot.slot)"
+            @drag-over="inventoryStore.setHotbarDropTarget(slot.slot)"
+            @drop="handleHotbarSlotDrop(slot.slot)"
+          />
         </div>
         <v-btn
           :disabled="!selectedHotbarItem"

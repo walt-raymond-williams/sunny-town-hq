@@ -758,6 +758,7 @@ function backToPet() {
         @close="inventoryOpen = false"
         @craft-recipe="craftInventoryRecipe"
         @equip-item="equipInventoryItem"
+        @select-hotbar-slot="selectHotbarSlot"
         @toggle-crafting-panel="toggleCraftingPanel"
         @unequip-slot="unequipInventorySlot"
         @update-show-all-crafting-recipes="showAllCraftingRecipes = $event"

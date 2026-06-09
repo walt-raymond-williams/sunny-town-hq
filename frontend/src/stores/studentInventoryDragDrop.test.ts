@@ -1,5 +1,6 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { setStudentHotbarSlot } from '../api/hotbarApi'
 import { moveStudentInventoryStack } from '../api/inventoryApi'
 import type { InventoryItem, StudentInventorySlots } from '../types/inventory'
 import { useStudentInventoryStore } from './studentInventory'
@@ -57,6 +58,7 @@ describe('student inventory drag/drop moves', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(moveStudentInventoryStack).mockReset()
+    vi.mocked(setStudentHotbarSlot).mockReset()
   })
 
   it('rejects dragging or moving from an empty source slot before calling the API', async () => {
@@ -116,5 +118,67 @@ describe('student inventory drag/drop moves', () => {
 
     expect(store.invalidInventoryDropSlotIndex).toBe(0)
     expect(moveStudentInventoryStack).not.toHaveBeenCalled()
+  })
+
+  it('assigns a dragged inventory item to a hotbar slot through the hotbar API', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots(inventoryWithRock(0))
+    vi.mocked(setStudentHotbarSlot).mockResolvedValueOnce({
+      slots: [
+        { slot: 1, item: item() },
+        { slot: 2, item: null },
+        { slot: 3, item: null },
+        { slot: 4, item: null },
+        { slot: 5, item: null },
+      ],
+    })
+
+    expect(store.startInventorySlotDrag(0)).toBe(true)
+    await expect(store.dropInventorySlotOnHotbar(1)).resolves.toBe(true)
+
+    expect(setStudentHotbarSlot).toHaveBeenCalledWith(1, 'rock')
+    expect(store.hotbarSlots[0]?.item).toMatchObject({ key: 'rock', quantity: 3 })
+    expect(store.draggedInventorySlotIndex).toBeNull()
+    expect(store.pendingHotbarDropSlot).toBeNull()
+    expect(store.invalidHotbarDropSlot).toBeNull()
+  })
+
+  it('rejects hotbar drops without an occupied source before calling the API', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots(inventoryWithRock(0))
+
+    await expect(store.dropInventorySlotOnHotbar(2)).resolves.toBe(false)
+    expect(store.invalidHotbarDropSlot).toBe(2)
+
+    store.draggedInventorySlotIndex = 1
+    await expect(store.dropInventorySlotOnHotbar(3)).resolves.toBe(false)
+
+    expect(setStudentHotbarSlot).not.toHaveBeenCalled()
+    expect(store.invalidInventoryDropSlotIndex).toBe(1)
+    expect(store.invalidHotbarDropSlot).toBe(3)
+    expect(store.draggedInventorySlotIndex).toBeNull()
+  })
+
+  it('leaves the last confirmed hotbar state and clears pending state when assignment fails', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots(inventoryWithRock(0))
+    store.setHotbar({
+      slots: [
+        { slot: 1, item: item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1 }) },
+        { slot: 2, item: null },
+        { slot: 3, item: null },
+        { slot: 4, item: null },
+        { slot: 5, item: null },
+      ],
+    })
+    vi.mocked(setStudentHotbarSlot).mockRejectedValueOnce(new Error('hotbar unavailable'))
+
+    expect(store.startInventorySlotDrag(0)).toBe(true)
+    await expect(store.dropInventorySlotOnHotbar(1)).resolves.toBe(false)
+
+    expect(store.hotbarSlots[0]?.item).toMatchObject({ key: 'pickaxe', quantity: 0 })
+    expect(store.error).toBe('hotbar unavailable')
+    expect(store.pendingHotbarDropSlot).toBeNull()
+    expect(store.draggedInventorySlotIndex).toBeNull()
   })
 })

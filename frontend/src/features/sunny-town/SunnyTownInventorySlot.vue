@@ -4,6 +4,7 @@ import type { InventorySlotItem } from '../../types/inventory'
 
 const props = withDefaults(defineProps<{
   disabled?: boolean
+  draggableEnabled?: boolean
   invalidDrop?: boolean
   item: InventorySlotItem | null
   pending?: boolean
@@ -14,6 +15,7 @@ const props = withDefaults(defineProps<{
   variant?: 'default' | 'compact'
 }>(), {
   disabled: false,
+  draggableEnabled: true,
   invalidDrop: false,
   pending: false,
   quantity: undefined,
@@ -55,7 +57,7 @@ const accessibleLabel = computed(() => {
 })
 
 function handleDragStart(event: DragEvent) {
-  if (props.disabled || !props.item) {
+  if (props.disabled || !props.draggableEnabled || !props.item) {
     event.preventDefault()
     return
   }
@@ -101,7 +103,7 @@ function handleDrop(event: DragEvent) {
     type="button"
     :aria-disabled="disabled"
     :aria-label="accessibleLabel"
-    :draggable="Boolean(item) && !disabled"
+    :draggable="Boolean(item) && draggableEnabled && !disabled"
     :disabled="disabled"
     :title="tooltipText"
     @click="emit('click'); emit('select')"

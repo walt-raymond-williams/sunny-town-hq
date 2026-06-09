@@ -1040,13 +1040,24 @@ h2 {
 }
 
 .sunny-town-hotbar-editor {
-  align-items: center;
+  align-items: start;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   display: grid;
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 12px;
   padding-top: 12px;
+}
+
+.sunny-town-hotbar-editor__summary {
+  min-width: 0;
+}
+
+.sunny-town-hotbar-editor__slots {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(5, 58px);
 }
 
 .sunny-town-inventory-grid {

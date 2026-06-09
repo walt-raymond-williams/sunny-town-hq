@@ -23,6 +23,8 @@ interface StudentInventoryState {
   pendingInventoryMoveSourceIndex: number | null
   pendingInventoryMoveDestinationIndex: number | null
   invalidInventoryDropSlotIndex: number | null
+  pendingHotbarDropSlot: number | null
+  invalidHotbarDropSlot: number | null
   error: string
   craftingError: string
 }
@@ -56,6 +58,8 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
     pendingInventoryMoveSourceIndex: null,
     pendingInventoryMoveDestinationIndex: null,
     invalidInventoryDropSlotIndex: null,
+    pendingHotbarDropSlot: null,
+    invalidHotbarDropSlot: null,
     error: '',
     craftingError: '',
   }),
@@ -218,6 +222,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       }
       this.draggedInventorySlotIndex = slotIndex
       this.invalidInventoryDropSlotIndex = null
+      this.invalidHotbarDropSlot = null
       this.error = ''
       return true
     },
@@ -233,10 +238,23 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.invalidInventoryDropSlotIndex = null
       }
     },
+    setHotbarDropTarget(slot: number) {
+      if (this.draggedInventorySlotIndex === null) {
+        this.invalidHotbarDropSlot = slot
+        return
+      }
+      this.invalidHotbarDropSlot = null
+    },
+    clearHotbarDropTarget(slot: number) {
+      if (this.invalidHotbarDropSlot === slot) {
+        this.invalidHotbarDropSlot = null
+      }
+    },
     cancelInventorySlotDrag() {
       if (!this.isMovingInventorySlot) {
         this.draggedInventorySlotIndex = null
         this.invalidInventoryDropSlotIndex = null
+        this.invalidHotbarDropSlot = null
       }
     },
     async dropInventorySlot(slotIndex: number): Promise<boolean> {
@@ -248,6 +266,36 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       try {
         return await this.moveInventorySlot(sourceSlotIndex, slotIndex)
       } finally {
+        this.draggedInventorySlotIndex = null
+        this.invalidInventoryDropSlotIndex = null
+        this.invalidHotbarDropSlot = null
+      }
+    },
+    async dropInventorySlotOnHotbar(slot: number): Promise<boolean> {
+      const sourceSlotIndex = this.draggedInventorySlotIndex
+      if (sourceSlotIndex === null) {
+        this.invalidHotbarDropSlot = slot
+        return false
+      }
+      const sourceSlot = this.inventorySlots.find((candidate) => candidate.slotIndex === sourceSlotIndex)
+      if (!sourceSlot?.item) {
+        this.invalidInventoryDropSlotIndex = sourceSlotIndex
+        this.invalidHotbarDropSlot = slot
+        this.draggedInventorySlotIndex = null
+        return false
+      }
+
+      this.pendingHotbarDropSlot = slot
+      this.invalidHotbarDropSlot = null
+      this.error = ''
+
+      try {
+        await this.setHotbarSlot(slot, sourceSlot.item.key)
+        return true
+      } catch {
+        return false
+      } finally {
+        this.pendingHotbarDropSlot = null
         this.draggedInventorySlotIndex = null
         this.invalidInventoryDropSlotIndex = null
       }
