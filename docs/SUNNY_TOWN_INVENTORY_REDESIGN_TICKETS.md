@@ -149,6 +149,9 @@ Verification:
 
 GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/12
 
+Status: Complete
+Completed in: `78f9192`
+
 Type: frontend
 Priority: P0
 
@@ -178,7 +181,7 @@ Implementation notes:
 
 Verification:
 - `cd frontend; npm run build`
-- Component/unit tests if the existing frontend test setup supports it.
+- `cd frontend; npm run test`
 
 ### Issue: Render Sunny Town Inventory As A Grid
 
