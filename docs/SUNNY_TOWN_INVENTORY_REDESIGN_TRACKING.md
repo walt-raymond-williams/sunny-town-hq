@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after issue #17 creation.
+Snapshot refreshed: 2026-06-09 after issue #18 creation.
 
 ### Closed
 
@@ -47,34 +47,34 @@ Snapshot refreshed: 2026-06-09 after issue #17 creation.
 - #16 Replace hotbar assignment buttons with drop targets  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/16
 
+- #17 Replace equipment buttons with drop targets  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/17
+
 ### Open
 
-- #17 Replace equipment buttons with drop targets  
+- #18 Remove legacy button-based inventory assignment UI  
   Status: `status:ready`  
-  Blocked by: #15, closed  
-  Related precedent: #16, closed  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/17
+  Blocked by: #16 and #17, both closed  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/18
 
 ## Recommended Next Management Step
 
-Start issue #17:
+Start issue #18:
 
-`Replace equipment buttons with drop targets`
+`Remove legacy button-based inventory assignment UI`
 
 Why:
 
-- The first inventory grid foundation slice and slot-to-slot drag/drop are complete.
-- Hotbar drop targets are complete, giving a frontend pattern for compact drop slots.
-- Equipment assignment already has durable backend APIs and server-side compatibility validation.
-- This removes the other awkward legacy button flow from the critical player workflow.
-- It unblocks the later character preview shell.
-- Handoff: `docs/SUNNY_TOWN_EQUIPMENT_DROP_TARGET_HANDOFF.md`.
+- Inventory slot movement, hotbar drops, and equipment drops are complete.
+- The selected-item `Slot N` and `Wear` buttons are now duplicate assignment paths.
+- Removing them makes the inventory menu feel like one coherent game UI before adding character preview or crafting polish.
+- Handoff: `docs/SUNNY_TOWN_LEGACY_INVENTORY_BUTTON_REMOVAL_HANDOFF.md`.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 17 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 18 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -92,3 +92,4 @@ git pull
 - `docs/SUNNY_TOWN_INVENTORY_DRAG_DROP_HANDOFF.md`
 - `docs/SUNNY_TOWN_HOTBAR_DROP_TARGET_HANDOFF.md`
 - `docs/SUNNY_TOWN_EQUIPMENT_DROP_TARGET_HANDOFF.md`
+- `docs/SUNNY_TOWN_LEGACY_INVENTORY_BUTTON_REMOVAL_HANDOFF.md`
