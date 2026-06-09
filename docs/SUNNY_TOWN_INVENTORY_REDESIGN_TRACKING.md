@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after issue #21 closure.
+Snapshot refreshed: 2026-06-09 after creating issue #22.
 
 ### Closed
 
@@ -82,9 +82,15 @@ Snapshot refreshed: 2026-06-09 after issue #21 closure.
 ### Open
 
 - #20 Add stats-ready character panel  
-  Status: `status:ready`  
+  Status: `status:in-progress`  
   Blocked by: #19 and #21, both closed  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/20
+
+- #22 Move equipment slots into character preview card  
+  Status: open follow-up / ready after #20 coordination  
+  Related: #19, #20, #17  
+  Handoff: `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/22
 
 ## Recommended Next Management Step
 
@@ -101,11 +107,23 @@ Why:
 - It is a small frontend slice before larger crafting, container, and tabbed-menu work.
 - Handoff: `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`.
 
+Follow-up UI polish now tracked:
+
+`Move equipment slots into character preview card` (#22)
+
+Why:
+
+- Manual review found the gear/accessory/tool slots listed below the character image, which wastes vertical space and reads poorly.
+- The desired layout is a compact equipment rail inside the character preview card, preferably to the left of the avatar.
+- This should generally wait for #20 or coordinate with it, because both touch the same character-panel surface.
+- Handoff: `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`.
+
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 20 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 22 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -127,3 +145,4 @@ git pull
 - `docs/SUNNY_TOWN_CHARACTER_PREVIEW_HANDOFF.md`
 - `docs/SUNNY_TOWN_E_MENU_PLAY_AREA_HANDOFF.md`
 - `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`
+- `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`
