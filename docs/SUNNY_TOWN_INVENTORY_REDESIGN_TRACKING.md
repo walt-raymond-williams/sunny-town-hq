@@ -99,6 +99,7 @@ Why:
 - The character preview shell landed and is verified.
 - The current `E` menu is too cramped for the redesigned inventory surface.
 - A larger play-area overlay should land before adding stats-ready layout, crafting polish, or tabs.
+- The selected-item detail panel at the bottom of the inventory should be removed if it only duplicates item tooltip/icon/name information.
 - This is a high-priority frontend capacity fix with no backend/schema dependency.
 - Handoff: `docs/SUNNY_TOWN_E_MENU_PLAY_AREA_HANDOFF.md`.
 

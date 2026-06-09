@@ -31,12 +31,13 @@ The current `E` menu is still shaped like a small debugging tray. It is capped a
 That is too cramped for the intended final direction:
 
 - inventory grid
-- selected item detail
 - hotbar drop targets
 - equipment drop targets
 - character preview
 - crafting panel
 - future stats and tabs
+
+There is also a selected-item detail section at the bottom of the current inventory area. If it only repeats the selected item's icon, name, and description that are already available through item tooltips, remove it or collapse that space as part of this ticket. Preserve it only if inspection shows it still provides a unique action or state that is not available elsewhere.
 
 For now, it is acceptable for the `E` menu to use most or all of the Sunny Town play area.
 
@@ -84,12 +85,16 @@ Current `.sunny-town-inventory-tray` constraints to inspect:
    - preserve room for any always-visible close/control affordance
    - keep the overlay scoped to the play area rather than full browser/page chrome
 4. Rework desktop columns so crafting and inventory/equipment areas have enough room.
-5. Ensure each major region can scroll internally when content exceeds available height.
-6. Keep narrow/mobile behavior usable:
+5. Evaluate the selected-item detail panel:
+   - remove it if it only duplicates the slot tooltip/icon/name information
+   - preserve or relocate any unique status/action if one still exists
+   - remove dead CSS for `.sunny-town-selected-item` if the panel is deleted
+6. Ensure each major region can scroll internally when content exceeds available height.
+7. Keep narrow/mobile behavior usable:
    - single-column stacking is fine
    - full-height scrolling is fine
    - avoid text overlap and clipped controls
-7. Preserve existing behavior:
+8. Preserve existing behavior:
    - press `E` opens/closes as before
    - close button works
    - inventory drag/drop works
@@ -103,6 +108,7 @@ Current `.sunny-town-inventory-tray` constraints to inspect:
 - A full play-area panel is acceptable for now.
 - Avoid adding tabs in this ticket; tabs are a later shell task.
 - Avoid adding stats in this ticket; #20 handles stats-ready layout after this.
+- Avoid keeping redundant preview/detail panels just because they were useful during debugging.
 - Do not make the panel look like a marketing modal. It should feel like an in-game management screen.
 - Keep cards shallow and operational. Do not nest cards inside cards.
 
@@ -130,7 +136,8 @@ Manual checks:
 - Press `E`.
 - Confirm the menu uses most or all of the play area and is no longer cramped.
 - Confirm the menu closes normally.
-- Confirm inventory grid, equipment area, character preview, hotbar editor, selected-item details, and crafting panel all remain visible or reachable through clear scrolling.
+- Confirm inventory grid, equipment area, character preview, hotbar editor, and crafting panel all remain visible or reachable through clear scrolling.
+- Confirm the redundant selected-item detail section is removed, or that any remaining selected-item UI has a clearly unique purpose beyond repeating tooltip/icon/name data.
 - Confirm no major text/control overlap at desktop width.
 - Check a narrow/mobile viewport for stacking, scrolling, and clipped controls.
 
