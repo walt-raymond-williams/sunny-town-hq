@@ -181,4 +181,74 @@ describe('student inventory drag/drop moves', () => {
     expect(store.pendingHotbarDropSlot).toBeNull()
     expect(store.draggedInventorySlotIndex).toBeNull()
   })
+
+  it('equips a compatible dragged inventory item through the provided equipment handler', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots({
+      slotCount: 3,
+      slots: [
+        { slotIndex: 0, item: item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' }) },
+        { slotIndex: 1, item: null },
+        { slotIndex: 2, item: null },
+      ],
+      items: [item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' })],
+    })
+    const equip = vi.fn().mockResolvedValue(undefined)
+
+    expect(store.startInventorySlotDrag(0)).toBe(true)
+    await expect(store.dropInventorySlotOnEquipment('tool', equip)).resolves.toBe(true)
+
+    expect(equip).toHaveBeenCalledWith('tool', 'pickaxe')
+    expect(store.pendingEquipmentDropSlot).toBeNull()
+    expect(store.invalidEquipmentDropSlot).toBeNull()
+    expect(store.draggedInventorySlotIndex).toBeNull()
+  })
+
+  it('rejects incompatible equipment drops before calling the equipment handler', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots({
+      slotCount: 3,
+      slots: [
+        { slotIndex: 0, item: item({ key: 'rock', equipSlot: '', category: 'resource' }) },
+        { slotIndex: 1, item: item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' }) },
+        { slotIndex: 2, item: null },
+      ],
+      items: [
+        item({ key: 'rock', equipSlot: '', category: 'resource' }),
+        item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' }),
+      ],
+    })
+    const equip = vi.fn().mockResolvedValue(undefined)
+
+    expect(store.startInventorySlotDrag(0)).toBe(true)
+    await expect(store.dropInventorySlotOnEquipment('gear', equip)).resolves.toBe(false)
+    expect(equip).not.toHaveBeenCalled()
+    expect(store.invalidEquipmentDropSlot).toBe('gear')
+
+    expect(store.startInventorySlotDrag(1)).toBe(true)
+    await expect(store.dropInventorySlotOnEquipment('gear', equip)).resolves.toBe(false)
+    expect(equip).not.toHaveBeenCalled()
+    expect(store.invalidEquipmentDropSlot).toBe('gear')
+  })
+
+  it('clears pending equipment state when equipment assignment fails', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots({
+      slotCount: 3,
+      slots: [
+        { slotIndex: 0, item: item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' }) },
+        { slotIndex: 1, item: null },
+        { slotIndex: 2, item: null },
+      ],
+      items: [item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' })],
+    })
+    const equip = vi.fn().mockRejectedValue(new Error('equipment unavailable'))
+
+    expect(store.startInventorySlotDrag(0)).toBe(true)
+    await expect(store.dropInventorySlotOnEquipment('tool', equip)).resolves.toBe(false)
+
+    expect(store.pendingEquipmentDropSlot).toBeNull()
+    expect(store.draggedInventorySlotIndex).toBeNull()
+    expect(store.invalidEquipmentDropSlot).toBeNull()
+  })
 })

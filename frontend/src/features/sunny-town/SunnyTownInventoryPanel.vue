@@ -16,6 +16,7 @@ const emit = defineEmits<{
   close: []
   craftRecipe: [recipeKey: string]
   equipItem: [itemKey: string, slot: EquipmentSlot | '']
+  equipInventorySlotDrop: [slot: EquipmentSlot]
   selectHotbarSlot: [index: number]
   toggleCraftingPanel: []
   unequipSlot: [slot: EquipmentSlot]
@@ -51,6 +52,10 @@ async function handleInventorySlotDrop(slotIndex: number) {
 
 async function handleHotbarSlotDrop(slot: number) {
   await inventoryStore.dropInventorySlotOnHotbar(slot)
+}
+
+function handleEquipmentSlotDrop(slot: EquipmentSlot) {
+  emit('equipInventorySlotDrop', slot)
 }
 </script>
 
@@ -134,7 +139,20 @@ async function handleHotbarSlotDrop(slot: number) {
       </v-alert>
       <section class="equipment-panel equipment-panel--dark" aria-label="Equipment">
         <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
-          <div>
+          <SunnyTownInventorySlot
+            :draggable-enabled="false"
+            :item="slot.item"
+            :invalid-drop="inventoryStore.invalidEquipmentDropSlot === slot.slot"
+            :pending="inventoryStore.pendingEquipmentDropSlot === slot.slot"
+            :slot-label="slot.slot.slice(0, 1).toUpperCase()"
+            :tooltip="false"
+            variant="compact"
+            @drag-end="inventoryStore.cancelInventorySlotDrag()"
+            @drag-leave="inventoryStore.clearEquipmentDropTarget(slot.slot)"
+            @drag-over="inventoryStore.setEquipmentDropTarget(slot.slot)"
+            @drop="handleEquipmentSlotDrop(slot.slot)"
+          />
+          <div class="equipment-slot__summary">
             <p class="summary-category">{{ slot.slot }}</p>
             <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
           </div>

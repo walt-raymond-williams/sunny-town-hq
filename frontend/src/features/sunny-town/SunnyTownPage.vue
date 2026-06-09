@@ -151,6 +151,7 @@ const {
   clearSelectedHotbarSlot,
   craftInventoryRecipe,
   craftingPanelOpen,
+  equipInventorySlotDrop,
   equipInventoryItem,
   inventoryOpen,
   placingStoneBlock,
@@ -757,6 +758,7 @@ function backToPet() {
         @clear-hotbar="clearSelectedHotbarSlot"
         @close="inventoryOpen = false"
         @craft-recipe="craftInventoryRecipe"
+        @equip-inventory-slot-drop="equipInventorySlotDrop"
         @equip-item="equipInventoryItem"
         @select-hotbar-slot="selectHotbarSlot"
         @toggle-crafting-panel="toggleCraftingPanel"

@@ -29,6 +29,7 @@ interface MockInventoryStore {
   items: InventoryItem[]
   hotbarSlots: HotbarSlot[]
   craftRecipe: ReturnType<typeof vi.fn>
+  dropInventorySlotOnEquipment: ReturnType<typeof vi.fn>
   equipItem: ReturnType<typeof vi.fn>
   loadCraftingRecipes: ReturnType<typeof vi.fn>
   loadHotbar: ReturnType<typeof vi.fn>
@@ -48,6 +49,7 @@ function store(overrides: Partial<MockInventoryStore> = {}): MockInventoryStore 
       hotbarSlot(5, null),
     ],
     craftRecipe: vi.fn(),
+    dropInventorySlotOnEquipment: vi.fn(),
     equipItem: vi.fn(),
     loadCraftingRecipes: vi.fn(),
     loadHotbar: vi.fn(),
@@ -138,5 +140,25 @@ describe('useSunnyTownInventoryActions', () => {
     expect(inventoryStore.equipItem).toHaveBeenCalledWith('tool', 'pickaxe')
     expect(inventoryStore.unequipItem).toHaveBeenCalledWith('tool')
     expect(onEquipmentChanged).toHaveBeenCalledTimes(2)
+  })
+
+  it('equips dropped inventory slots through the store and runs the equipment callback from the drop handler', async () => {
+    const inventoryStore = store()
+    const onEquipmentChanged = vi.fn()
+    inventoryStore.dropInventorySlotOnEquipment.mockImplementation(async (slot, equip) => {
+      await equip(slot, 'pickaxe')
+      return true
+    })
+    const actions = useSunnyTownInventoryActions(inventoryStore, {
+      onEquipmentChanged,
+      onHotbarSelectionChanged: vi.fn(),
+      onHotbarUpdated: vi.fn(),
+    })
+
+    await actions.equipInventorySlotDrop('tool')
+
+    expect(inventoryStore.dropInventorySlotOnEquipment).toHaveBeenCalledOnce()
+    expect(inventoryStore.equipItem).toHaveBeenCalledWith('tool', 'pickaxe')
+    expect(onEquipmentChanged).toHaveBeenCalledOnce()
   })
 })

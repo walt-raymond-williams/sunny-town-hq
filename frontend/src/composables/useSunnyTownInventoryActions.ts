@@ -9,6 +9,7 @@ interface SunnyTownInventoryStore {
   hotbarSlots: HotbarSlot[]
   items: InventoryItem[]
   craftRecipe: (recipeKey: string) => Promise<void>
+  dropInventorySlotOnEquipment: (slot: EquipmentSlot, equip: (slot: EquipmentSlot, itemKey: string) => Promise<void>) => Promise<boolean>
   equipItem: (slot: EquipmentSlot, itemKey: string) => Promise<void>
   loadCraftingRecipes: () => Promise<void>
   loadHotbar: () => Promise<void>
@@ -80,6 +81,13 @@ export function useSunnyTownInventoryActions(
     options.onEquipmentChanged()
   }
 
+  async function equipInventorySlotDrop(slot: EquipmentSlot) {
+    await inventoryStore.dropInventorySlotOnEquipment(slot, async (equipmentSlot, itemKey) => {
+      await inventoryStore.equipItem(equipmentSlot, itemKey)
+      options.onEquipmentChanged()
+    })
+  }
+
   async function unequipInventorySlot(slot: EquipmentSlot) {
     await inventoryStore.unequipItem(slot)
     options.onEquipmentChanged()
@@ -100,6 +108,7 @@ export function useSunnyTownInventoryActions(
     clearSelectedHotbarSlot,
     craftInventoryRecipe,
     craftingPanelOpen,
+    equipInventorySlotDrop,
     equipInventoryItem,
     inventoryOpen,
     placingStoneBlock,

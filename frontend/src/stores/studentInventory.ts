@@ -25,6 +25,8 @@ interface StudentInventoryState {
   invalidInventoryDropSlotIndex: number | null
   pendingHotbarDropSlot: number | null
   invalidHotbarDropSlot: number | null
+  pendingEquipmentDropSlot: EquipmentSlot | null
+  invalidEquipmentDropSlot: EquipmentSlot | null
   error: string
   craftingError: string
 }
@@ -60,6 +62,8 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
     invalidInventoryDropSlotIndex: null,
     pendingHotbarDropSlot: null,
     invalidHotbarDropSlot: null,
+    pendingEquipmentDropSlot: null,
+    invalidEquipmentDropSlot: null,
     error: '',
     craftingError: '',
   }),
@@ -223,6 +227,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       this.draggedInventorySlotIndex = slotIndex
       this.invalidInventoryDropSlotIndex = null
       this.invalidHotbarDropSlot = null
+      this.invalidEquipmentDropSlot = null
       this.error = ''
       return true
     },
@@ -250,11 +255,26 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.invalidHotbarDropSlot = null
       }
     },
+    setEquipmentDropTarget(slot: EquipmentSlot) {
+      if (this.draggedInventorySlotIndex === null) {
+        this.invalidEquipmentDropSlot = slot
+        return
+      }
+      const sourceSlot = this.inventorySlots.find((candidate) => candidate.slotIndex === this.draggedInventorySlotIndex)
+      const sourceItem = sourceSlot?.item
+      this.invalidEquipmentDropSlot = sourceItem?.equipSlot === slot ? null : slot
+    },
+    clearEquipmentDropTarget(slot: EquipmentSlot) {
+      if (this.invalidEquipmentDropSlot === slot) {
+        this.invalidEquipmentDropSlot = null
+      }
+    },
     cancelInventorySlotDrag() {
       if (!this.isMovingInventorySlot) {
         this.draggedInventorySlotIndex = null
         this.invalidInventoryDropSlotIndex = null
         this.invalidHotbarDropSlot = null
+        this.invalidEquipmentDropSlot = null
       }
     },
     async dropInventorySlot(slotIndex: number): Promise<boolean> {
@@ -269,6 +289,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.draggedInventorySlotIndex = null
         this.invalidInventoryDropSlotIndex = null
         this.invalidHotbarDropSlot = null
+        this.invalidEquipmentDropSlot = null
       }
     },
     async dropInventorySlotOnHotbar(slot: number): Promise<boolean> {
@@ -296,6 +317,47 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         return false
       } finally {
         this.pendingHotbarDropSlot = null
+        this.draggedInventorySlotIndex = null
+        this.invalidInventoryDropSlotIndex = null
+      }
+    },
+    async dropInventorySlotOnEquipment(
+      slot: EquipmentSlot,
+      equip?: (slot: EquipmentSlot, itemKey: string) => Promise<void>,
+    ): Promise<boolean> {
+      const sourceSlotIndex = this.draggedInventorySlotIndex
+      if (sourceSlotIndex === null) {
+        this.invalidEquipmentDropSlot = slot
+        return false
+      }
+      const sourceSlot = this.inventorySlots.find((candidate) => candidate.slotIndex === sourceSlotIndex)
+      if (!sourceSlot?.item) {
+        this.invalidInventoryDropSlotIndex = sourceSlotIndex
+        this.invalidEquipmentDropSlot = slot
+        this.draggedInventorySlotIndex = null
+        return false
+      }
+      if (sourceSlot.item.equipSlot !== slot) {
+        this.invalidEquipmentDropSlot = slot
+        this.draggedInventorySlotIndex = null
+        return false
+      }
+
+      this.pendingEquipmentDropSlot = slot
+      this.invalidEquipmentDropSlot = null
+      this.error = ''
+
+      try {
+        if (equip) {
+          await equip(slot, sourceSlot.item.key)
+        } else {
+          await this.equipItem(slot, sourceSlot.item.key)
+        }
+        return true
+      } catch {
+        return false
+      } finally {
+        this.pendingEquipmentDropSlot = null
         this.draggedInventorySlotIndex = null
         this.invalidInventoryDropSlotIndex = null
       }

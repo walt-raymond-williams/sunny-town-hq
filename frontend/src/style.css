@@ -598,9 +598,14 @@ h2 {
   border: 1px solid #d9e1e4;
   border-radius: 8px;
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: space-between;
   padding: 10px 12px;
+}
+
+.equipment-slot__summary {
+  flex: 1;
+  min-width: 0;
 }
 
 .equipment-panel--dark {
