@@ -599,11 +599,6 @@ h2 {
   gap: 10px;
 }
 
-.equipment-panel__slots {
-  display: grid;
-  gap: 10px;
-}
-
 .equipment-slot {
   align-items: center;
   background: #f3f7f8;
@@ -633,6 +628,32 @@ h2 {
   color: rgba(255, 255, 255, 0.66);
 }
 
+.equipment-slot--rail {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 6px;
+}
+
+.equipment-slot--rail .equipment-slot__summary {
+  min-width: 0;
+}
+
+.equipment-slot--rail .inventory-item__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.equipment-slot--rail .v-btn {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
 .sunny-town-character-preview {
   align-items: center;
   background: rgba(255, 255, 255, 0.08);
@@ -640,9 +661,21 @@ h2 {
   border-radius: 8px;
   display: grid;
   gap: 12px;
-  grid-template-columns: 132px minmax(0, 1fr);
-  min-height: 146px;
-  padding: 8px 10px;
+  grid-template-columns: minmax(174px, 210px) 132px minmax(180px, 1fr);
+  min-height: 214px;
+  padding: 10px;
+}
+
+.sunny-town-character-preview__equipment {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sunny-town-character-preview__avatar-wrap {
+  align-items: center;
+  display: grid;
+  justify-items: center;
 }
 
 .sunny-town-character-preview__avatar {
@@ -1249,6 +1282,7 @@ h2 {
     justify-items: center;
   }
 
+  .sunny-town-character-preview__equipment,
   .sunny-town-character-preview__sheet {
     width: 100%;
   }

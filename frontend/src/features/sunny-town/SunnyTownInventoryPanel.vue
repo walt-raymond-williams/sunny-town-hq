@@ -136,38 +136,18 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
         {{ inventoryStore.error }}
       </v-alert>
       <section class="equipment-panel equipment-panel--dark" aria-label="Equipment">
-        <SunnyTownCharacterPreview :equipment="inventoryStore.equippedVisuals" />
-        <div class="equipment-panel__slots">
-          <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
-            <SunnyTownInventorySlot
-              :draggable-enabled="false"
-              :item="slot.item"
-              :invalid-drop="inventoryStore.invalidEquipmentDropSlot === slot.slot"
-              :pending="inventoryStore.pendingEquipmentDropSlot === slot.slot"
-              :slot-label="slot.slot.slice(0, 1).toUpperCase()"
-              :tooltip="false"
-              variant="compact"
-              @drag-end="inventoryStore.cancelInventorySlotDrag()"
-              @drag-leave="inventoryStore.clearEquipmentDropTarget(slot.slot)"
-              @drag-over="inventoryStore.setEquipmentDropTarget(slot.slot)"
-              @drop="handleEquipmentSlotDrop(slot.slot)"
-            />
-            <div class="equipment-slot__summary">
-              <p class="summary-category">{{ slot.slot }}</p>
-              <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
-            </div>
-            <v-btn
-              v-if="slot.item"
-              :loading="inventoryStore.isUpdatingEquipment"
-              color="primary"
-              size="x-small"
-              variant="flat"
-              @click="emit('unequipSlot', slot.slot)"
-            >
-              Unequip
-            </v-btn>
-          </div>
-        </div>
+        <SunnyTownCharacterPreview
+          :equipment="inventoryStore.equippedVisuals"
+          :equipment-slots="inventoryStore.equipmentSlots"
+          :invalid-drop-slot="inventoryStore.invalidEquipmentDropSlot"
+          :is-updating-equipment="inventoryStore.isUpdatingEquipment"
+          :pending-drop-slot="inventoryStore.pendingEquipmentDropSlot"
+          @cancel-drag="inventoryStore.cancelInventorySlotDrag()"
+          @clear-drop-target="inventoryStore.clearEquipmentDropTarget"
+          @drop-equipment="handleEquipmentSlotDrop"
+          @set-drop-target="inventoryStore.setEquipmentDropTarget"
+          @unequip="emit('unequipSlot', $event)"
+        />
       </section>
       <div class="sunny-town-inventory-grid" aria-label="Inventory slots">
         <SunnyTownInventorySlot
