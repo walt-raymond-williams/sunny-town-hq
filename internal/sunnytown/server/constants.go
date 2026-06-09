@@ -71,8 +71,8 @@ func (room *room) step(dt float64, now time.Time) {
 	var npcTransfers []npcTransfer
 	var npcJobEvents []npcJobProductionEvent
 	if len(room.players) > 0 || room.npcPausedAt.IsZero() {
-		npcTransfers = room.stepLiveNPCsLocked(dt, now)
 		npcJobEvents = room.collectNPCJobProductionLocked(dt, now)
+		npcTransfers = room.stepLiveNPCsLocked(dt, now)
 	}
 	room.respawnCollectiblesLocked(now)
 	room.respawnResourceNodesLocked(now)
