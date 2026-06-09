@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { craftStudentRecipe, getCraftingRecipes } from '../api/craftingApi'
 import { equipStudentItem, getStudentEquipment, unequipStudentItem } from '../api/equipmentApi'
 import { getStudentHotbar, setStudentHotbarSlot } from '../api/hotbarApi'
-import { getStudentInventorySlots } from '../api/inventoryApi'
+import { getStudentInventorySlots, moveStudentInventoryStack } from '../api/inventoryApi'
 import { withKnownCraftingRecipes } from './craftingRecipes'
 import type { CraftingRecipe, EquippedSlot, EquipmentSlot, HotbarSlot, InventoryItem, InventorySlot, StudentHotbar, StudentInventory, StudentInventorySlots } from '../types/inventory'
 
@@ -18,6 +18,11 @@ interface StudentInventoryState {
   isLoadingCrafting: boolean
   isCrafting: boolean
   isUpdatingEquipment: boolean
+  isMovingInventorySlot: boolean
+  draggedInventorySlotIndex: number | null
+  pendingInventoryMoveSourceIndex: number | null
+  pendingInventoryMoveDestinationIndex: number | null
+  invalidInventoryDropSlotIndex: number | null
   error: string
   craftingError: string
 }
@@ -46,6 +51,11 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
     isLoadingCrafting: false,
     isCrafting: false,
     isUpdatingEquipment: false,
+    isMovingInventorySlot: false,
+    draggedInventorySlotIndex: null,
+    pendingInventoryMoveSourceIndex: null,
+    pendingInventoryMoveDestinationIndex: null,
+    invalidInventoryDropSlotIndex: null,
     error: '',
     craftingError: '',
   }),
@@ -194,6 +204,89 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         throw error
       } finally {
         this.isUpdatingHotbar = false
+      }
+    },
+    startInventorySlotDrag(slotIndex: number): boolean {
+      if (this.isMovingInventorySlot) {
+        return false
+      }
+      const slot = this.inventorySlots.find((candidate) => candidate.slotIndex === slotIndex)
+      if (!slot?.item) {
+        this.draggedInventorySlotIndex = null
+        this.invalidInventoryDropSlotIndex = slotIndex
+        return false
+      }
+      this.draggedInventorySlotIndex = slotIndex
+      this.invalidInventoryDropSlotIndex = null
+      this.error = ''
+      return true
+    },
+    setInventorySlotDropTarget(slotIndex: number) {
+      if (this.draggedInventorySlotIndex === null) {
+        this.invalidInventoryDropSlotIndex = slotIndex
+        return
+      }
+      this.invalidInventoryDropSlotIndex = this.draggedInventorySlotIndex === slotIndex ? slotIndex : null
+    },
+    clearInventorySlotDropTarget(slotIndex: number) {
+      if (this.invalidInventoryDropSlotIndex === slotIndex) {
+        this.invalidInventoryDropSlotIndex = null
+      }
+    },
+    cancelInventorySlotDrag() {
+      if (!this.isMovingInventorySlot) {
+        this.draggedInventorySlotIndex = null
+        this.invalidInventoryDropSlotIndex = null
+      }
+    },
+    async dropInventorySlot(slotIndex: number): Promise<boolean> {
+      const sourceSlotIndex = this.draggedInventorySlotIndex
+      if (sourceSlotIndex === null) {
+        this.invalidInventoryDropSlotIndex = slotIndex
+        return false
+      }
+      try {
+        return await this.moveInventorySlot(sourceSlotIndex, slotIndex)
+      } finally {
+        this.draggedInventorySlotIndex = null
+        this.invalidInventoryDropSlotIndex = null
+      }
+    },
+    async moveInventorySlot(sourceSlotIndex: number, destinationSlotIndex: number): Promise<boolean> {
+      if (this.isMovingInventorySlot) {
+        return false
+      }
+      const sourceSlot = this.inventorySlots.find((slot) => slot.slotIndex === sourceSlotIndex)
+      if (!sourceSlot?.item) {
+        this.invalidInventoryDropSlotIndex = sourceSlotIndex
+        return false
+      }
+      if (sourceSlotIndex === destinationSlotIndex) {
+        this.invalidInventoryDropSlotIndex = destinationSlotIndex
+        return false
+      }
+
+      this.isMovingInventorySlot = true
+      this.pendingInventoryMoveSourceIndex = sourceSlotIndex
+      this.pendingInventoryMoveDestinationIndex = destinationSlotIndex
+      this.invalidInventoryDropSlotIndex = null
+      this.error = ''
+
+      try {
+        const inventory = await moveStudentInventoryStack({
+          source: { kind: 'player_inventory', slotIndex: sourceSlotIndex },
+          destination: { kind: 'player_inventory', slotIndex: destinationSlotIndex },
+          mode: 'auto',
+        })
+        this.setInventorySlots(inventory)
+        return true
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : String(error)
+        return false
+      } finally {
+        this.isMovingInventorySlot = false
+        this.pendingInventoryMoveSourceIndex = null
+        this.pendingInventoryMoveDestinationIndex = null
       }
     },
     async loadCraftingRecipes() {

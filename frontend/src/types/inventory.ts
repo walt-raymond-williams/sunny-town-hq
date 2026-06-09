@@ -26,6 +26,21 @@ export interface StudentInventorySlots {
   items: InventoryItem[]
 }
 
+export type InventoryStorageKind = 'player_inventory'
+
+export interface InventoryStorageRef {
+  kind: InventoryStorageKind
+  slotIndex: number
+}
+
+export type InventoryMoveMode = 'move' | 'swap' | 'merge' | 'auto'
+
+export interface InventoryMoveRequest {
+  source: InventoryStorageRef
+  destination: InventoryStorageRef
+  mode: InventoryMoveMode
+}
+
 export interface InventorySlotItem {
   key: string
   name: string

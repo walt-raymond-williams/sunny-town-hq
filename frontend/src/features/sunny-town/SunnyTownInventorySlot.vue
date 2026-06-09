@@ -23,8 +23,13 @@ const props = withDefaults(defineProps<{
   variant: 'default',
 })
 
-defineEmits<{
+const emit = defineEmits<{
   click: []
+  dragEnd: []
+  dragLeave: []
+  dragOver: [event: DragEvent]
+  dragStart: [event: DragEvent]
+  drop: [event: DragEvent]
   select: []
 }>()
 
@@ -48,6 +53,37 @@ const accessibleLabel = computed(() => {
   const quantityText = showQuantity.value ? `, quantity ${stackQuantity.value}` : ''
   return props.slotLabel ? `${props.slotLabel}, ${props.item.name}${quantityText}` : `${props.item.name}${quantityText}`
 })
+
+function handleDragStart(event: DragEvent) {
+  if (props.disabled || !props.item) {
+    event.preventDefault()
+    return
+  }
+  event.dataTransfer?.setData('text/plain', props.item.key)
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
+  emit('dragStart', event)
+}
+
+function handleDragOver(event: DragEvent) {
+  if (props.disabled) {
+    return
+  }
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+  emit('dragOver', event)
+}
+
+function handleDrop(event: DragEvent) {
+  if (props.disabled) {
+    return
+  }
+  event.preventDefault()
+  emit('drop', event)
+}
 </script>
 
 <template>
@@ -65,9 +101,15 @@ const accessibleLabel = computed(() => {
     type="button"
     :aria-disabled="disabled"
     :aria-label="accessibleLabel"
+    :draggable="Boolean(item) && !disabled"
     :disabled="disabled"
     :title="tooltipText"
-    @click="$emit('click'); $emit('select')"
+    @click="emit('click'); emit('select')"
+    @dragend="emit('dragEnd')"
+    @dragleave="emit('dragLeave')"
+    @dragover="handleDragOver"
+    @dragstart="handleDragStart"
+    @drop="handleDrop"
   >
     <span v-if="slotLabel" class="sunny-town-inventory-slot__label">{{ slotLabel }}</span>
     <span v-if="item" class="inventory-item__icon sunny-town-inventory-slot__icon" :class="iconClass" aria-hidden="true" />

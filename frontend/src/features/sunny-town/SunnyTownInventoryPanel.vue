@@ -34,6 +34,19 @@ const selectedInventoryItem = computed(() => selectedInventorySlot.value?.item |
 const visibleCraftingRecipes = computed(() => (
   props.showAllCraftingRecipes ? inventoryStore.knownCraftingRecipes : inventoryStore.craftableRecipes
 ))
+
+function handleInventorySlotDragStart(slotIndex: number, event: DragEvent) {
+  if (!inventoryStore.startInventorySlotDrag(slotIndex)) {
+    event.preventDefault()
+  }
+}
+
+async function handleInventorySlotDrop(slotIndex: number) {
+  const moved = await inventoryStore.dropInventorySlot(slotIndex)
+  if (moved) {
+    selectedInventorySlotIndex.value = slotIndex
+  }
+}
 </script>
 
 <template>
@@ -137,9 +150,16 @@ const visibleCraftingRecipes = computed(() => (
           v-for="slot in inventoryStore.inventorySlots"
           :key="slot.slotIndex"
           :item="slot.item"
+          :invalid-drop="inventoryStore.invalidInventoryDropSlotIndex === slot.slotIndex"
+          :pending="inventoryStore.pendingInventoryMoveSourceIndex === slot.slotIndex || inventoryStore.pendingInventoryMoveDestinationIndex === slot.slotIndex"
           :quantity="slot.item?.quantity"
           :selected="selectedInventorySlot?.slotIndex === slot.slotIndex"
           :slot-label="String(slot.slotIndex + 1)"
+          @drag-end="inventoryStore.cancelInventorySlotDrag()"
+          @drag-leave="inventoryStore.clearInventorySlotDropTarget(slot.slotIndex)"
+          @drag-over="inventoryStore.setInventorySlotDropTarget(slot.slotIndex)"
+          @drag-start="handleInventorySlotDragStart(slot.slotIndex, $event)"
+          @drop="handleInventorySlotDrop(slot.slotIndex)"
           @select="selectedInventorySlotIndex = slot.slotIndex"
         />
       </div>

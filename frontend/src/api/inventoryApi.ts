@@ -1,5 +1,5 @@
-import { authJson } from './http'
-import type { EquipmentSlot, InventoryItem, InventorySlot, StudentInventory, StudentInventorySlots } from '../types/inventory'
+import { authJson, jsonOptions } from './http'
+import type { EquipmentSlot, InventoryItem, InventoryMoveRequest, InventorySlot, StudentInventory, StudentInventorySlots } from '../types/inventory'
 
 export interface InventoryItemResponse {
   key?: string
@@ -38,6 +38,18 @@ export async function getStudentInventory(): Promise<StudentInventory> {
 
 export async function getStudentInventorySlots(): Promise<StudentInventorySlots> {
   const response = await authJson<StudentInventorySlotsResponse>('/api/student/inventory/slots')
+  return normalizeStudentInventorySlots(response)
+}
+
+export async function moveStudentInventoryStack(request: InventoryMoveRequest): Promise<StudentInventorySlots> {
+  const response = await authJson<StudentInventorySlotsResponse>(
+    '/api/student/inventory/move',
+    jsonOptions('POST', request),
+  )
+  return normalizeStudentInventorySlots(response)
+}
+
+function normalizeStudentInventorySlots(response: StudentInventorySlotsResponse): StudentInventorySlots {
   const slotCount = response.slotCount ?? 0
   const slots = normalizeInventorySlots(response.slots || [], slotCount)
   return {
