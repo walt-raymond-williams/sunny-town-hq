@@ -1,6 +1,6 @@
 # Container Storage Contract
 
-This document is the accepted design contract for Sunny Town container and chest storage. It defines the model that future transfer and chest-grid tickets should implement.
+This document is the accepted current contract for Sunny Town container and chest storage. HQ durable container identity and Sunny Town-validated chest open/transfer flows are implemented for the inventory redesign branch.
 
 ## Ownership Boundary
 
@@ -11,7 +11,7 @@ This document is the accepted design contract for Sunny Town container and chest
 
 ## Stable Container Identity
 
-Durable containers should be identified by an HQ-owned `container_id`.
+Durable containers are identified by an HQ-owned `container_id`.
 
 Implemented first schema:
 
@@ -110,7 +110,7 @@ The UI should treat the server response as authoritative and refresh both grids 
 
 ## Inventory Descriptor Shape
 
-Container transfers should extend the existing inventory slot descriptor pattern.
+Container transfers use the existing inventory slot descriptor pattern.
 
 Recommended shape:
 
@@ -133,7 +133,7 @@ Specialized shop storage can continue using `shop_input_storage` and `shop_stock
 
 Container storage can participate in crafting through the same recipe storage descriptor model used by player and shop crafting.
 
-Recommended future descriptor:
+Current recipe storage descriptors include `player_inventory`, `shop_input_storage`, and `shop_stock`. A future container-backed crafting route can use:
 
 ```json
 {

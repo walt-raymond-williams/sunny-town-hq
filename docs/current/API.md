@@ -120,7 +120,7 @@ Inventory item payloads returned by student inventory, hotbar, equipment, and cr
 }
 ```
 
-`POST /api/student/inventory/move` moves player inventory stacks transactionally. The request uses source and destination descriptors so later container work can extend the same shape:
+`POST /api/student/inventory/move` moves player inventory stacks transactionally. The request uses the same source and destination descriptor pattern as container transfers:
 
 ```json
 {
@@ -151,7 +151,7 @@ Supported first-slice modes:
 
 The response is the updated slotted inventory payload. `quantity` is only used by `split`; existing move/swap/merge/auto callers may omit it.
 
-Future container transfer APIs should extend this descriptor pattern with `kind: "container"` and a stable `containerId`, following `docs/current/CONTAINER_STORAGE.md`. Browser requests must not be treated as live access authority; Sunny Town validates proximity/object access before HQ mutates durable container contents.
+Container transfers use this descriptor pattern with `kind: "container"` and a stable `containerId`, following `docs/current/CONTAINER_STORAGE.md`. Browser requests must not be treated as live access authority; Sunny Town validates proximity/object access before HQ mutates durable container contents.
 
 `GET /api/student/crafting/recipes` returns student-visible recipes with ingredient ownership derived from the selected recipe storage context. The current public student route uses a `player_inventory` context backed by `student_inventory_slot` totals. During the slotted-inventory transition, the aggregate `student_inventory_item` table is still maintained for compatibility, but crafting availability uses the same slot authority as crafting execution.
 

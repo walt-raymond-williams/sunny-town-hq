@@ -34,12 +34,12 @@ Current implemented baseline:
 - Cookie Keeper `shopkeeper_stock` production now increments durable HQ-owned Cookie Keeper shop cookie stock, and player purchases consume that stock.
 - Cookie Keeper has a small durable starter stock seed, a logical output storage capacity of `64`, and the shop UI shows `current / 64` stock before purchase.
 - `sunny-town-house-1` has an authored `Cookie Shop` area (`cookie-shop`) tagged as shop/workplace/storage owner; Cookie Keeper still uses `cookie-keeper-counter` as the owned work anchor.
-- `sunny-town-house-1` has authored `cookie-shop-output-chest` and `cookie-shop-input-chest` fixtures. The output chest snapshots as a source `fixture`, kind `chest` world object tied to `cookie-shop`, `cookie-keeper-shop`, output storage, and `cookie`; the input chest snapshots with `storageRole: input`, `cookie-shop`, and `cookie-keeper-shop`, but no durable ingredient quantity yet.
+- `sunny-town-house-1` has authored `cookie-shop-output-chest` and `cookie-shop-input-chest` fixtures. The output chest snapshots as a source `fixture`, kind `chest` world object tied to `cookie-shop`, `cookie-keeper-shop`, output storage, and `cookie`; the input chest snapshots with `storageRole: input`, `cookie-shop`, and `cookie-keeper-shop`, while durable ingredient quantities live in HQ `shop_input_storage_item`.
 - The frontend renders chest world objects from the normal `worldObjects` snapshot stream.
 - Players can inspect the nearby output chest with `F`; the read-only panel loads existing `cookie-keeper-shop` stock/capacity from `GET /api/student/shop/stock`.
 - Existing player crafting now uses the shared HQ recipe catalog/execution foundation in `internal/hq/inventory/crafting.go`; student crafting remains API-compatible.
-- Cookie Shop storage planning now lives in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`; it tracks logical output chest capacity, authored shop area, physical chest fixtures, shared recipe execution, and later input ingredients.
-- Fresh continuation should start in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md` under "Immediate Next Slice: HQ-Owned Shop Input Storage"; that section is the authoritative tracker for the next coding slice.
+- Cookie Shop storage planning now lives in `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`; it tracks logical output chest capacity, authored shop area, physical chest fixtures, shared recipe execution, input ingredients, and player replenishment through validated container transfer.
+- Fresh continuation should start in the inventory redesign tracking doc or active GitHub issue rather than the completed Cookie Shop input-storage slices.
 - NPCs can follow cross-map portal routes, move room membership, appear only in their current map snapshot, and avoid portal bounce.
 
 Important current code touchpoints:
@@ -513,27 +513,23 @@ Implemented notes:
 - Frontend world-object rendering draws chest fixtures.
 - Chest snapshots now expose authored `interactionRadius`.
 - Added read-only chest inspection: pressing `F` near `cookie-shop-output-chest` opens a storage panel backed by existing `GET /api/student/shop/stock` stock/capacity.
-- Added authored `cookie-shop-input-chest` fixture as the physical anchor for future Cookie Shop ingredient storage.
+- Added authored `cookie-shop-input-chest` fixture as the physical anchor for HQ-owned Cookie Shop ingredient storage.
 - Map validation requires input storage fixtures to identify their owning shop and location.
 - Revised the next production architecture decision: recipes should be shared HQ-owned definitions used by player crafting, NPC/shop production, and future workstations. Do not implement a Cookie Keeper-only recipe path.
 - Implemented the shared recipe execution foundation in HQ inventory: recipe definitions are actor-agnostic, student crafting adapts the existing student inventory functions, and missing ingredients stop output production before mutation.
 - Implemented HQ-owned Cookie Shop input storage in `shop_input_storage_item`, scoped by shop ID and item type with a current `64` total-unit capacity for `cookie-keeper-shop`.
 - Implemented recipe-aware Cookie Keeper production: the shared cookie recipe consumes 1 flour and 1 sugar from shop input storage and produces 1 cookie into shop output stock.
 - Added durable blocked production attempts for missing inputs or full output storage, so failed production does not inflate successful production progress.
-- Fresh databases seed 16 flour and 16 sugar into Cookie Shop input storage as a bridge until player/admin replenishment exists.
+- Fresh databases seed 16 flour and 16 sugar into Cookie Shop input storage as a cold-start supply.
 - This slice intentionally does not add NPC-held inventory, assignments, or raw drive/position persistence.
 
-Next ND-10 sub-slice:
+Implemented inventory-redesign follow-up:
 
-- Implement Cookie Shop input replenishment:
-  - Add a controlled way to add ingredients to `shop_input_storage_item` without direct database edits.
-  - Prefer a narrow internal/service/debug/admin path first unless player deposit/access rules are designed in the same slice.
-  - If player deposit is implemented, validate access to `cookie-shop-input-chest` and move items from player inventory to shop input storage in one HQ-owned transaction.
-  - Verify with `go test ./...`; frontend build is only needed if API response shapes change.
-- After replenishment is stable:
-  - Add a Cookie Shop workstation fixture, likely a stove/oven, as the future player/NPC recipe interaction point.
-  - Extend player-facing crafting/storage UI only after ownership transfer and container access rules are designed.
-- Defer explicit chest actions such as withdraw/deposit until the shop sale path and ownership transfer rules are designed.
+- Cookie Shop input replenishment now uses the Sunny Town `container_transfer` flow.
+- Sunny Town validates access to `cookie-shop-input-chest`, and HQ moves items from player inventory to shop input storage in one transaction.
+- Input deposits accept `flour` and `sugar`, reject over-capacity writes, and do not create fixture-local quantities.
+- A Cookie Shop workstation fixture, likely a stove/oven, remains future work for player cooking or workstation-specific crafting.
+- Output chest withdrawal remains out of scope while shop sales consume output stock through the shop purchase API.
 - Alternate branch: make teacher lesson prep consume or expose durable progress if broader NPC job gameplay is the priority.
 - Do not generalize inventory ownership to character-capable inventory unless the next gameplay requirement clearly needs NPC-held items.
 - Do not create a second inventory/stock source for the output chest; keep durable quantities HQ-owned.

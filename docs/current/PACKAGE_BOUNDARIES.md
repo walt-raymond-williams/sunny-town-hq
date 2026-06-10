@@ -20,8 +20,9 @@ Do not move `cmd/hq` app construction or route registration just to reduce line 
 - `internal/hq/users`: app user persistence, role sync, default student provisioning, and student listing.
 - `internal/hq/assignments`: assignment DTOs, typed assignment queries, submission, grading commands, teacher/student HTTP handlers, and AI grading coordination points.
 - `internal/hq/inventory`: student inventory, equipment, hotbar, crafting, wallet, shop purchases, durable shop stock, and related HTTP handlers.
+- `internal/hq/progression`: durable Sunny Town character skill definitions, XP ledgers, skill projections, and student progression read APIs.
 - `internal/hq/pet`: pet rules, profile persistence, pet actions, decay, game-result rewards, REST handlers, and Connect RPC handler.
-- `internal/hq/sunnytownbridge`: service-authenticated Sunny Town internal endpoints, durable Sunny Town position/map-object persistence, star/resource ledgers for player events, and NPC job production ledgers/progress aggregates. It coordinates with `internal/hq/inventory` when NPC production creates durable shop stock.
+- `internal/hq/sunnytownbridge`: service-authenticated Sunny Town internal endpoints, durable Sunny Town position/map-object persistence, star/resource ledgers for player events, and NPC job production ledgers/progress aggregates. It coordinates with `internal/hq/inventory` when NPC production creates durable shop stock and with `internal/hq/progression` when validated resource events award character XP.
 - `internal/hq/ai`: HQ-side AI grading context, result persistence, auto-apply policy, internal AI endpoints, and outbound grade triggering.
 - `internal/hq/schema`: startup migration runner for ordered SQL migrations.
 - `internal/hq/httpapi`: domain-neutral HTTP helpers such as JSON responses, static SPA serving, request logging, and local IPv4 discovery.
