@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after completing issue #33.
+Snapshot refreshed: 2026-06-10 after completing issue #35.
 
 ### Closed
 
@@ -131,17 +131,16 @@ Snapshot refreshed: 2026-06-10 after completing issue #33.
   Completed in `ac8f7be`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/33
 
+- #35 Add inventory stack splitting
+  Completed in `999aa3e`.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/35
+
 ### Open
 
 - #34 Implement mining XP progression vertical slice  
   Status: `status:ready`  
   Handoff: `docs/SUNNY_TOWN_MINING_XP_VERTICAL_SLICE_HANDOFF.md`  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/34
-
-- #35 Add inventory stack splitting  
-  Status: `status:ready`  
-  Handoff: `docs/SUNNY_TOWN_STACK_SPLITTING_HANDOFF.md`  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/35
 
 - #6 Keep current-state docs synchronized with architecture changes  
   Status: `status:ready`  
@@ -150,21 +149,20 @@ Snapshot refreshed: 2026-06-10 after completing issue #33.
 
 ## Recommended Next Management Step
 
-Start issue #35:
+Start issue #34:
 
-`Add inventory stack splitting`
+`Implement mining XP progression vertical slice`
 
 Why:
 
-- It is the next narrower inventory interaction slice before the broader mining XP progression work.
-- It builds directly on the completed slotted inventory, drag/drop, and container transfer flows.
-- It improves both player inventory and container deposit ergonomics without changing progression schema.
+- It is the remaining open inventory-redesign feature issue on this branch.
+- It builds on the completed stats/skills model design from #28.
+- It gives the mining loop a durable progression payoff after the inventory/resource work.
 
 Suggested sequence:
 
-1. #35 Add inventory stack splitting.
-2. #34 Implement mining XP progression vertical slice.
-3. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
+1. #34 Implement mining XP progression vertical slice.
+2. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
 
 ## Useful Commands
 
