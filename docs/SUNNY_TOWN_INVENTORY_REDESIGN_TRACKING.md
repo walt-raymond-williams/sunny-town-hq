@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after closing #29 and unblocking #30.
+Snapshot refreshed: 2026-06-10 after closing #31 and unblocking #32.
 
 ### Closed
 
@@ -107,6 +107,10 @@ Snapshot refreshed: 2026-06-10 after closing #29 and unblocking #30.
   Completed in `f8a212b`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
 
+- #31 Add Cookie Shop input storage
+  Completed in `a338f86`.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/31
+
 ### Open
 
 - #27 Add tabbed E menu shell
@@ -129,16 +133,9 @@ Snapshot refreshed: 2026-06-10 after closing #29 and unblocking #30.
   Handoff: `docs/SUNNY_TOWN_CHEST_INVENTORY_GRID_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
 
-- #31 Add Cookie Shop input storage
-  Status: `status:ready`
-  Blocked by: #25, closed
-  Related: #29, #32
-  Handoff: `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_STORAGE_HANDOFF.md`
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/31
-
 - #32 Add ingredient-aware Cookie Shop production
-  Status: `status:blocked`
-  Blocked by: #25 and #31
+  Status: `status:ready`
+  Blocked by: #25 and #31, closed
   Related: #24, #28
   Handoff: `docs/SUNNY_TOWN_INGREDIENT_AWARE_COOKIE_PRODUCTION_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/32
@@ -150,15 +147,14 @@ Assign agents to the first ready batch:
 - #27 Add tabbed E menu shell
 - #28 Define stats and skills progression model
 - #30 Render chest inventory grid
-- #31 Add Cookie Shop input storage
+- #32 Add ingredient-aware Cookie Shop production
 
 Why:
 
 - These issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
 - #27 and #28 can run independently of the storage/container backend work.
 - #30 was unblocked by #29 and can now render chest slots against the container response shape.
-- #31 was unblocked by #25 and can now build on the recipe storage descriptor foundation.
-- Keep #32 blocked until its prerequisites close.
+- #32 was unblocked by #31 and can verify ingredient-aware production against the existing input storage and recipe descriptor foundation.
 
 ## Useful Commands
 
