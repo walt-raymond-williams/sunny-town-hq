@@ -380,6 +380,8 @@ Verification:
 
 ### Issue: Design General Container Storage Schema And Access Contract
 
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/26
+
 Type: design
 Priority: P1
 
@@ -411,11 +413,13 @@ Verification:
 
 ### Issue: Add Player To Container Transfer Operations
 
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
+
 Type: backend
 Priority: P1
 
 Blocked by:
-- Design General Container Storage Schema And Access Contract
+- Design General Container Storage Schema And Access Contract (#26)
 - Add Inventory Stack Move, Swap, And Merge API
 
 Related to:
@@ -442,6 +446,8 @@ Verification:
 - Backend tests for transfer, insufficient quantity, full target, invalid container, and conflict behavior.
 
 ### Issue: Render Chest Inventory Grid
+
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
 
 Type: frontend
 Priority: P1
@@ -477,11 +483,13 @@ Verification:
 
 ### Issue: Add Storage Context To Crafting Recipe APIs
 
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/25
+
 Type: backend
 Priority: P1
 
 Blocked by:
-- Design General Container Storage Schema And Access Contract
+- Add Inventory Stack Move, Swap, And Merge API (#11, closed)
 
 Related to:
 - Add Cookie Shop Input Storage
@@ -508,6 +516,8 @@ Verification:
 - Tests for player storage context and fake non-player storage context.
 
 ### Issue: Add Cookie Shop Input Storage
+
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/31
 
 Type: backend
 Priority: P1
@@ -539,6 +549,8 @@ Verification:
 - `go test ./internal/hq/schema`
 
 ### Issue: Add Ingredient-Aware Cookie Shop Production
+
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/32
 
 Type: backend
 Priority: P2
@@ -630,6 +642,8 @@ Verification:
 
 ### Issue: Add Tabbed E Menu Shell
 
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/27
+
 Type: frontend
 Priority: P2
 
@@ -660,6 +674,8 @@ Verification:
 ## Epic: Stats And Skills Progression
 
 ### Issue: Define Stats And Skills Progression Model
+
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
 
 Type: design
 Priority: P2

@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-09 after creating issue #24.
+Snapshot refreshed: 2026-06-10 after uploading roadmap issues #25-#32.
 
 ### Closed
 
@@ -91,35 +91,84 @@ Snapshot refreshed: 2026-06-09 after creating issue #24.
   Completed in `8da662b`.  
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/23
 
+- #24 Redesign crafting panel for inventory menu
+  Completed in `1b082e7`.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/24
+
 ### Open
 
-- #24 Redesign crafting panel for inventory menu  
-  Status: `status:ready`  
-  Blocked by: #12, #13, and #23, all closed  
-  Related: future storage-context crafting and Cookie Shop input storage  
-  Handoff: `docs/SUNNY_TOWN_CRAFTING_PANEL_REDESIGN_HANDOFF.md`  
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/24
+- #25 Add storage context to crafting recipe APIs
+  Status: `status:ready`
+  Blocked by: #11, closed
+  Related: #31, #32, #29, #24
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/25
+
+- #26 Design general container storage schema and access contract
+  Status: `status:ready`
+  Blocked by: #10, closed
+  Related: #29, #30, #25
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/26
+
+- #27 Add tabbed E menu shell
+  Status: `status:ready`
+  Blocked by: #13, closed
+  Related: #19, #28
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/27
+
+- #28 Define stats and skills progression model
+  Status: `status:ready`
+  Related: #20, #32
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
+
+- #29 Add player to container transfer operations
+  Status: `status:blocked`
+  Blocked by: #26 and #11
+  Related: #30, #25
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
+
+- #30 Render chest inventory grid
+  Status: `status:blocked`
+  Blocked by: #12 and #29
+  Related: #13, #24
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
+
+- #31 Add Cookie Shop input storage
+  Status: `status:blocked`
+  Blocked by: #25
+  Related: #29, #32
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/31
+
+- #32 Add ingredient-aware Cookie Shop production
+  Status: `status:blocked`
+  Blocked by: #25 and #31
+  Related: #24, #28
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/32
 
 ## Recommended Next Management Step
 
-Start issue #24:
+Create handoff docs for the first ready batch, then assign agents:
 
-`Redesign crafting panel for inventory menu`
+- #25 Add storage context to crafting recipe APIs
+- #26 Design general container storage schema and access contract
+- #27 Add tabbed E menu shell
+- #28 Define stats and skills progression model
 
 Why:
 
-- The inventory grid, drag/drop, hotbar, equipment, expanded E menu, character panel, and crafting correctness fixes have landed.
-- Crafting is now reliable enough to polish the panel without building on ambiguous backend behavior.
-- This keeps the player-facing E menu moving toward the final game-style inventory experience.
-- The slice is frontend-focused and does not block on storage-aware crafting.
-- Handoff: `docs/SUNNY_TOWN_CRAFTING_PANEL_REDESIGN_HANDOFF.md`.
+- These four issues are marked `status:ready` and do not depend on any newly opened issue.
+- #25 unlocks Cookie Shop input storage and ingredient-aware production.
+- #26 unlocks player-container transfer operations and chest grid rendering.
+- #27 and #28 can run independently of the storage/container backend work.
+- Keep #29, #30, #31, and #32 blocked until their prerequisites close.
 
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 24 --comments
-& 'C:\Program Files\GitHub CLI\gh.exe' issue view 23 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 25 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 26 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 27 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 28 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
