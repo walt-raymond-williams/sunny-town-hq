@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after uploading roadmap issues #25-#32.
+Snapshot refreshed: 2026-06-10 after closing #25 and unblocking #31.
 
 ### Closed
 
@@ -95,14 +95,11 @@ Snapshot refreshed: 2026-06-10 after uploading roadmap issues #25-#32.
   Completed in `1b082e7`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/24
 
-### Open
-
 - #25 Add storage context to crafting recipe APIs
-  Status: `status:ready`
-  Blocked by: #11, closed
-  Related: #31, #32, #29, #24
-  Handoff: `docs/SUNNY_TOWN_STORAGE_CONTEXT_CRAFTING_HANDOFF.md`
+  Completed in `99fe784`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/25
+
+### Open
 
 - #26 Design general container storage schema and access contract
   Status: `status:ready`
@@ -139,8 +136,8 @@ Snapshot refreshed: 2026-06-10 after uploading roadmap issues #25-#32.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
 
 - #31 Add Cookie Shop input storage
-  Status: `status:blocked`
-  Blocked by: #25
+  Status: `status:ready`
+  Blocked by: #25, closed
   Related: #29, #32
   Handoff: `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_STORAGE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/31
@@ -156,18 +153,18 @@ Snapshot refreshed: 2026-06-10 after uploading roadmap issues #25-#32.
 
 Assign agents to the first ready batch:
 
-- #25 Add storage context to crafting recipe APIs
 - #26 Design general container storage schema and access contract
 - #27 Add tabbed E menu shell
 - #28 Define stats and skills progression model
+- #31 Add Cookie Shop input storage
 
 Why:
 
-- These four issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
-- #25 unlocks Cookie Shop input storage and ingredient-aware production.
+- These issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
 - #26 unlocks player-container transfer operations and chest grid rendering.
 - #27 and #28 can run independently of the storage/container backend work.
-- Keep #29, #30, #31, and #32 blocked until their prerequisites close.
+- #31 was unblocked by #25 and can now build on the recipe storage descriptor foundation.
+- Keep #29, #30, and #32 blocked until their prerequisites close.
 
 ## Useful Commands
 
