@@ -24,6 +24,8 @@ interface SunnyTownInventoryActionOptions {
   onHotbarUpdated: () => void
 }
 
+export type SunnyTownInventoryMenuTab = 'inventory' | 'crafting'
+
 export function hotbarIndexForEvent(event: Pick<KeyboardEvent, 'code'>): number | null {
   if (!/^Digit[1-5]$/.test(event.code)) {
     return null
@@ -36,6 +38,7 @@ export function useSunnyTownInventoryActions(
   options: SunnyTownInventoryActionOptions,
 ) {
   const inventoryOpen = ref(false)
+  const inventoryMenuTab = ref<SunnyTownInventoryMenuTab>('inventory')
   const craftingPanelOpen = ref(false)
   const showAllCraftingRecipes = ref(true)
   const selectedHotbarIndex = ref(0)
@@ -49,6 +52,7 @@ export function useSunnyTownInventoryActions(
   async function toggleInventory() {
     inventoryOpen.value = !inventoryOpen.value
     if (inventoryOpen.value) {
+      inventoryMenuTab.value = 'inventory'
       craftingPanelOpen.value = true
       await inventoryStore.loadInventory()
       await inventoryStore.loadHotbar()
@@ -59,6 +63,14 @@ export function useSunnyTownInventoryActions(
   async function toggleCraftingPanel() {
     craftingPanelOpen.value = !craftingPanelOpen.value
     if (craftingPanelOpen.value) {
+      await inventoryStore.loadCraftingRecipes()
+    }
+  }
+
+  async function setInventoryMenuTab(tab: SunnyTownInventoryMenuTab) {
+    inventoryMenuTab.value = tab
+    if (tab === 'crafting') {
+      craftingPanelOpen.value = true
       await inventoryStore.loadCraftingRecipes()
     }
   }
@@ -95,11 +107,13 @@ export function useSunnyTownInventoryActions(
     craftInventoryRecipe,
     craftingPanelOpen,
     equipInventorySlotDrop,
+    inventoryMenuTab,
     inventoryOpen,
     placingStoneBlock,
     selectedHotbarIndex,
     selectedHotbarItemKey,
     selectHotbarSlot,
+    setInventoryMenuTab,
     showAllCraftingRecipes,
     stoneBlockQuantity,
     toggleCraftingPanel,

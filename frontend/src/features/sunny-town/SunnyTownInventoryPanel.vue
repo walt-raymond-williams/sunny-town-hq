@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { SunnyTownInventoryMenuTab } from '../../composables/useSunnyTownInventoryActions'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { EquipmentSlot } from '../../types/inventory'
 import SunnyTownCharacterPreview from './SunnyTownCharacterPreview.vue'
 import SunnyTownInventorySlot from './SunnyTownInventorySlot.vue'
 
 const props = defineProps<{
+  activeTab: SunnyTownInventoryMenuTab
   craftingPanelOpen: boolean
   selectedHotbarIndex: number
   showAllCraftingRecipes: boolean
@@ -19,6 +21,7 @@ const emit = defineEmits<{
   selectHotbarSlot: [index: number]
   toggleCraftingPanel: []
   unequipSlot: [slot: EquipmentSlot]
+  updateActiveTab: [tab: SunnyTownInventoryMenuTab]
   updateShowAllCraftingRecipes: [value: boolean]
 }>()
 
@@ -59,7 +62,26 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
 
 <template>
   <div class="sunny-town-inventory-tray" data-testid="sunny-town-inventory-panel" role="dialog" aria-label="Inventory">
-    <section v-if="craftingPanelOpen" class="sunny-town-crafting" aria-label="Crafting">
+    <header class="sunny-town-e-menu__header">
+      <v-tabs
+        :model-value="activeTab"
+        bg-color="transparent"
+        color="warning"
+        density="compact"
+        mandatory
+        @update:model-value="emit('updateActiveTab', $event as SunnyTownInventoryMenuTab)"
+      >
+        <v-tab value="inventory">Inventory</v-tab>
+        <v-tab value="crafting">Crafting</v-tab>
+      </v-tabs>
+      <v-btn icon="mdi-close" size="x-small" variant="text" @click="emit('close')" />
+    </header>
+    <section
+      v-if="activeTab === 'crafting' || (activeTab === 'inventory' && craftingPanelOpen)"
+      class="sunny-town-crafting"
+      :class="{ 'sunny-town-crafting--focused': activeTab === 'crafting' }"
+      aria-label="Crafting"
+    >
       <div class="sunny-town-crafting__header">
         <strong>Crafting</strong>
         <v-switch
@@ -137,7 +159,7 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
         </v-btn>
       </div>
     </section>
-    <div class="sunny-town-inventory">
+    <div v-if="activeTab === 'inventory'" class="sunny-town-inventory">
       <div class="sunny-town-inventory__header">
         <strong>Inventory</strong>
         <div class="sunny-town-inventory__actions">
@@ -150,7 +172,6 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
           >
             Crafting
           </v-btn>
-          <v-btn icon="mdi-close" size="x-small" variant="text" @click="emit('close')" />
         </div>
       </div>
       <v-alert v-if="inventoryStore.error" class="mb-3" density="compact" type="error" variant="tonal">

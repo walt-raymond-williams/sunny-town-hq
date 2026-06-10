@@ -84,10 +84,26 @@ describe('useSunnyTownInventoryActions', () => {
     await actions.toggleInventory()
 
     expect(actions.inventoryOpen.value).toBe(true)
+    expect(actions.inventoryMenuTab.value).toBe('inventory')
     expect(actions.craftingPanelOpen.value).toBe(true)
     expect(actions.showAllCraftingRecipes.value).toBe(true)
     expect(inventoryStore.loadInventory).toHaveBeenCalledOnce()
     expect(inventoryStore.loadHotbar).toHaveBeenCalledOnce()
+    expect(inventoryStore.loadCraftingRecipes).toHaveBeenCalledOnce()
+  })
+
+  it('switches to the crafting tab and ensures recipes are loaded', async () => {
+    const inventoryStore = store()
+    const actions = useSunnyTownInventoryActions(inventoryStore, {
+      onEquipmentChanged: vi.fn(),
+      onHotbarSelectionChanged: vi.fn(),
+      onHotbarUpdated: vi.fn(),
+    })
+
+    await actions.setInventoryMenuTab('crafting')
+
+    expect(actions.inventoryMenuTab.value).toBe('crafting')
+    expect(actions.craftingPanelOpen.value).toBe(true)
     expect(inventoryStore.loadCraftingRecipes).toHaveBeenCalledOnce()
   })
 

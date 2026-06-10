@@ -1131,7 +1131,7 @@ h2 {
   display: grid;
   gap: 16px;
   grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 1.2fr);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   inset: 12px;
   max-height: calc(100% - 24px);
   max-width: none;
@@ -1140,6 +1140,19 @@ h2 {
   position: absolute;
   width: auto;
   z-index: 5;
+}
+
+.sunny-town-e-menu__header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.sunny-town-e-menu__header .v-tabs {
+  min-width: 0;
 }
 
 .sunny-town-inventory {
@@ -1207,6 +1220,12 @@ h2 {
   padding-right: 14px;
   scrollbar-gutter: stable;
   width: 100%;
+}
+
+.sunny-town-crafting--focused {
+  border-right: 0;
+  grid-column: 1 / -1;
+  padding-right: 0;
 }
 
 .sunny-town-crafting__header {
@@ -1376,6 +1395,10 @@ h2 {
     width: auto;
   }
 
+  .sunny-town-e-menu__header {
+    align-items: flex-start;
+  }
+
   .sunny-town-inventory,
   .sunny-town-crafting {
     height: auto;
@@ -1404,6 +1427,12 @@ h2 {
     margin-bottom: 12px;
     padding-bottom: 12px;
     padding-right: 0;
+  }
+
+  .sunny-town-crafting--focused {
+    border-bottom: 0;
+    margin-bottom: 0;
+    padding-bottom: 0;
   }
 
   .sunny-town-crafting__recipe {

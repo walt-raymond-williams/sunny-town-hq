@@ -163,10 +163,12 @@ const {
   craftingPanelOpen,
   equipInventorySlotDrop,
   inventoryOpen,
+  inventoryMenuTab,
   placingStoneBlock,
   selectedHotbarIndex,
   selectedHotbarItemKey,
   selectHotbarSlot,
+  setInventoryMenuTab,
   showAllCraftingRecipes,
   stoneBlockQuantity,
   toggleCraftingPanel,
@@ -819,6 +821,7 @@ function backToPet() {
       />
       <SunnyTownInventoryPanel
         v-if="inventoryOpen"
+        :active-tab="inventoryMenuTab"
         :crafting-panel-open="craftingPanelOpen"
         :selected-hotbar-index="selectedHotbarIndex"
         :show-all-crafting-recipes="showAllCraftingRecipes"
@@ -829,6 +832,7 @@ function backToPet() {
         @select-hotbar-slot="selectHotbarSlot"
         @toggle-crafting-panel="toggleCraftingPanel"
         @unequip-slot="unequipInventorySlot"
+        @update-active-tab="setInventoryMenuTab"
         @update-show-all-crafting-recipes="showAllCraftingRecipes = $event"
       />
   </SunnyTownHud>
