@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after closing #30.
+Snapshot refreshed: 2026-06-10 after closing #27.
 
 ### Closed
 
@@ -103,6 +103,10 @@ Snapshot refreshed: 2026-06-10 after closing #30.
   Completed in `52481cf`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/26
 
+- #27 Add tabbed E menu shell
+  Completed in `3786d8d`.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/27
+
 - #29 Add player to container transfer operations
   Completed in `f8a212b`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
@@ -121,13 +125,6 @@ Snapshot refreshed: 2026-06-10 after closing #30.
 
 ### Open
 
-- #27 Add tabbed E menu shell
-  Status: `status:ready`
-  Blocked by: #13, closed
-  Related: #19, #28
-  Handoff: `docs/SUNNY_TOWN_TABBED_E_MENU_HANDOFF.md`
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/27
-
 - #28 Define stats and skills progression model
   Status: `status:ready`
   Related: #20, #32
@@ -136,15 +133,14 @@ Snapshot refreshed: 2026-06-10 after closing #30.
 
 ## Recommended Next Management Step
 
-Assign agents to the first ready batch:
+Assign the remaining ready inventory redesign ticket:
 
-- #27 Add tabbed E menu shell
 - #28 Define stats and skills progression model
 
 Why:
 
-- These issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
-- #27 and #28 can run independently of the storage/container backend work.
+- This issue is marked `status:ready`, has a handoff doc, and does not depend on any newly opened issue.
+- #28 can run independently of the completed E-menu and storage/container backend work.
 
 ## Useful Commands
 
