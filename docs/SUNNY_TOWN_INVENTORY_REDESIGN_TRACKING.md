@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after closing #26 and unblocking #29.
+Snapshot refreshed: 2026-06-10 after closing #29 and unblocking #30.
 
 ### Closed
 
@@ -103,6 +103,10 @@ Snapshot refreshed: 2026-06-10 after closing #26 and unblocking #29.
   Completed in `52481cf`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/26
 
+- #29 Add player to container transfer operations
+  Completed in `f8a212b`.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
+
 ### Open
 
 - #27 Add tabbed E menu shell
@@ -118,16 +122,9 @@ Snapshot refreshed: 2026-06-10 after closing #26 and unblocking #29.
   Handoff: `docs/SUNNY_TOWN_STATS_SKILLS_MODEL_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
 
-- #29 Add player to container transfer operations
-  Status: `status:ready`
-  Blocked by: #26 and #11, closed
-  Related: #30, #25
-  Handoff: `docs/SUNNY_TOWN_PLAYER_CONTAINER_TRANSFER_HANDOFF.md`
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
-
 - #30 Render chest inventory grid
-  Status: `status:blocked`
-  Blocked by: #12 and #29
+  Status: `status:ready`
+  Blocked by: #12 and #29, closed
   Related: #13, #24
   Handoff: `docs/SUNNY_TOWN_CHEST_INVENTORY_GRID_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
@@ -152,16 +149,16 @@ Assign agents to the first ready batch:
 
 - #27 Add tabbed E menu shell
 - #28 Define stats and skills progression model
-- #29 Add player to container transfer operations
+- #30 Render chest inventory grid
 - #31 Add Cookie Shop input storage
 
 Why:
 
 - These issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
 - #27 and #28 can run independently of the storage/container backend work.
-- #29 was unblocked by #26 and can now implement transfer operations against the accepted container contract.
+- #30 was unblocked by #29 and can now render chest slots against the container response shape.
 - #31 was unblocked by #25 and can now build on the recipe storage descriptor foundation.
-- Keep #30 and #32 blocked until their prerequisites close.
+- Keep #32 blocked until its prerequisites close.
 
 ## Useful Commands
 
