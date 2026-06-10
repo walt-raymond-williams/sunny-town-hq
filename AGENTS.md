@@ -15,6 +15,7 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 - Project docs, plans, setup notes, and testing guidance live in `docs/`.
 - Current-state architecture, package boundaries, API, database, and runtime docs live in `docs/current/`.
 - Historical planning docs live in `docs/archive/`.
+- When docs disagree, `docs/current/` is the front door and source of truth for implemented behavior; planning, roadmap, tracking, and archive docs are historical context unless an active GitHub issue says otherwise.
 - Production frontend assets are generated into local `web/` by `npm run build`; `web/` is ignored and should not be committed.
 - Integration/runtime configuration lives under `deploy/`.
 - Common verification and runtime commands live in `Taskfile.yml`.
@@ -35,6 +36,7 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 - Keep generated or local noise out of commits unless explicitly requested.
 - `hq-local.err.log` and `hq-local.out.log` are intentionally visible in `git status`; do not stage them unless explicitly asked.
 - Historical planning docs may be removed after their decisions are captured in current-state architecture docs.
+- Prefer archiving durable rationale and deleting completed agent handoff scaffolding once the linked issues are closed.
 
 ## Feature Planning Workflow
 

@@ -483,14 +483,14 @@ Out of scope:
 Suggested verification:
 
 - Use `rg` to find inventory, equipment, hotbar, crafting, and item metadata code.
-- Compare findings against `docs/INVENTORY_AND_EQUIPMENT.md`.
+- Compare findings against `docs/archive/INVENTORY_AND_EQUIPMENT.md`.
 - Run existing focused tests only if needed to confirm current behavior.
 
 ## Required Output From Discovery
 
 The discovery audit should produce a follow-up document, tentatively named:
 
-`docs/SUNNY_TOWN_INVENTORY_REDESIGN_ROADMAP.md`
+`docs/archive/SUNNY_TOWN_INVENTORY_REDESIGN_ROADMAP.md`
 
 That document should contain:
 

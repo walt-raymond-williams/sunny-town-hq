@@ -71,7 +71,7 @@ Implementation notes:
 - Do this as a short design note before schema implementation.
 
 Verification:
-- Documentation review against `docs/INVENTORY_AND_EQUIPMENT.md`, `docs/current/DATABASE.md`, and `docs/current/ARCHITECTURE.md`.
+- Documentation review against `docs/archive/INVENTORY_AND_EQUIPMENT.md`, `docs/current/DATABASE.md`, and `docs/current/ARCHITECTURE.md`.
 
 ### Issue: Implement Slotted Player Inventory Persistence
 

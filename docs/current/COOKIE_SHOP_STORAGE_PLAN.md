@@ -51,7 +51,7 @@ Current architecture decision:
 - HQ crafting now has a shared recipe catalog/execution foundation in `internal/hq/inventory/crafting.go`.
 - The current `stone_block` player recipe still uses the existing `/api/student/crafting/...` behavior, but execution is routed through storage operations instead of being hard-coded to student inventory.
 - Shared recipe execution is intentionally storage-agnostic: current student crafting adapts `ConsumeStudentItem` / `IncrementStudentItem` behind a `player_inventory` storage descriptor, while Cookie Shop production uses `shop_input_storage` as the recipe input descriptor and `shop_stock` as the output descriptor.
-- Inventory redesign discovery in `docs/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md` agrees with this direction: chest fixtures are interaction metadata, durable quantities live in HQ, and grid/container UI wraps explicit storage endpoints rather than creating Sunny Town-local inventory state.
+- Archived inventory redesign discovery in `docs/archive/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md` agrees with this direction: chest fixtures are interaction metadata, durable quantities live in HQ, and grid/container UI wraps explicit storage endpoints rather than creating Sunny Town-local inventory state.
 - General container/chest identity, access validation, conflict handling, and implemented transfer behavior are defined in `docs/current/CONTAINER_STORAGE.md`.
 
 Next task for a fresh agent:

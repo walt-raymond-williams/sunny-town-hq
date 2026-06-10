@@ -179,7 +179,8 @@ Sunny Town does not write the HQ database directly. It calls internal HQ HTTP en
 - [Testing guidelines](docs/TESTING_GUIDELINES.md)
 - [Sunny Town architecture](docs/SUNNY_TOWN_ARCHITECTURE.md)
 - [Sunny Town movement model](docs/SUNNY_TOWN_MOVEMENT_MODEL.md)
-- [Inventory and equipment](docs/INVENTORY_AND_EQUIPMENT.md)
+- [Inventory API](docs/current/API.md)
+- [Inventory database](docs/current/DATABASE.md)
 - [Keycloak setup](docs/KEYCLOAK_SETUP.md)
 - [Restructure implementation plan](docs/RESTRUCTURE_IMPLEMENTATION_PLAN.md)
 

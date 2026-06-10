@@ -140,8 +140,7 @@ Snapshot refreshed: 2026-06-10 after completing issue #6.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/34
 
 - #6 Keep current-state docs synchronized with architecture changes
-  Completed in `7d0f545`.
-  Handoff: `docs/CURRENT_STATE_DOCS_SYNC_HANDOFF.md`
+  Completed in `7d0f545`; stakeholder cleanup completed after that docs sync.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/6
 
 ### Open
@@ -154,9 +153,7 @@ No ready inventory redesign feature issues remain.
 
 Recommended next step:
 
-Use #6 for current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
-
-Handoff: `docs/CURRENT_STATE_DOCS_SYNC_HANDOFF.md`
+Open the final PR from `codex/inventory-redesign-dev` for human review. The current-state docs in `docs/current/` are the reviewer front door; archived inventory planning docs are historical rationale only.
 
 ## Useful Commands
 
@@ -178,32 +175,18 @@ git pull
 ## Related Local Docs
 
 - `AGENTS.md`
-- `docs/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md`
-- `docs/SUNNY_TOWN_INVENTORY_REDESIGN_ROADMAP.md`
-- `docs/SUNNY_TOWN_INVENTORY_REDESIGN_TICKETS.md`
-- `docs/SUNNY_TOWN_INVENTORY_METADATA_HANDOFF.md`
-- `docs/SUNNY_TOWN_INVENTORY_SLOT_COMPONENT_HANDOFF.md`
-- `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_HANDOFF.md`
-- `docs/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`
-- `docs/SUNNY_TOWN_INVENTORY_DRAG_DROP_HANDOFF.md`
-- `docs/SUNNY_TOWN_HOTBAR_DROP_TARGET_HANDOFF.md`
-- `docs/SUNNY_TOWN_EQUIPMENT_DROP_TARGET_HANDOFF.md`
-- `docs/SUNNY_TOWN_LEGACY_INVENTORY_BUTTON_REMOVAL_HANDOFF.md`
-- `docs/SUNNY_TOWN_CHARACTER_PREVIEW_HANDOFF.md`
-- `docs/SUNNY_TOWN_E_MENU_PLAY_AREA_HANDOFF.md`
-- `docs/SUNNY_TOWN_STATS_READY_CHARACTER_PANEL_HANDOFF.md`
-- `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`
-- `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`
-- `docs/SUNNY_TOWN_CRAFTING_PANEL_REDESIGN_HANDOFF.md`
-- `docs/SUNNY_TOWN_STORAGE_CONTEXT_CRAFTING_HANDOFF.md`
-- `docs/SUNNY_TOWN_CONTAINER_STORAGE_CONTRACT_HANDOFF.md`
-- `docs/SUNNY_TOWN_TABBED_E_MENU_HANDOFF.md`
-- `docs/SUNNY_TOWN_STATS_SKILLS_MODEL_HANDOFF.md`
-- `docs/SUNNY_TOWN_PLAYER_CONTAINER_TRANSFER_HANDOFF.md`
-- `docs/SUNNY_TOWN_CHEST_INVENTORY_GRID_HANDOFF.md`
-- `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_STORAGE_HANDOFF.md`
-- `docs/SUNNY_TOWN_INGREDIENT_AWARE_COOKIE_PRODUCTION_HANDOFF.md`
-- `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_REPLENISHMENT_HANDOFF.md`
-- `docs/SUNNY_TOWN_MINING_XP_VERTICAL_SLICE_HANDOFF.md`
-- `docs/SUNNY_TOWN_STACK_SPLITTING_HANDOFF.md`
-- `docs/CURRENT_STATE_DOCS_SYNC_HANDOFF.md`
+- `docs/current/API.md`
+- `docs/current/ARCHITECTURE.md`
+- `docs/current/CONTAINER_STORAGE.md`
+- `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
+- `docs/current/DATABASE.md`
+- `docs/current/PACKAGE_BOUNDARIES.md`
+- `docs/current/SCHEMA_OWNERSHIP.md`
+- `docs/current/STATS_SKILLS_PROGRESSION.md`
+- `docs/archive/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md`
+- `docs/archive/SUNNY_TOWN_INVENTORY_REDESIGN_ROADMAP.md`
+- `docs/archive/SUNNY_TOWN_INVENTORY_REDESIGN_TICKETS.md`
+- `docs/archive/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`
+- `docs/archive/INVENTORY_AND_EQUIPMENT.md`
+
+Completed inventory handoff docs for issues #8 through #35 and #6 were deleted after their issue work landed. Durable rationale was preserved in `docs/current/` and `docs/archive/`.

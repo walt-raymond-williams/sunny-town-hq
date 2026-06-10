@@ -61,7 +61,7 @@ Acceptance criteria:
 - Sunny Town commits durable changes only through HQ internal HTTP endpoints.
 - HQ internal Sunny Town endpoints require `X-HQ-Service-Secret`.
 
-Source docs: `README.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `README.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ### REQ-RUNTIME-001: Health Checks
 
@@ -231,7 +231,7 @@ Acceptance criteria:
 - Feeding cannot create negative cookie quantities.
 - The legacy JSON feed endpoint may exist, but the main frontend pet path uses Connect RPC.
 
-Source docs: `ARCHITECTURE.md`, `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `ARCHITECTURE.md`, `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ### STORY-PET-003: Play With Pet
 
@@ -279,7 +279,7 @@ Acceptance criteria:
 - Inventory APIs do not return a `star` item.
 - Sunny Town star pickup rewards update wallet state through HQ.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`
 
 ### REQ-INV-002: Inventory Item Ownership
 
@@ -295,7 +295,7 @@ Acceptance criteria:
 - Student inventory API returns only items with quantity greater than zero.
 - Cookies, rock, crystal, and stone blocks are inventory items.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ### STORY-INV-001: View Inventory
 
@@ -311,7 +311,7 @@ Acceptance criteria:
 - Inventory shows equip status for equippable items.
 - Student Pet and Sunny Town show consistent cookie quantities.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`, `docs/TESTING_GUIDELINES.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`, `docs/TESTING_GUIDELINES.md`
 
 ### STORY-INV-002: Equip Items
 
@@ -329,7 +329,7 @@ Acceptance criteria:
 - Equipping does not decrement item quantity.
 - Unequipping clears the slot and does not remove the item from inventory.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ### STORY-INV-003: Starter Equipment
 
@@ -343,7 +343,7 @@ Acceptance criteria:
 - New student accounts receive `sunny_hoodie`, `star_cap`, and `pickaxe` during authenticated user sync.
 - Starter items appear in the inventory API with positive quantity.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ### STORY-INV-004: Buy Shop Item
 
@@ -360,7 +360,7 @@ Acceptance criteria:
 - Purchase increments cookie inventory.
 - Purchase returns updated star balance and inventory.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`
 
 ### STORY-CRAFT-001: Craft Stone Block
 
@@ -376,7 +376,7 @@ Acceptance criteria:
 - If the student lacks ingredients, no inventory changes.
 - Crafting returns updated inventory and recipe availability.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ## Sunny Town Entry and Session Stories
 
@@ -537,7 +537,7 @@ Acceptance criteria:
 - Schoolwork NPCs open the existing student assignment flow inside Sunny Town.
 - Shop NPCs use the HQ shop API.
 
-Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ## Sunny Town Mining and Resource Stories
 
@@ -559,7 +559,7 @@ Acceptance criteria:
 - Depleted nodes schedule respawn.
 - Resource node depletion is in Sunny Town memory and resets if Sunny Town restarts.
 
-Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/INVENTORY_AND_EQUIPMENT.md`, `docs/TESTING_GUIDELINES.md`
+Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/archive/INVENTORY_AND_EQUIPMENT.md`, `docs/TESTING_GUIDELINES.md`
 
 ### REQ-ST-MINE-001: Idempotent Resource Commit
 
@@ -577,7 +577,7 @@ Acceptance criteria:
 - Retrying the same event id does not double-award resources.
 - Sunny Town sends `resource_committed` or `resource_failed`.
 
-Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ## Sunny Town Placed Object Stories
 
@@ -599,7 +599,7 @@ Acceptance criteria:
 - Placed objects block movement.
 - Placed objects remain after reconnect and Sunny Town restart.
 
-Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/INVENTORY_AND_EQUIPMENT.md`, `docs/TESTING_GUIDELINES.md`
+Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/archive/INVENTORY_AND_EQUIPMENT.md`, `docs/TESTING_GUIDELINES.md`
 
 ### STORY-ST-BUILD-002: Remove Stone Block
 
@@ -616,7 +616,7 @@ Acceptance criteria:
 - Sunny Town broadcasts `map_object_removed`.
 - Other players in the same map see the block removed without waiting for a later reconnect.
 
-Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/SUNNY_TOWN_ARCHITECTURE.md`, `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ## WebSocket Protocol Requirements
 
@@ -680,7 +680,7 @@ Acceptance criteria:
 - After equipment changes, the store reloads inventory so `equipped` flags stay correct.
 - Crafting updates inventory and recipe availability.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`
 
 ### REQ-FE-003: Equipment Change Broadcast
 
@@ -696,7 +696,7 @@ Acceptance criteria:
 - Future snapshots include updated equipment visuals.
 - Other players can see the updated avatar equipment.
 
-Source docs: `docs/INVENTORY_AND_EQUIPMENT.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`
+Source docs: `docs/archive/INVENTORY_AND_EQUIPMENT.md`, `docs/SUNNY_TOWN_ARCHITECTURE.md`
 
 ## Verification Requirements
 
