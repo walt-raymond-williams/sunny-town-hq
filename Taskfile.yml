@@ -37,17 +37,17 @@ tasks:
   compose:up:
     desc: Build and start the full local Docker Compose stack.
     cmds:
-      - docker compose -f deploy\docker-compose.yml up -d --build
+      - docker compose -f deploy/docker-compose.yml up -d --build
 
   compose:rebuild-runtime:
     desc: Rebuild and recreate HQ and Sunny Town containers.
     cmds:
-      - docker compose -f deploy\docker-compose.yml up -d --build --force-recreate hq sunny-town
+      - docker compose -f deploy/docker-compose.yml up -d --build --force-recreate hq sunny-town
 
   compose:config:
     desc: Validate Docker Compose configuration.
     cmds:
-      - docker compose -f deploy\docker-compose.yml config
+      - docker compose -f deploy/docker-compose.yml config
 
   health:
     desc: Check HQ and Sunny Town health endpoints.

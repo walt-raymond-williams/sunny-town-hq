@@ -3,48 +3,91 @@ package protocol
 import stmaps "hq/internal/sunnytown/maps"
 
 type ClientMessage struct {
-	Type         string  `json:"type"`
-	Seq          int64   `json:"seq,omitempty"`
-	ClientTimeMS int64   `json:"client_time_ms,omitempty"`
-	X            float64 `json:"x,omitempty"`
-	Y            float64 `json:"y,omitempty"`
-	Facing       string  `json:"facing,omitempty"`
-	Moving       bool    `json:"moving,omitempty"`
-	ToolKey      string  `json:"toolKey,omitempty"`
-	ItemKey      string  `json:"itemKey,omitempty"`
-	GridX        int     `json:"gridX,omitempty"`
-	GridY        int     `json:"gridY,omitempty"`
+	Type         string         `json:"type"`
+	Seq          int64          `json:"seq,omitempty"`
+	ClientTimeMS int64          `json:"client_time_ms,omitempty"`
+	X            float64        `json:"x,omitempty"`
+	Y            float64        `json:"y,omitempty"`
+	Facing       string         `json:"facing,omitempty"`
+	Moving       bool           `json:"moving,omitempty"`
+	ToolKey      string         `json:"toolKey,omitempty"`
+	ItemKey      string         `json:"itemKey,omitempty"`
+	GridX        int            `json:"gridX,omitempty"`
+	GridY        int            `json:"gridY,omitempty"`
+	ObjectSource string         `json:"objectSource,omitempty"`
+	ObjectID     string         `json:"objectId,omitempty"`
+	Source       StorageSlotRef `json:"source,omitempty"`
+	Destination  StorageSlotRef `json:"destination,omitempty"`
 }
 
 type EquipmentSnapshot map[string]string
 type InventorySnapshot map[string]int
 
+type StorageSlotRef struct {
+	Kind        string `json:"kind,omitempty"`
+	ContainerID string `json:"containerId,omitempty"`
+	SlotIndex   int    `json:"slotIndex,omitempty"`
+}
+
+type InventoryItemSnapshot struct {
+	Key         string `json:"key,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Quantity    int    `json:"quantity,omitempty"`
+	EquipSlot   string `json:"equipSlot,omitempty"`
+	VisualKey   string `json:"visualKey,omitempty"`
+	IconKey     string `json:"iconKey,omitempty"`
+	MaxStack    int    `json:"maxStack,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Equipped    bool   `json:"equipped,omitempty"`
+}
+
+type InventorySlotSnapshot struct {
+	SlotIndex int                    `json:"slotIndex"`
+	Item      *InventoryItemSnapshot `json:"item,omitempty"`
+}
+
+type StudentInventorySlotsSnapshot struct {
+	SlotCount int                     `json:"slotCount"`
+	Slots     []InventorySlotSnapshot `json:"slots"`
+	Items     []InventoryItemSnapshot `json:"items"`
+}
+
+type ContainerSlotsSnapshot struct {
+	ContainerID string                  `json:"containerId"`
+	SlotCount   int                     `json:"slotCount"`
+	Revision    int64                   `json:"revision"`
+	Slots       []InventorySlotSnapshot `json:"slots"`
+}
+
 type ServerMessage struct {
-	Type           string                 `json:"type"`
-	SelfID         string                 `json:"selfId,omitempty"`
-	RoomID         string                 `json:"roomId,omitempty"`
-	MapID          string                 `json:"mapId,omitempty"`
-	Map            *stmaps.GameMap        `json:"map,omitempty"`
-	Tick           int64                  `json:"tick,omitempty"`
-	ServerTimeMS   int64                  `json:"serverTimeMs,omitempty"`
-	Players        []PlayerSnapshot       `json:"players,omitempty"`
-	NPCs           []NPCSnapshot          `json:"npcs,omitempty"`
-	Collectibles   []CollectibleSnapshot  `json:"collectibles,omitempty"`
-	ResourceNodes  []ResourceNodeSnapshot `json:"resourceNodes,omitempty"`
-	PlacedObjects  []PlacedObjectSnapshot `json:"placedObjects,omitempty"`
-	PlacedObject   *PlacedObjectSnapshot  `json:"placedObject,omitempty"`
-	WorldObjects   []WorldObjectSnapshot  `json:"worldObjects,omitempty"`
-	WorldObject    *WorldObjectSnapshot   `json:"worldObject,omitempty"`
-	Code           string                 `json:"code,omitempty"`
-	EventID        string                 `json:"eventId,omitempty"`
-	Kind           string                 `json:"kind,omitempty"`
-	Amount         int                    `json:"amount,omitempty"`
-	NewStarBalance int                    `json:"newStarBalance,omitempty"`
-	CollectibleID  string                 `json:"collectibleId,omitempty"`
-	NodeID         string                 `json:"nodeId,omitempty"`
-	ResourceKey    string                 `json:"resourceKey,omitempty"`
-	Quantity       int                    `json:"quantity,omitempty"`
-	Reason         string                 `json:"reason,omitempty"`
+	Type           string                         `json:"type"`
+	SelfID         string                         `json:"selfId,omitempty"`
+	RoomID         string                         `json:"roomId,omitempty"`
+	MapID          string                         `json:"mapId,omitempty"`
+	Map            *stmaps.GameMap                `json:"map,omitempty"`
+	Tick           int64                          `json:"tick,omitempty"`
+	ServerTimeMS   int64                          `json:"serverTimeMs,omitempty"`
+	Players        []PlayerSnapshot               `json:"players,omitempty"`
+	NPCs           []NPCSnapshot                  `json:"npcs,omitempty"`
+	Collectibles   []CollectibleSnapshot          `json:"collectibles,omitempty"`
+	ResourceNodes  []ResourceNodeSnapshot         `json:"resourceNodes,omitempty"`
+	PlacedObjects  []PlacedObjectSnapshot         `json:"placedObjects,omitempty"`
+	PlacedObject   *PlacedObjectSnapshot          `json:"placedObject,omitempty"`
+	WorldObjects   []WorldObjectSnapshot          `json:"worldObjects,omitempty"`
+	WorldObject    *WorldObjectSnapshot           `json:"worldObject,omitempty"`
+	Code           string                         `json:"code,omitempty"`
+	EventID        string                         `json:"eventId,omitempty"`
+	Kind           string                         `json:"kind,omitempty"`
+	Amount         int                            `json:"amount,omitempty"`
+	NewStarBalance int                            `json:"newStarBalance,omitempty"`
+	CollectibleID  string                         `json:"collectibleId,omitempty"`
+	NodeID         string                         `json:"nodeId,omitempty"`
+	ResourceKey    string                         `json:"resourceKey,omitempty"`
+	Quantity       int                            `json:"quantity,omitempty"`
+	Reason         string                         `json:"reason,omitempty"`
+	Inventory      *StudentInventorySlotsSnapshot `json:"inventory,omitempty"`
+	Container      *ContainerSlotsSnapshot        `json:"container,omitempty"`
 }
 
 type PlayerSnapshot struct {

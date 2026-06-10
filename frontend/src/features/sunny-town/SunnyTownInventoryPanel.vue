@@ -1,35 +1,119 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import type { SunnyTownInventoryMenuTab } from '../../composables/useSunnyTownInventoryActions'
+import { useCharacterProgressionStore } from '../../stores/characterProgression'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { EquipmentSlot } from '../../types/inventory'
+import SunnyTownCharacterPreview from './SunnyTownCharacterPreview.vue'
+import SunnyTownInventorySlot from './SunnyTownInventorySlot.vue'
 
 const props = defineProps<{
+  activeTab: SunnyTownInventoryMenuTab
   craftingPanelOpen: boolean
   selectedHotbarIndex: number
   showAllCraftingRecipes: boolean
 }>()
 
 const emit = defineEmits<{
-  assignHotbar: [itemKey: string]
   clearHotbar: []
   close: []
   craftRecipe: [recipeKey: string]
-  equipItem: [itemKey: string, slot: EquipmentSlot | '']
+  equipInventorySlotDrop: [slot: EquipmentSlot]
+  selectHotbarSlot: [index: number]
   toggleCraftingPanel: []
   unequipSlot: [slot: EquipmentSlot]
+  updateActiveTab: [tab: SunnyTownInventoryMenuTab]
   updateShowAllCraftingRecipes: [value: boolean]
 }>()
 
 const inventoryStore = useStudentInventoryStore()
+const progressionStore = useCharacterProgressionStore()
+const selectedInventorySlotIndex = ref<number | null>(null)
+const splitQuantity = ref(1)
 const selectedHotbarItem = computed(() => inventoryStore.hotbarSlots[props.selectedHotbarIndex]?.item || null)
+const selectedInventorySlot = computed(() => {
+  if (selectedInventorySlotIndex.value === null) {
+    return inventoryStore.inventorySlots.find((slot) => slot.item) || null
+  }
+  return inventoryStore.inventorySlots.find((slot) => slot.slotIndex === selectedInventorySlotIndex.value) || null
+})
+const firstEmptyInventorySlot = computed(() => inventoryStore.inventorySlots.find((slot) => !slot.item) || null)
+const selectedStackQuantity = computed(() => selectedInventorySlot.value?.item?.quantity || 0)
+const canSplitSelectedStack = computed(() => (
+  Boolean(selectedInventorySlot.value?.item) &&
+  selectedStackQuantity.value > 1 &&
+  Boolean(firstEmptyInventorySlot.value) &&
+  !inventoryStore.isMovingInventorySlot
+))
 const visibleCraftingRecipes = computed(() => (
   props.showAllCraftingRecipes ? inventoryStore.knownCraftingRecipes : inventoryStore.craftableRecipes
 ))
+
+watch(selectedStackQuantity, (quantity) => {
+  splitQuantity.value = quantity > 1 ? Math.max(1, Math.floor(quantity / 2)) : 1
+}, { immediate: true })
+
+onMounted(() => {
+  void progressionStore.loadProgression()
+})
+
+function handleInventorySlotDragStart(slotIndex: number, event: DragEvent) {
+  if (!inventoryStore.startInventorySlotDrag(slotIndex)) {
+    event.preventDefault()
+  }
+}
+
+async function handleInventorySlotDrop(slotIndex: number) {
+  const moved = await inventoryStore.dropInventorySlot(slotIndex)
+  if (moved) {
+    selectedInventorySlotIndex.value = slotIndex
+  }
+}
+
+async function handleHotbarSlotDrop(slot: number) {
+  await inventoryStore.dropInventorySlotOnHotbar(slot)
+}
+
+async function handleSplitSelectedStack() {
+  const source = selectedInventorySlot.value
+  const destination = firstEmptyInventorySlot.value
+  if (!source?.item || !destination) {
+    return
+  }
+  const split = Math.trunc(Number(splitQuantity.value))
+  const moved = await inventoryStore.splitInventorySlot(source.slotIndex, destination.slotIndex, split)
+  if (moved) {
+    selectedInventorySlotIndex.value = destination.slotIndex
+  }
+}
+
+function handleEquipmentSlotDrop(slot: EquipmentSlot) {
+  emit('equipInventorySlotDrop', slot)
+}
 </script>
 
 <template>
   <div class="sunny-town-inventory-tray" data-testid="sunny-town-inventory-panel" role="dialog" aria-label="Inventory">
-    <section v-if="craftingPanelOpen" class="sunny-town-crafting" aria-label="Crafting">
+    <header class="sunny-town-e-menu__header">
+      <v-tabs
+        :model-value="activeTab"
+        bg-color="transparent"
+        color="warning"
+        density="compact"
+        mandatory
+        @update:model-value="emit('updateActiveTab', $event as SunnyTownInventoryMenuTab)"
+      >
+        <v-tab value="inventory">Inventory</v-tab>
+        <v-tab value="crafting">Crafting</v-tab>
+      </v-tabs>
+      <v-btn icon="mdi-close" size="x-small" variant="text" @click="emit('close')" />
+    </header>
+    <section
+      v-if="activeTab === 'crafting' || (activeTab === 'inventory' && craftingPanelOpen)"
+      class="sunny-town-crafting"
+      :class="{ 'sunny-town-crafting--focused': activeTab === 'crafting' }"
+      aria-label="Crafting"
+    >
       <div class="sunny-town-crafting__header">
         <strong>Crafting</strong>
         <v-switch
@@ -60,18 +144,39 @@ const visibleCraftingRecipes = computed(() => (
         class="sunny-town-crafting__recipe"
         :class="{ 'sunny-town-crafting__recipe--disabled': !recipe.canCraft }"
       >
-        <span class="inventory-item__icon" :class="`inventory-item__icon--${recipe.outputKey}`" aria-hidden="true" />
-        <div>
-          <p class="inventory-item__name">{{ recipe.name }}</p>
+        <div class="sunny-town-crafting__output" aria-hidden="true">
+          <span
+            class="inventory-item__icon sunny-town-crafting__output-icon"
+            :class="`inventory-item__icon--${recipe.outputIconKey || recipe.outputKey}`"
+          />
+          <strong v-if="recipe.quantity !== 1" class="sunny-town-crafting__output-quantity">{{ recipe.quantity }}</strong>
+        </div>
+        <div class="sunny-town-crafting__body">
+          <div class="sunny-town-crafting__title-row">
+            <p class="inventory-item__name">{{ recipe.name }}</p>
+            <span class="sunny-town-crafting__yield">x{{ recipe.quantity }} {{ recipe.outputName }}</span>
+          </div>
           <p class="inventory-item__description">{{ recipe.description }}</p>
           <div class="sunny-town-crafting__ingredients">
-            <span
+            <div
               v-for="ingredient in recipe.ingredients"
               :key="ingredient.itemKey"
+              class="sunny-town-crafting__ingredient"
               :class="{ 'sunny-town-crafting__ingredient--missing': ingredient.owned < ingredient.required }"
             >
-              {{ ingredient.owned }}/{{ ingredient.required }} {{ ingredient.name }}
-            </span>
+              <span
+                class="inventory-item__icon sunny-town-crafting__ingredient-icon"
+                :class="`inventory-item__icon--${ingredient.iconKey || ingredient.itemKey}`"
+                aria-hidden="true"
+              />
+              <span class="sunny-town-crafting__ingredient-name">{{ ingredient.name }}</span>
+              <strong class="sunny-town-crafting__ingredient-count">{{ ingredient.owned }}/{{ ingredient.required }}</strong>
+            </div>
+          </div>
+          <div class="sunny-town-crafting__routing" aria-label="Crafting storage">
+            <span>Inventory</span>
+            <v-icon aria-hidden="true" icon="mdi-arrow-right" size="14" />
+            <span>Inventory</span>
           </div>
         </div>
         <v-btn
@@ -86,7 +191,7 @@ const visibleCraftingRecipes = computed(() => (
         </v-btn>
       </div>
     </section>
-    <div class="sunny-town-inventory">
+    <div v-if="activeTab === 'inventory'" class="sunny-town-inventory">
       <div class="sunny-town-inventory__header">
         <strong>Inventory</strong>
         <div class="sunny-town-inventory__actions">
@@ -99,65 +204,99 @@ const visibleCraftingRecipes = computed(() => (
           >
             Crafting
           </v-btn>
-          <v-btn icon="mdi-close" size="x-small" variant="text" @click="emit('close')" />
         </div>
       </div>
       <v-alert v-if="inventoryStore.error" class="mb-3" density="compact" type="error" variant="tonal">
         {{ inventoryStore.error }}
       </v-alert>
       <section class="equipment-panel equipment-panel--dark" aria-label="Equipment">
-        <div v-for="slot in inventoryStore.equipmentSlots" :key="slot.slot" class="equipment-slot">
-          <div>
-            <p class="summary-category">{{ slot.slot }}</p>
-            <p class="inventory-item__name">{{ slot.item?.name || 'Empty' }}</p>
-          </div>
-          <v-btn
-            v-if="slot.item"
-            :loading="inventoryStore.isUpdatingEquipment"
-            color="primary"
-            size="x-small"
-            variant="flat"
-            @click="emit('unequipSlot', slot.slot)"
-          >
-            Unequip
-          </v-btn>
-        </div>
+        <SunnyTownCharacterPreview
+          :equipment="inventoryStore.equippedVisuals"
+          :equipment-slots="inventoryStore.equipmentSlots"
+          :invalid-drop-slot="inventoryStore.invalidEquipmentDropSlot"
+          :is-updating-equipment="inventoryStore.isUpdatingEquipment"
+          :pending-drop-slot="inventoryStore.pendingEquipmentDropSlot"
+          :progression-error="progressionStore.error"
+          :progression-loading="progressionStore.isLoading"
+          :skills="progressionStore.skills"
+          @cancel-drag="inventoryStore.cancelInventorySlotDrag()"
+          @clear-drop-target="inventoryStore.clearEquipmentDropTarget"
+          @drop-equipment="handleEquipmentSlotDrop"
+          @set-drop-target="inventoryStore.setEquipmentDropTarget"
+          @unequip="emit('unequipSlot', $event)"
+        />
       </section>
-      <div class="inventory-list inventory-list--compact">
-        <div v-for="item in inventoryStore.items" :key="item.key" class="inventory-item inventory-item--dark">
-          <span class="inventory-item__icon" :class="`inventory-item__icon--${item.key}`" aria-hidden="true" />
-          <div>
-            <p class="inventory-item__name">{{ item.name }}</p>
-            <p class="inventory-item__description">{{ item.description }}</p>
-          </div>
-          <div class="sunny-town-inventory__item-actions">
-            <v-btn
-              v-if="item.equipSlot && !item.equipped"
-              :loading="inventoryStore.isUpdatingEquipment"
-              color="primary"
-              size="x-small"
-              variant="flat"
-              @click="emit('equipItem', item.key, item.equipSlot)"
-            >
-              Wear
-            </v-btn>
-            <v-btn
-              :loading="inventoryStore.isUpdatingHotbar"
-              color="warning"
-              size="x-small"
-              variant="tonal"
-              @click="emit('assignHotbar', item.key)"
-            >
-              Slot {{ selectedHotbarIndex + 1 }}
-            </v-btn>
-            <strong class="inventory-item__quantity">{{ item.quantity }}</strong>
-          </div>
-        </div>
+      <div class="sunny-town-inventory-grid" aria-label="Inventory slots">
+        <SunnyTownInventorySlot
+          v-for="slot in inventoryStore.inventorySlots"
+          :key="slot.slotIndex"
+          :item="slot.item"
+          :invalid-drop="inventoryStore.invalidInventoryDropSlotIndex === slot.slotIndex"
+          :pending="inventoryStore.pendingInventoryMoveSourceIndex === slot.slotIndex || inventoryStore.pendingInventoryMoveDestinationIndex === slot.slotIndex"
+          :quantity="slot.item?.quantity"
+          :selected="selectedInventorySlot?.slotIndex === slot.slotIndex"
+          :slot-label="String(slot.slotIndex + 1)"
+          @drag-end="inventoryStore.cancelInventorySlotDrag()"
+          @drag-leave="inventoryStore.clearInventorySlotDropTarget(slot.slotIndex)"
+          @drag-over="inventoryStore.setInventorySlotDropTarget(slot.slotIndex)"
+          @drag-start="handleInventorySlotDragStart(slot.slotIndex, $event)"
+          @drop="handleInventorySlotDrop(slot.slotIndex)"
+          @select="selectedInventorySlotIndex = slot.slotIndex"
+        />
       </div>
-      <section class="sunny-town-hotbar-editor" aria-label="Selected hotbar slot">
-        <div>
+      <section class="sunny-town-stack-splitter" aria-label="Split selected stack">
+        <div class="sunny-town-stack-splitter__summary">
+          <p class="inventory-item__name">{{ selectedInventorySlot?.item?.name || 'No stack selected' }}</p>
+          <p class="inventory-item__description">
+            {{ selectedInventorySlot?.item ? `${selectedStackQuantity} in slot ${(selectedInventorySlot?.slotIndex ?? 0) + 1}` : 'Select a stack to split.' }}
+          </p>
+        </div>
+        <v-text-field
+          v-model.number="splitQuantity"
+          class="sunny-town-stack-splitter__quantity"
+          density="compact"
+          hide-details
+          label="Qty"
+          min="1"
+          :max="Math.max(selectedStackQuantity - 1, 1)"
+          type="number"
+          variant="outlined"
+        />
+        <v-btn
+          :disabled="!canSplitSelectedStack"
+          :loading="inventoryStore.isMovingInventorySlot"
+          prepend-icon="mdi-call-split"
+          size="x-small"
+          variant="tonal"
+          @click="handleSplitSelectedStack"
+        >
+          Split
+        </v-btn>
+      </section>
+      <section class="sunny-town-hotbar-editor" aria-label="Hotbar slots">
+        <div class="sunny-town-hotbar-editor__summary">
           <p class="inventory-item__name">Slot {{ selectedHotbarIndex + 1 }}</p>
           <p class="inventory-item__description">{{ selectedHotbarItem?.name || 'Empty' }}</p>
+        </div>
+        <div class="sunny-town-hotbar-editor__slots">
+          <SunnyTownInventorySlot
+            v-for="(slot, index) in inventoryStore.hotbarSlots"
+            :key="slot.slot"
+            :draggable-enabled="false"
+            :item="slot.item"
+            :invalid-drop="inventoryStore.invalidHotbarDropSlot === slot.slot"
+            :pending="inventoryStore.pendingHotbarDropSlot === slot.slot"
+            :quantity="slot.item?.quantity"
+            :selected="selectedHotbarIndex === index"
+            :slot-label="String(slot.slot)"
+            :tooltip="false"
+            variant="compact"
+            @click="emit('selectHotbarSlot', index)"
+            @drag-end="inventoryStore.cancelInventorySlotDrag()"
+            @drag-leave="inventoryStore.clearHotbarDropTarget(slot.slot)"
+            @drag-over="inventoryStore.setHotbarDropTarget(slot.slot)"
+            @drop="handleHotbarSlotDrop(slot.slot)"
+          />
         </div>
         <v-btn
           :disabled="!selectedHotbarItem"

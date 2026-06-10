@@ -50,6 +50,7 @@ type RewardCommitResponse struct {
 type ResourceCommitRequest struct {
 	EventID     string `json:"event_id"`
 	AppUserID   int64  `json:"app_user_id"`
+	CharacterID int64  `json:"character_id,omitempty"`
 	Source      string `json:"source"`
 	RoomID      string `json:"room_id"`
 	MapID       string `json:"map_id"`
@@ -167,6 +168,18 @@ type inventoryQuantityResponse struct {
 	Quantity int    `json:"quantity"`
 }
 
+type ContainerTransferRequest struct {
+	AppUserID   int64                     `json:"appUserId"`
+	Source      stprotocol.StorageSlotRef `json:"source"`
+	Destination stprotocol.StorageSlotRef `json:"destination"`
+	Mode        string                    `json:"mode"`
+}
+
+type ContainerTransferResponse struct {
+	Inventory stprotocol.StudentInventorySlotsSnapshot `json:"inventory"`
+	Container stprotocol.ContainerSlotsSnapshot        `json:"container"`
+}
+
 type equipmentSlotResponse struct {
 	Slot string                 `json:"slot"`
 	Item *equipmentItemResponse `json:"item"`
@@ -232,6 +245,42 @@ func (client *Client) LoadStudentInventoryQuantity(ctx context.Context, appUserI
 		return 0, err
 	}
 	return quantity.Quantity, nil
+}
+
+func (client *Client) LoadContainerSlots(ctx context.Context, containerID string) (stprotocol.ContainerSlotsSnapshot, error) {
+	query := url.Values{}
+	query.Set("container_id", containerID)
+	response, err := client.internalRequest(ctx, http.MethodGet, "/api/internal/sunny-town/container-slots?"+query.Encode(), nil)
+	if err != nil {
+		return stprotocol.ContainerSlotsSnapshot{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return stprotocol.ContainerSlotsSnapshot{}, fmt.Errorf("container slots request failed status=%d", response.StatusCode)
+	}
+
+	var slots stprotocol.ContainerSlotsSnapshot
+	if err := json.NewDecoder(response.Body).Decode(&slots); err != nil {
+		return stprotocol.ContainerSlotsSnapshot{}, err
+	}
+	return slots, nil
+}
+
+func (client *Client) TransferContainerStack(ctx context.Context, request ContainerTransferRequest) (ContainerTransferResponse, error) {
+	response, err := client.jsonRequest(ctx, http.MethodPost, "/api/internal/sunny-town/container-transfer", request)
+	if err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return ContainerTransferResponse{}, fmt.Errorf("container transfer failed status=%d", response.StatusCode)
+	}
+
+	var transferred ContainerTransferResponse
+	if err := json.NewDecoder(response.Body).Decode(&transferred); err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	return transferred, nil
 }
 
 func (client *Client) LoadStudentPosition(ctx context.Context, appUserID int64) (StudentPositionResponse, error) {

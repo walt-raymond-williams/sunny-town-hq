@@ -47,6 +47,22 @@ func TestHTTPHandlerRejectsWrongMethods(t *testing.T) {
 			},
 		},
 		{
+			name:   "inventory slots only allows get",
+			method: http.MethodPost,
+			path:   "/api/student/inventory/slots",
+			handle: func(handler HTTPHandler, w http.ResponseWriter, r *http.Request) {
+				handler.HandleStudentInventorySlots(w, r)
+			},
+		},
+		{
+			name:   "inventory move only allows post",
+			method: http.MethodGet,
+			path:   "/api/student/inventory/move",
+			handle: func(handler HTTPHandler, w http.ResponseWriter, r *http.Request) {
+				handler.HandleStudentInventoryMove(w, r)
+			},
+		},
+		{
 			name:   "crafting recipes only allows get",
 			method: http.MethodPost,
 			path:   "/api/student/crafting/recipes",
@@ -143,6 +159,14 @@ func TestHTTPHandlerRejectsBadJSON(t *testing.T) {
 			wantError: "invalid hotbar request",
 		},
 		{
+			name: "inventory move",
+			path: "/api/student/inventory/move",
+			handle: func(handler HTTPHandler, w http.ResponseWriter, r *http.Request) {
+				handler.HandleStudentInventoryMove(w, r)
+			},
+			wantError: "request body must be valid JSON",
+		},
+		{
 			name: "craft recipe",
 			path: "/api/student/crafting/craft",
 			handle: func(handler HTTPHandler, w http.ResponseWriter, r *http.Request) {
@@ -212,6 +236,21 @@ func TestInventoryHTTPErrorMessages(t *testing.T) {
 	}
 	if got := HotbarErrorMessage(ErrHotbarItemNotOwned); got != "item is not in your inventory" {
 		t.Fatalf("HotbarErrorMessage not owned = %q", got)
+	}
+	if got := InventoryMoveErrorMessage(ErrInventoryIncompatibleMerge); got != "stacks cannot be merged" {
+		t.Fatalf("InventoryMoveErrorMessage incompatible merge = %q", got)
+	}
+	if !IsInventoryMoveClientError(ErrInventoryStackFull) {
+		t.Fatal("ErrInventoryStackFull should be a client error")
+	}
+	if got := InventoryMoveErrorMessage(ErrInvalidInventorySplitQuantity); got != "invalid split quantity" {
+		t.Fatalf("InventoryMoveErrorMessage invalid split quantity = %q", got)
+	}
+	if !IsInventoryMoveClientError(ErrInvalidInventorySplitQuantity) {
+		t.Fatal("ErrInvalidInventorySplitQuantity should be a client error")
+	}
+	if got := CraftingErrorMessage(ErrInventoryFull); got != "not enough room in inventory" {
+		t.Fatalf("CraftingErrorMessage inventory full = %q", got)
 	}
 }
 

@@ -9,11 +9,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	hqinventory "hq/internal/hq/inventory"
+	hqprogression "hq/internal/hq/progression"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -119,6 +121,71 @@ func TestCommitSunnyTownResourceIdempotent(t *testing.T) {
 	}
 	if ledgerRows != 1 || rockQuantity != 2 {
 		t.Fatalf("ledgerRows=%d rockQuantity=%d, want 1 and 2", ledgerRows, rockQuantity)
+	}
+}
+
+func TestCommitSunnyTownResourceAwardsMiningXPIdempotently(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	var characterID int64
+	if err := db.QueryRow(
+		ctx,
+		`
+			insert into sunny_town_character (character_type, app_user_id, room_id, display_name, avatar_id)
+			values ('player', 123, 'sunny-town-main', 'Student', 'pet-default')
+			returning id
+		`,
+	).Scan(&characterID); err != nil {
+		t.Fatalf("seed player character: %v", err)
+	}
+
+	store := Store{DB: db}
+	request := ResourceEventRequest{
+		EventID:     "forest-crossing-v1:rock-node-001:1:123",
+		AppUserID:   123,
+		CharacterID: characterID,
+		Source:      "sunny_town_mining",
+		RoomID:      "sunny-town-main",
+		MapID:       "forest-crossing-v1",
+		NodeID:      "rock-node-001",
+		ResourceKey: "rock",
+		Amount:      2,
+	}
+
+	first, err := store.CommitResource(ctx, request)
+	if err != nil {
+		t.Fatalf("first resource commit error = %v", err)
+	}
+	second, err := store.CommitResource(ctx, request)
+	if err != nil {
+		t.Fatalf("second resource commit error = %v", err)
+	}
+	if !first.Accepted || first.Duplicate || !second.Accepted || !second.Duplicate {
+		t.Fatalf("responses first=%#v second=%#v, want accepted then duplicate", first, second)
+	}
+
+	var xpLedgerRows int
+	var xp int
+	var level int
+	if err := db.QueryRow(ctx, "select count(*) from sunny_town_character_skill_xp_ledger").Scan(&xpLedgerRows); err != nil {
+		t.Fatalf("count xp ledger rows: %v", err)
+	}
+	if err := db.QueryRow(
+		ctx,
+		`
+			select xp, level
+			from sunny_town_character_skill
+			where character_id = $1 and skill_key = $2
+		`,
+		characterID,
+		hqprogression.MiningSkillKey,
+	).Scan(&xp, &level); err != nil {
+		t.Fatalf("load mining skill: %v", err)
+	}
+	if xpLedgerRows != 1 || xp != hqprogression.MiningHarvestXP || level != 1 {
+		t.Fatalf("xpLedgerRows=%d xp=%d level=%d, want 1, %d, 1", xpLedgerRows, xp, level, hqprogression.MiningHarvestXP)
 	}
 }
 
@@ -502,6 +569,52 @@ func TestSunnyTownResourceEndpointRequiresServiceSecret(t *testing.T) {
 	}
 }
 
+func TestCharacterSkillXPEndpointUsesServiceAuthenticatedRequest(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	var characterID int64
+	if err := db.QueryRow(
+		ctx,
+		`
+			insert into sunny_town_character (character_type, app_user_id, room_id, display_name, avatar_id)
+			values ('player', 123, 'sunny-town-main', 'Student', 'pet-default')
+			returning id
+		`,
+	).Scan(&characterID); err != nil {
+		t.Fatalf("seed player character: %v", err)
+	}
+
+	body, err := json.Marshal(CharacterSkillXPRequest{
+		EventID:     "manual-test-xp",
+		CharacterID: characterID,
+		Source:      "sunny_town_mining",
+		ActivityKey: "resource_harvest",
+		SkillKey:    hqprogression.MiningSkillKey,
+		XPAmount:    hqprogression.MiningHarvestXP,
+		RoomID:      "sunny-town-main",
+		MapID:       "forest-crossing-v1",
+		NodeID:      "rock-node-001",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/internal/sunny-town/character-skill-xp", bytes.NewReader(body))
+	request.Header.Set("X-HQ-Service-Secret", "test-secret")
+	response := httptest.NewRecorder()
+
+	NewHTTPHandler(Store{DB: db}, "test-secret").HandleCharacterSkillXP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s, want 200", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"duplicate":false`) || !strings.Contains(response.Body.String(), `"key":"mining"`) {
+		t.Fatalf("body = %s, want mining xp response", response.Body.String())
+	}
+}
+
 func TestSunnyTownNPCJobProductionProgressEndpointRequiresServiceSecret(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/internal/sunny-town/npc-job-production/progress?room_id=sunny-town-main", nil)
 	response := httptest.NewRecorder()
@@ -510,6 +623,89 @@ func TestSunnyTownNPCJobProductionProgressEndpointRequiresServiceSecret(t *testi
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestContainerTransferEndpointUsesServiceAuthenticatedRequest(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := hqinventory.IncrementStudentItem(ctx, db, 123, "rock", 4); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into storage_container (
+				id,
+				kind,
+				room_id,
+				map_id,
+				fixture_id,
+				slot_count,
+				access_policy
+			)
+			values ('fixture:sunny-town-main:sunny-town-house-1:test-chest', 'fixture', 'sunny-town-main', 'sunny-town-house-1', 'test-chest', 10, 'room_shared')
+		`,
+	); err != nil {
+		t.Fatalf("seed storage container: %v", err)
+	}
+
+	body := []byte(`{
+		"appUserId": 123,
+		"source": {"kind": "player_inventory", "slotIndex": 0},
+		"destination": {"kind": "container", "containerId": "fixture:sunny-town-main:sunny-town-house-1:test-chest", "slotIndex": 0},
+		"mode": "move"
+	}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/internal/sunny-town/container-transfer", bytes.NewReader(body))
+	request.Header.Set("X-HQ-Service-Secret", "test-secret")
+	response := httptest.NewRecorder()
+
+	NewHTTPHandler(Store{DB: db}, "test-secret").HandleContainerTransfer(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s, want 200", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"containerId":"fixture:sunny-town-main:sunny-town-house-1:test-chest"`) {
+		t.Fatalf("body = %s, want container response", response.Body.String())
+	}
+}
+
+func TestContainerSlotsEndpointUsesServiceAuthenticatedRequest(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into storage_container (
+				id,
+				kind,
+				room_id,
+				map_id,
+				fixture_id,
+				slot_count,
+				access_policy
+			)
+			values ('fixture:sunny-town-main:sunny-town-house-1:test-chest', 'fixture', 'sunny-town-main', 'sunny-town-house-1', 'test-chest', 10, 'room_shared')
+		`,
+	); err != nil {
+		t.Fatalf("seed storage container: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/internal/sunny-town/container-slots?container_id=fixture:sunny-town-main:sunny-town-house-1:test-chest", nil)
+	request.Header.Set("X-HQ-Service-Secret", "test-secret")
+	response := httptest.NewRecorder()
+
+	NewHTTPHandler(Store{DB: db}, "test-secret").HandleContainerSlots(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s, want 200", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"slotCount":10`) {
+		t.Fatalf("body = %s, want container slots", response.Body.String())
 	}
 }
 
@@ -833,6 +1029,39 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			updated_at timestamptz not null default now(),
 			constraint sunny_town_npc_character_room_key unique (room_id, npc_key)
 		)`,
+		`create table sunny_town_skill_definition (
+			skill_key text primary key,
+			display_name text not null,
+			description text not null default '',
+			xp_per_level integer not null default 100,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now()
+		)`,
+		`insert into sunny_town_skill_definition (skill_key, display_name, description, xp_per_level)
+			values ('mining', 'Mining', 'Breaking rocks, harvesting stone and crystal, and using pickaxes.', 100)`,
+		`create table sunny_town_character_skill (
+			character_id bigint not null references sunny_town_character(id) on delete cascade,
+			skill_key text not null references sunny_town_skill_definition(skill_key) on delete restrict,
+			xp integer not null default 0,
+			level integer not null default 1,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (character_id, skill_key)
+		)`,
+		`create table sunny_town_character_skill_xp_ledger (
+			id bigserial primary key,
+			event_id text not null unique,
+			character_id bigint not null references sunny_town_character(id) on delete cascade,
+			source text not null,
+			activity_key text not null,
+			skill_key text not null references sunny_town_skill_definition(skill_key) on delete restrict,
+			xp_amount integer not null,
+			room_id text null,
+			map_id text null,
+			node_id text null,
+			metadata jsonb not null default '{}'::jsonb,
+			created_at timestamptz not null default now()
+		)`,
 		`create table sunny_town_npc_job_production_ledger (
 			id bigserial primary key,
 			event_id text not null unique,
@@ -889,6 +1118,9 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			description text not null default '',
 			equip_slot text null,
 			visual_key text null,
+			icon_key text null,
+			max_stack integer null,
+			category text null,
 			created_at timestamptz not null default now(),
 			updated_at timestamptz not null default now()
 		)`,
@@ -900,6 +1132,15 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 				('rock', 'Rock', 'A sturdy rock from Forest Crossing.'),
 				('crystal', 'Crystal', 'A bright crystal from Forest Crossing.'),
 				('stone_block', 'Stone Block', 'A solid block crafted from stone.')`,
+		`update inventory_item_type
+			set icon_key = key,
+				max_stack = case when key = 'pickaxe' then 1 else 64 end,
+				category = case
+					when key = 'cookie' then 'consumable'
+					when key in ('rock', 'crystal') then 'resource'
+					when key = 'stone_block' then 'building'
+					else category
+				end`,
 		`create table student_inventory_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,
 			item_type_id bigint not null references inventory_item_type(id) on delete restrict,
@@ -908,6 +1149,22 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (app_user_id, item_type_id),
 			constraint student_inventory_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table student_inventory_slot (
+			app_user_id bigint not null references app_user(id) on delete cascade,
+			slot_index integer not null,
+			item_type_id bigint null references inventory_item_type(id) on delete restrict,
+			quantity integer null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (app_user_id, slot_index),
+			constraint student_inventory_slot_index_check check (slot_index >= 0 and slot_index < 30),
+			constraint student_inventory_slot_quantity_check check (quantity is null or quantity > 0),
+			constraint student_inventory_slot_empty_or_occupied_check check (
+				(item_type_id is null and quantity is null)
+				or
+				(item_type_id is not null and quantity is not null)
+			)
 		)`,
 		`create table student_inventory_ledger (
 			id bigserial primary key,
@@ -951,6 +1208,32 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (shop_id, item_type_id),
 			constraint shop_input_storage_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table storage_container (
+			id text primary key,
+			kind text not null,
+			room_id text not null,
+			map_id text not null,
+			fixture_id text null,
+			placed_object_id text null,
+			shop_id text null,
+			storage_role text null,
+			location_id text null,
+			owner_app_user_id bigint null references app_user(id) on delete cascade,
+			slot_count integer not null,
+			access_policy text not null,
+			revision bigint not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now()
+		)`,
+		`create table storage_container_slot (
+			container_id text not null references storage_container(id) on delete cascade,
+			slot_index integer not null,
+			item_type_id bigint null references inventory_item_type(id) on delete restrict,
+			quantity integer null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (container_id, slot_index)
 		)`,
 		`create table student_sunny_town_position (
 			app_user_id bigint primary key references app_user(id) on delete cascade,

@@ -26,6 +26,47 @@ func (room *room) nearestBreakableWorldObjectLocked(player *player, toolKey stri
 	return nearest
 }
 
+func (room *room) validatedContainerAccessLocked(player *player, objectSource string, objectID string, action string) (string, bool) {
+	if player == nil || objectID == "" {
+		return "", false
+	}
+	object := room.worldObjects[worldObjectKey(objectSource, objectID)]
+	if object == nil || !object.active || object.kind != worldObjectKindChest {
+		return "", false
+	}
+	if object.mapID != room.gameMap.ID {
+		return "", false
+	}
+	if !containerActionAllowed(object, action) {
+		return "", false
+	}
+	centerX, centerY := object.center()
+	if math.Hypot(player.x-centerX, player.y-centerY) > object.interactionRadius {
+		return "", false
+	}
+	switch object.source {
+	case worldObjectSourceFixture:
+		return fmt.Sprintf("fixture:%s:%s:%s", room.id, room.gameMap.ID, object.id), true
+	case worldObjectSourcePlaced:
+		return "placed:" + object.id, true
+	default:
+		return "", false
+	}
+}
+
+func containerActionAllowed(object *worldObject, action string) bool {
+	switch action {
+	case "read":
+		return object.storageRole == "output" || object.storageRole == "input" || object.storageRole == "general"
+	case "deposit":
+		return object.storageRole == "input" || object.storageRole == "general"
+	case "withdraw":
+		return object.storageRole == "general"
+	default:
+		return false
+	}
+}
+
 func (room *room) collectStarsLocked(player *player, now time.Time) []rewardEvent {
 	rewards := []rewardEvent{}
 	for _, collectible := range room.collectibles {

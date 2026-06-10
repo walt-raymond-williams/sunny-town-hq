@@ -449,6 +449,151 @@ h2 {
   text-align: center;
 }
 
+.inventory-item__status {
+  color: #c8f7dc;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sunny-town-inventory-slot {
+  align-items: center;
+  background: rgba(23, 33, 43, 0.84);
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  display: grid;
+  height: 64px;
+  justify-items: center;
+  padding: 7px;
+  position: relative;
+  width: 64px;
+}
+
+.sunny-town-inventory-slot:hover,
+.sunny-town-inventory-slot:focus-visible {
+  border-color: rgba(241, 200, 91, 0.78);
+  outline: 0;
+}
+
+.sunny-town-inventory-slot--compact {
+  height: 58px;
+  padding: 6px;
+  width: 58px;
+}
+
+.sunny-town-inventory-slot--selected {
+  border-color: #f1c85b;
+  box-shadow: 0 0 0 2px rgba(241, 200, 91, 0.28);
+}
+
+.sunny-town-inventory-slot--disabled,
+.sunny-town-inventory-slot:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.sunny-town-inventory-slot--pending {
+  border-color: #82d3ff;
+}
+
+.sunny-town-inventory-slot--invalid-drop {
+  border-color: #ff8f7f;
+  box-shadow: 0 0 0 2px rgba(255, 143, 127, 0.22);
+}
+
+.sunny-town-inventory-slot__label {
+  font-size: 11px;
+  font-weight: 800;
+  left: 6px;
+  line-height: 1;
+  position: absolute;
+  top: 5px;
+}
+
+.sunny-town-inventory-slot__icon {
+  height: 36px;
+  width: 36px;
+}
+
+.sunny-town-inventory-slot--compact .sunny-town-inventory-slot__icon {
+  height: 34px;
+  width: 34px;
+}
+
+.sunny-town-inventory-slot__empty {
+  border: 1px dashed rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  height: 32px;
+  width: 32px;
+}
+
+.sunny-town-inventory-slot__quantity {
+  bottom: 5px;
+  font-size: 12px;
+  line-height: 1;
+  position: absolute;
+  right: 6px;
+}
+
+.sunny-town-inventory-slot__pending {
+  animation: sunny-town-slot-pulse 0.9s ease-in-out infinite alternate;
+  background: rgba(130, 211, 255, 0.8);
+  border-radius: 999px;
+  height: 8px;
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 8px;
+}
+
+.sunny-town-inventory-slot__tooltip {
+  background: rgba(23, 33, 43, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 12px 28px rgba(23, 33, 43, 0.28);
+  color: #ffffff;
+  display: grid;
+  font-size: 12px;
+  gap: 3px;
+  left: 50%;
+  line-height: 1.35;
+  max-width: 220px;
+  min-width: 160px;
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
+  z-index: 20;
+}
+
+.sunny-town-inventory-slot__tooltip span {
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.sunny-town-inventory-slot:hover .sunny-town-inventory-slot__tooltip,
+.sunny-town-inventory-slot:focus-visible .sunny-town-inventory-slot__tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+@keyframes sunny-town-slot-pulse {
+  from {
+    opacity: 0.45;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 .equipment-panel {
   display: grid;
   gap: 10px;
@@ -460,9 +605,14 @@ h2 {
   border: 1px solid #d9e1e4;
   border-radius: 8px;
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: space-between;
   padding: 10px 12px;
+}
+
+.equipment-slot__summary {
+  flex: 1;
+  min-width: 0;
 }
 
 .equipment-panel--dark {
@@ -476,6 +626,130 @@ h2 {
 
 .equipment-panel--dark .summary-category {
   color: rgba(255, 255, 255, 0.66);
+}
+
+.equipment-slot--rail {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 58px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 6px;
+}
+
+.equipment-slot--rail .equipment-slot__summary {
+  min-width: 0;
+}
+
+.equipment-slot--rail .inventory-item__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.equipment-slot--rail .v-btn {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+.sunny-town-character-preview {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(174px, 210px) 132px minmax(180px, 1fr);
+  min-height: 214px;
+  padding: 10px;
+}
+
+.sunny-town-character-preview__equipment {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sunny-town-character-preview__avatar-wrap {
+  align-items: center;
+  display: grid;
+  justify-items: center;
+}
+
+.sunny-town-character-preview__avatar {
+  display: block;
+  height: 136px;
+  width: 128px;
+}
+
+.sunny-town-character-preview__tool {
+  transform-origin: 94px 94px;
+}
+
+.sunny-town-character-preview__sheet {
+  display: grid;
+  gap: 10px;
+  grid-auto-rows: max-content;
+  min-width: 0;
+}
+
+.sunny-town-character-preview__title {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.sunny-town-character-preview__error {
+  color: #ffd5d5;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sunny-town-character-preview__stats {
+  display: grid;
+  gap: 8px;
+}
+
+.sunny-town-character-preview__stat {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.76);
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+  grid-template-columns: minmax(74px, max-content) minmax(0, 1fr);
+  min-height: 28px;
+  padding: 5px 7px;
+  text-transform: uppercase;
+}
+
+.sunny-town-character-preview__stat strong {
+  color: #ffffff;
+  font-size: 11px;
+  justify-self: end;
+}
+
+.sunny-town-character-preview__rail {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  display: block;
+  height: 10px;
+  min-width: 0;
+}
+
+.sunny-town-character-preview__rail--filled {
+  background:
+    linear-gradient(90deg, #f2c84b var(--progress), rgba(255, 255, 255, 0.14) var(--progress));
+  grid-column: 1 / -1;
 }
 
 .game-overlay {
@@ -547,51 +821,11 @@ h2 {
 }
 
 .sunny-town-hotbar__slot {
-  align-items: center;
-  background: rgba(23, 33, 43, 0.84);
-  border: 2px solid rgba(255, 255, 255, 0.22);
-  border-radius: 8px;
-  color: #ffffff;
-  cursor: pointer;
-  display: grid;
-  height: 58px;
-  justify-items: center;
-  padding: 6px;
-  position: relative;
-  width: 58px;
-}
-
-.sunny-town-hotbar__slot--selected {
-  border-color: #f1c85b;
-  box-shadow: 0 0 0 2px rgba(241, 200, 91, 0.28);
+  flex: 0 0 auto;
 }
 
 .sunny-town-hotbar__slot--empty-item {
   opacity: 0.62;
-}
-
-.sunny-town-hotbar__number {
-  font-size: 11px;
-  font-weight: 800;
-  left: 6px;
-  line-height: 1;
-  position: absolute;
-  top: 5px;
-}
-
-.sunny-town-hotbar__empty {
-  border: 1px dashed rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  height: 30px;
-  width: 30px;
-}
-
-.sunny-town-hotbar__quantity {
-  bottom: 4px;
-  font-size: 12px;
-  line-height: 1;
-  position: absolute;
-  right: 6px;
 }
 
 .sunny-town-help {
@@ -728,12 +962,14 @@ h2 {
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
   left: 50%;
-  max-width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  max-width: min(860px, calc(100% - 24px));
+  overflow: auto;
   padding: 14px;
   position: absolute;
   top: 54px;
   transform: translateX(-50%);
-  width: 360px;
+  width: 860px;
   z-index: 6;
 }
 
@@ -792,7 +1028,6 @@ h2 {
 .sunny-town-shop__header span,
 .sunny-town-chest-panel__header span,
 .sunny-town-schoolwork__header span,
-.sunny-town-chest-panel__item small,
 .sunny-town-shop__item small {
   color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
@@ -846,16 +1081,38 @@ h2 {
   padding: 8px 0;
 }
 
-.sunny-town-chest-panel__item {
-  align-items: center;
+.sunny-town-chest-panel__grids {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(300px, 1fr) minmax(240px, 0.85fr);
+}
+
+.sunny-town-chest-panel__storage {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.sunny-town-chest-panel__storage-header {
+  align-items: baseline;
+  display: flex;
   gap: 10px;
-  grid-template-columns: 38px minmax(0, 1fr);
-  min-height: 62px;
-  padding: 10px;
+  justify-content: space-between;
+}
+
+.sunny-town-chest-panel__storage-header span {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  text-align: right;
+}
+
+.sunny-town-chest-panel__grid {
+  grid-template-columns: repeat(auto-fit, 58px);
 }
 
 .sunny-town-shop__item + .sunny-town-shop__item {
@@ -867,18 +1124,7 @@ h2 {
   margin: 0;
 }
 
-.sunny-town-chest-panel__item p {
-  font-weight: 700;
-  margin: 0;
-  text-transform: capitalize;
-}
-
 .sunny-town-shop__item small {
-  display: block;
-  line-height: 1.35;
-}
-
-.sunny-town-chest-panel__item small {
   display: block;
   line-height: 1.35;
 }
@@ -903,22 +1149,36 @@ h2 {
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(260px, 340px) minmax(300px, 360px);
-  grid-template-rows: minmax(0, 1fr);
-  height: min(640px, calc(100vh - 72px));
-  max-height: calc(100% - 72px);
-  max-width: min(756px, calc(100% - 24px));
+  gap: 16px;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 1.2fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  inset: 12px;
+  max-height: calc(100% - 24px);
+  max-width: none;
   overflow: hidden;
-  padding: 14px;
+  padding: 16px;
   position: absolute;
-  right: 12px;
-  top: 54px;
-  width: max-content;
+  width: auto;
   z-index: 5;
 }
 
+.sunny-town-e-menu__header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.sunny-town-e-menu__header .v-tabs {
+  min-width: 0;
+}
+
 .sunny-town-inventory {
+  display: grid;
+  gap: 12px;
+  grid-auto-rows: max-content;
   height: 100%;
   max-height: none;
   min-height: 0;
@@ -932,7 +1192,6 @@ h2 {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  margin-bottom: 12px;
 }
 
 .sunny-town-inventory__actions {
@@ -941,22 +1200,48 @@ h2 {
   gap: 6px;
 }
 
-.sunny-town-hotbar-editor {
+.sunny-town-stack-splitter {
   align-items: center;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  margin-top: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(82px, 96px) auto;
   padding-top: 12px;
 }
 
-.sunny-town-inventory__item-actions {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
+.sunny-town-stack-splitter__summary {
+  min-width: 0;
+}
+
+.sunny-town-stack-splitter__quantity {
+  min-width: 0;
+}
+
+.sunny-town-hotbar-editor {
+  align-items: start;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: 12px;
+}
+
+.sunny-town-hotbar-editor__summary {
+  min-width: 0;
+}
+
+.sunny-town-hotbar-editor__slots {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(5, minmax(52px, 58px));
+}
+
+.sunny-town-inventory-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, 64px);
+  justify-content: start;
 }
 
 .sunny-town-crafting {
@@ -974,6 +1259,12 @@ h2 {
   width: 100%;
 }
 
+.sunny-town-crafting--focused {
+  border-right: 0;
+  grid-column: 1 / -1;
+  padding-right: 0;
+}
+
 .sunny-town-crafting__header {
   align-items: center;
   display: flex;
@@ -982,29 +1273,128 @@ h2 {
 }
 
 .sunny-town-crafting__recipe {
-  align-items: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  align-items: start;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
   display: grid;
-  gap: 10px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  padding-top: 10px;
+  gap: 12px;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  padding: 10px;
 }
 
 .sunny-town-crafting__recipe--disabled {
   opacity: 0.72;
 }
 
-.sunny-town-crafting__ingredients {
-  color: rgba(255, 255, 255, 0.72);
+.sunny-town-crafting__output {
+  align-items: center;
+  aspect-ratio: 1;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  position: relative;
+}
+
+.sunny-town-crafting__output-icon {
+  height: 34px;
+  width: 34px;
+}
+
+.sunny-town-crafting__output-quantity {
+  background: rgba(16, 19, 24, 0.88);
+  border-radius: 999px;
+  bottom: 4px;
+  color: #fff7d8;
+  font-size: 11px;
+  line-height: 1;
+  min-width: 20px;
+  padding: 4px 6px;
+  position: absolute;
+  right: 4px;
+  text-align: center;
+}
+
+.sunny-town-crafting__body {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.sunny-town-crafting__title-row {
+  align-items: baseline;
   display: flex;
-  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.sunny-town-crafting__yield {
+  color: #ffdfa3;
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.sunny-town-crafting__ingredients {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+}
+
+.sunny-town-crafting__ingredient {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.82);
+  display: flex;
   font-size: 12px;
   gap: 6px;
-  line-height: 1.35;
+  min-width: 0;
+  padding: 5px 7px;
+}
+
+.sunny-town-crafting__ingredient-icon {
+  flex: 0 0 auto;
+  height: 20px;
+  width: 20px;
+}
+
+.sunny-town-crafting__ingredient-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sunny-town-crafting__ingredient-count {
+  color: #fff7d8;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .sunny-town-crafting__ingredient--missing {
+  background: rgba(231, 91, 79, 0.16);
+  border-color: rgba(255, 180, 168, 0.34);
+  color: #ffcabf;
+}
+
+.sunny-town-crafting__ingredient--missing .sunny-town-crafting__ingredient-count {
   color: #ffb4a8;
+}
+
+.sunny-town-crafting__routing {
+  align-items: center;
+  color: rgba(255, 255, 255, 0.62);
+  display: flex;
+  font-size: 11px;
+  gap: 5px;
+  text-transform: uppercase;
 }
 
 .sunny-town-crafting__empty {
@@ -1032,13 +1422,18 @@ h2 {
   }
 
   .sunny-town-inventory-tray {
+    inset: 10px;
     grid-template-columns: 1fr;
+    grid-template-rows: none;
     height: auto;
-    left: 12px;
-    max-height: calc(100vh - 24px);
-    max-width: calc(100% - 24px);
+    max-height: calc(100% - 20px);
+    max-width: none;
     overflow-y: auto;
     width: auto;
+  }
+
+  .sunny-town-e-menu__header {
+    align-items: flex-start;
   }
 
   .sunny-town-inventory,
@@ -1049,12 +1444,56 @@ h2 {
     width: 100%;
   }
 
+  .sunny-town-inventory-grid {
+    grid-template-columns: repeat(auto-fit, 58px);
+  }
+
+  .sunny-town-stack-splitter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sunny-town-stack-splitter .v-btn,
+  .sunny-town-stack-splitter__quantity {
+    width: 100%;
+  }
+
+  .sunny-town-character-preview {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .sunny-town-character-preview__equipment,
+  .sunny-town-character-preview__sheet {
+    width: 100%;
+  }
+
   .sunny-town-crafting {
     border-bottom: 1px solid rgba(255, 255, 255, 0.14);
     border-right: 0;
     margin-bottom: 12px;
     padding-bottom: 12px;
     padding-right: 0;
+  }
+
+  .sunny-town-crafting--focused {
+    border-bottom: 0;
+    margin-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .sunny-town-crafting__recipe {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .sunny-town-crafting__recipe .v-btn {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .sunny-town-crafting__title-row {
+    align-items: start;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .game-overlay {
@@ -1089,5 +1528,24 @@ h2 {
     max-height: calc(100% - 24px);
     overflow: auto;
     top: 12px;
+  }
+
+  .sunny-town-chest-panel {
+    max-height: calc(100% - 24px);
+    top: 12px;
+  }
+
+  .sunny-town-chest-panel__grids {
+    grid-template-columns: 1fr;
+  }
+
+  .sunny-town-chest-panel__storage-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sunny-town-chest-panel__storage-header span {
+    text-align: left;
   }
 }

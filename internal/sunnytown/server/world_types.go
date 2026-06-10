@@ -25,6 +25,7 @@ type fixtureDefinition = stmaps.FixtureDefinition
 type npcRoute = stnavigation.Route
 
 type clientMessage = stprotocol.ClientMessage
+type storageSlotRef = stprotocol.StorageSlotRef
 type equipmentSnapshot = stprotocol.EquipmentSnapshot
 type inventorySnapshot = stprotocol.InventorySnapshot
 type serverMessage = stprotocol.ServerMessage
@@ -237,6 +238,7 @@ type rewardEvent struct {
 type resourceEvent struct {
 	eventID     string
 	appUserID   int64
+	characterID int64
 	roomID      string
 	mapID       string
 	nodeID      string
@@ -275,3 +277,4 @@ type placeMapObjectRequest = hqclient.PlaceMapObjectRequest
 type removeMapObjectRequest = hqclient.RemoveMapObjectRequest
 type studentPositionResponse = hqclient.StudentPositionResponse
 type studentPositionRequest = hqclient.StudentPositionRequest
+type containerTransferRequest = hqclient.ContainerTransferRequest

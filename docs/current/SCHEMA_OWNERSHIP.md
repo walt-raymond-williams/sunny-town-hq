@@ -72,7 +72,16 @@ Tables, constraints, and indexes:
 - `inventory_item_type`
 - `inventory_item_type_key_check`
 - `inventory_item_type_equip_slot_check`
+- `inventory_item_type_icon_key_check`
+- `inventory_item_type_max_stack_check`
+- `inventory_item_type_category_check`
 - `student_inventory_item`
+- `student_inventory_slot`
+- `student_inventory_slot_index_check`
+- `student_inventory_slot_quantity_check`
+- `student_inventory_slot_empty_or_occupied_check`
+- `student_inventory_slot_app_user_id_idx`
+- `student_inventory_slot_item_type_id_idx`
 - `student_inventory_ledger`
 - `student_inventory_ledger_app_user_id_idx`
 - `student_equipped_item`
@@ -92,8 +101,20 @@ Tables, constraints, and indexes:
 - `shop_input_storage_item`
 - `shop_input_storage_item_shop_id_check`
 - `shop_input_storage_item_quantity_nonnegative`
+- `storage_container`
+- `storage_container_kind_check`
+- `storage_container_storage_role_check`
+- `storage_container_slot_count_check`
+- `storage_container_access_policy_check`
+- `storage_container_fixture_identity_check`
+- `storage_container_placed_identity_check`
+- `storage_container_shop_identity_check`
+- `storage_container_slot`
+- `storage_container_slot_index_check`
+- `storage_container_slot_quantity_check`
+- `storage_container_slot_empty_or_occupied_check`
 
-Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`, `0012_cookie_recipe_inputs.sql`, `0014_seed_cookie_keeper_input_storage.sql`
+Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`, `0012_cookie_recipe_inputs.sql`, `0014_seed_cookie_keeper_input_storage.sql`, `0015_inventory_item_metadata.sql`, `0016_student_inventory_slots.sql`, `0017_storage_containers.sql`
 
 ### Pet
 
@@ -156,6 +177,28 @@ Tables, constraints, and indexes:
 - `sunny_town_npc_character_room_idx`
 
 Migration targets: `0006_sunny_town_characters.sql`, `0007_sunny_town_npc_characters.sql`
+
+### Sunny Town Character Progression
+
+Owner: `internal/hq/progression`, coordinated with `internal/hq/sunnytownbridge` and Sunny Town server-validated gameplay events.
+
+Tables, constraints, and indexes:
+
+- `sunny_town_skill_definition`
+- `sunny_town_skill_definition_key_check`
+- `sunny_town_skill_definition_display_name_check`
+- `sunny_town_skill_definition_xp_per_level_check`
+- `sunny_town_character_skill`
+- `sunny_town_character_skill_xp_check`
+- `sunny_town_character_skill_level_check`
+- `sunny_town_character_skill_xp_ledger`
+- `sunny_town_character_skill_xp_event_id_check`
+- `sunny_town_character_skill_xp_source_check`
+- `sunny_town_character_skill_xp_activity_key_check`
+- `sunny_town_character_skill_xp_amount_check`
+- `sunny_town_character_skill_xp_ledger_character_idx`
+
+Migration target: `0018_character_progression.sql`
 
 ## Migration Notes
 

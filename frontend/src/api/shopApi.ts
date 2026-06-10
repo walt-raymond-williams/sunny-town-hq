@@ -1,6 +1,6 @@
 import { authJson, jsonOptions } from './http'
-import type { InventoryItem, StudentInventory } from '../types/inventory'
-import type { InventoryItemResponse, StudentInventoryResponse } from './inventoryApi'
+import type { StudentInventory } from '../types/inventory'
+import { normalizeInventoryItem, type StudentInventoryResponse } from './inventoryApi'
 
 interface ShopPurchaseResponse {
   starBalance?: number
@@ -64,17 +64,5 @@ export async function getShopStock(shopId: string): Promise<ShopStock> {
       quantity: item.quantity ?? 0,
       capacity: item.capacity ?? 0,
     })),
-  }
-}
-
-function normalizeInventoryItem(item: InventoryItemResponse): InventoryItem {
-  return {
-    key: item.key || '',
-    name: item.name || '',
-    description: item.description || '',
-    quantity: item.quantity ?? 0,
-    equipSlot: item.equipSlot || '',
-    visualKey: item.visualKey || '',
-    equipped: item.equipped ?? false,
   }
 }

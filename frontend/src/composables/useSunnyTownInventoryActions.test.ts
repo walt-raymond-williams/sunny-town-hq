@@ -13,6 +13,9 @@ function inventoryItem(overrides: Partial<InventoryItem> = {}): InventoryItem {
     quantity: 2,
     equipSlot: '',
     visualKey: '',
+    iconKey: 'stone_block',
+    maxStack: 64,
+    category: 'building',
     equipped: false,
     ...overrides,
   }
@@ -26,6 +29,7 @@ interface MockInventoryStore {
   items: InventoryItem[]
   hotbarSlots: HotbarSlot[]
   craftRecipe: ReturnType<typeof vi.fn>
+  dropInventorySlotOnEquipment: ReturnType<typeof vi.fn>
   equipItem: ReturnType<typeof vi.fn>
   loadCraftingRecipes: ReturnType<typeof vi.fn>
   loadHotbar: ReturnType<typeof vi.fn>
@@ -45,6 +49,7 @@ function store(overrides: Partial<MockInventoryStore> = {}): MockInventoryStore 
       hotbarSlot(5, null),
     ],
     craftRecipe: vi.fn(),
+    dropInventorySlotOnEquipment: vi.fn(),
     equipItem: vi.fn(),
     loadCraftingRecipes: vi.fn(),
     loadHotbar: vi.fn(),
@@ -79,10 +84,26 @@ describe('useSunnyTownInventoryActions', () => {
     await actions.toggleInventory()
 
     expect(actions.inventoryOpen.value).toBe(true)
+    expect(actions.inventoryMenuTab.value).toBe('inventory')
     expect(actions.craftingPanelOpen.value).toBe(true)
     expect(actions.showAllCraftingRecipes.value).toBe(true)
     expect(inventoryStore.loadInventory).toHaveBeenCalledOnce()
     expect(inventoryStore.loadHotbar).toHaveBeenCalledOnce()
+    expect(inventoryStore.loadCraftingRecipes).toHaveBeenCalledOnce()
+  })
+
+  it('switches to the crafting tab and ensures recipes are loaded', async () => {
+    const inventoryStore = store()
+    const actions = useSunnyTownInventoryActions(inventoryStore, {
+      onEquipmentChanged: vi.fn(),
+      onHotbarSelectionChanged: vi.fn(),
+      onHotbarUpdated: vi.fn(),
+    })
+
+    await actions.setInventoryMenuTab('crafting')
+
+    expect(actions.inventoryMenuTab.value).toBe('crafting')
+    expect(actions.craftingPanelOpen.value).toBe(true)
     expect(inventoryStore.loadCraftingRecipes).toHaveBeenCalledOnce()
   })
 
@@ -100,7 +121,7 @@ describe('useSunnyTownInventoryActions', () => {
     expect(onHotbarSelectionChanged).toHaveBeenCalledOnce()
   })
 
-  it('assigns and clears the selected hotbar slot using one-based API slots', async () => {
+  it('clears the selected hotbar slot using one-based API slots', async () => {
     const inventoryStore = store()
     const onHotbarUpdated = vi.fn()
     const actions = useSunnyTownInventoryActions(inventoryStore, {
@@ -110,15 +131,14 @@ describe('useSunnyTownInventoryActions', () => {
     })
     actions.selectHotbarSlot(2)
 
-    await actions.assignInventoryItemToSelectedHotbarSlot('rock')
     await actions.clearSelectedHotbarSlot()
 
-    expect(inventoryStore.setHotbarSlot).toHaveBeenNthCalledWith(1, 3, 'rock')
-    expect(inventoryStore.setHotbarSlot).toHaveBeenNthCalledWith(2, 3, '')
-    expect(onHotbarUpdated).toHaveBeenCalledTimes(2)
+    expect(inventoryStore.setHotbarSlot).toHaveBeenCalledOnce()
+    expect(inventoryStore.setHotbarSlot).toHaveBeenCalledWith(3, '')
+    expect(onHotbarUpdated).toHaveBeenCalledOnce()
   })
 
-  it('updates equipment and skips missing equipment slots', async () => {
+  it('unequips inventory slots and runs the equipment callback', async () => {
     const inventoryStore = store()
     const onEquipmentChanged = vi.fn()
     const actions = useSunnyTownInventoryActions(inventoryStore, {
@@ -127,13 +147,30 @@ describe('useSunnyTownInventoryActions', () => {
       onHotbarUpdated: vi.fn(),
     })
 
-    await actions.equipInventoryItem('pickaxe', '')
-    await actions.equipInventoryItem('pickaxe', 'tool')
     await actions.unequipInventorySlot('tool')
 
-    expect(inventoryStore.equipItem).toHaveBeenCalledOnce()
-    expect(inventoryStore.equipItem).toHaveBeenCalledWith('tool', 'pickaxe')
+    expect(inventoryStore.equipItem).not.toHaveBeenCalled()
     expect(inventoryStore.unequipItem).toHaveBeenCalledWith('tool')
-    expect(onEquipmentChanged).toHaveBeenCalledTimes(2)
+    expect(onEquipmentChanged).toHaveBeenCalledOnce()
+  })
+
+  it('equips dropped inventory slots through the store and runs the equipment callback from the drop handler', async () => {
+    const inventoryStore = store()
+    const onEquipmentChanged = vi.fn()
+    inventoryStore.dropInventorySlotOnEquipment.mockImplementation(async (slot, equip) => {
+      await equip(slot, 'pickaxe')
+      return true
+    })
+    const actions = useSunnyTownInventoryActions(inventoryStore, {
+      onEquipmentChanged,
+      onHotbarSelectionChanged: vi.fn(),
+      onHotbarUpdated: vi.fn(),
+    })
+
+    await actions.equipInventorySlotDrop('tool')
+
+    expect(inventoryStore.dropInventorySlotOnEquipment).toHaveBeenCalledOnce()
+    expect(inventoryStore.equipItem).toHaveBeenCalledWith('tool', 'pickaxe')
+    expect(onEquipmentChanged).toHaveBeenCalledOnce()
   })
 })

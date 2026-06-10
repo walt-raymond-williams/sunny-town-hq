@@ -7,19 +7,23 @@ function createEffects() {
     loadCraftingRecipes: vi.fn(),
     setItemQuantity: vi.fn(),
   }
+  const refreshProgression = vi.fn()
   const refs = {
     craftingPanelOpen: ref(false),
     error: ref(''),
     gameToast: ref(''),
+    progressionPanelOpen: ref(false),
     starBalance: ref(10),
   }
   return {
     effects: useSunnyTownMessageEffects({
       ...refs,
       inventoryStore,
+      refreshProgression,
       setTimeoutFn: globalThis.setTimeout,
     }),
     inventoryStore,
+    refreshProgression,
     refs,
   }
 }
@@ -72,6 +76,29 @@ describe('useSunnyTownMessageEffects', () => {
     expect(refs.gameToast.value).toBe('+2 rock')
     expect(inventoryStore.setItemQuantity).toHaveBeenCalledWith('rock', 5)
     expect(inventoryStore.loadCraftingRecipes).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes progression after resource commits only when the character panel is open', () => {
+    const { effects, refreshProgression, refs } = createEffects()
+
+    effects.applyResourceCommitted({
+      type: 'resource_committed',
+      amount: 1,
+      quantity: 3,
+      resourceKey: 'rock',
+    })
+
+    expect(refreshProgression).not.toHaveBeenCalled()
+
+    refs.progressionPanelOpen.value = true
+    effects.applyResourceCommitted({
+      type: 'resource_committed',
+      amount: 1,
+      quantity: 4,
+      resourceKey: 'rock',
+    })
+
+    expect(refreshProgression).toHaveBeenCalledOnce()
   })
 
   it('applies placed and removed object inventory effects', () => {

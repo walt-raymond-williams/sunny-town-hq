@@ -53,6 +53,62 @@ func (handler HTTPHandler) HandleStudentInventory(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, inventory)
 }
 
+func (handler HTTPHandler) HandleStudentInventorySlots(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	inventory, err := LoadStudentSlots(r.Context(), handler.store, user.ID)
+	if err != nil {
+		log.Printf("load student inventory slots: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{
+			"error": "inventory slots could not be loaded",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, inventory)
+}
+
+func (handler HTTPHandler) HandleStudentInventoryMove(w http.ResponseWriter, r *http.Request) {
+	user, ok := handler.requireRole(w, r, "student")
+	if !ok {
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var request InventoryMoveRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "request body must be valid JSON",
+		})
+		return
+	}
+
+	inventory, err := MoveStudentInventoryStack(r.Context(), handler.store, user.ID, request)
+	if err != nil {
+		status := http.StatusBadRequest
+		if !IsInventoryMoveClientError(err) {
+			status = http.StatusInternalServerError
+			log.Printf("move student inventory stack: %v", err)
+		}
+		writeJSON(w, status, map[string]string{
+			"error": InventoryMoveErrorMessage(err),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, inventory)
+}
+
 func (handler HTTPHandler) HandleStudentHotbar(w http.ResponseWriter, r *http.Request) {
 	user, ok := handler.requireRole(w, r, "student")
 	if !ok {
@@ -292,6 +348,69 @@ func (handler HTTPHandler) HandleStudentShopStock(w http.ResponseWriter, r *http
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func IsInventoryMoveClientError(err error) bool {
+	return errors.Is(err, ErrUnsupportedInventoryMoveMode) ||
+		errors.Is(err, ErrUnsupportedInventoryStorage) ||
+		errors.Is(err, ErrInvalidInventorySlot) ||
+		errors.Is(err, ErrInventorySourceEmpty) ||
+		errors.Is(err, ErrInventoryDestinationEmpty) ||
+		errors.Is(err, ErrInventoryDestinationOccupied) ||
+		errors.Is(err, ErrInventoryIncompatibleMerge) ||
+		errors.Is(err, ErrInventoryStackFull) ||
+		errors.Is(err, ErrInvalidInventorySplitQuantity)
+}
+
+func InventoryMoveErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrUnsupportedInventoryMoveMode):
+		return "unsupported inventory move"
+	case errors.Is(err, ErrUnsupportedInventoryStorage):
+		return "unsupported inventory storage"
+	case errors.Is(err, ErrInvalidInventorySlot):
+		return "invalid inventory slot"
+	case errors.Is(err, ErrInventorySourceEmpty):
+		return "source slot is empty"
+	case errors.Is(err, ErrInventoryDestinationEmpty):
+		return "destination slot is empty"
+	case errors.Is(err, ErrInventoryDestinationOccupied):
+		return "destination slot is occupied"
+	case errors.Is(err, ErrInventoryIncompatibleMerge):
+		return "stacks cannot be merged"
+	case errors.Is(err, ErrInventoryStackFull):
+		return "destination stack is full"
+	case errors.Is(err, ErrInvalidInventorySplitQuantity):
+		return "invalid split quantity"
+	default:
+		return "inventory move could not be completed"
+	}
+}
+
+func StatusForInventoryStorageError(err error) int {
+	if IsInventoryMoveClientError(err) ||
+		errors.Is(err, ErrContainerNotFound) ||
+		errors.Is(err, ErrInvalidContainer) ||
+		errors.Is(err, ErrInventoryFull) ||
+		errors.Is(err, ErrShopInputStorageFull) {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
+}
+
+func InventoryStorageErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrContainerNotFound):
+		return "container not found"
+	case errors.Is(err, ErrInvalidContainer):
+		return "invalid container"
+	case errors.Is(err, ErrInventoryFull):
+		return "not enough room in inventory"
+	case errors.Is(err, ErrShopInputStorageFull):
+		return "shop input storage is full"
+	default:
+		return InventoryMoveErrorMessage(err)
+	}
 }
 
 func EquipmentErrorMessage(err error) string {

@@ -35,18 +35,26 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_star_ledger`: idempotent star reward and spend records
 - `inventory_item_type`: inventory catalog
 - `student_inventory_item`: current per-student item quantities
+- `student_inventory_slot`: durable per-student inventory slot layout
 - `student_inventory_ledger`: idempotent resource and inventory event records
 - `shop_input_storage_item`: durable shop-owned ingredient/input storage quantities
 - `student_equipped_item`: current gear/accessory/tool equipment
 - `student_hotbar_slot`: current student hotbar slots
 - `shop_stock_item`: current HQ-owned shop item quantities
 - `shop_stock_ledger`: idempotent shop stock production/adjustment records
+- `storage_container`: durable container/chest identity, ownership/access metadata, slot count, and revision
+- `storage_container_slot`: durable container/chest item slots
 - `student_sunny_town_position`: last accepted Sunny Town map position
 - `sunny_town_map_object`: persisted placed map objects
 - `sunny_town_character`: shared Sunny Town character identity for player-controlled and future NPC actors
 - `sunny_town_npc_character`: durable NPC character mapping by room and NPC key
 - `sunny_town_npc_job_production_ledger`: idempotent durable NPC job production events
 - `sunny_town_npc_job_production_blocked_ledger`: idempotent durable NPC job production attempts blocked by storage/recipe state
+- `sunny_town_skill_definition`: durable skill vocabulary and starter XP curve metadata
+- `sunny_town_character_skill`: current character skill XP/level projection
+- `sunny_town_character_skill_xp_ledger`: idempotent character skill XP award records
+
+Stats and skills progression is implemented for the first mining slice. `sunny_town_skill_definition` seeds `mining`, `sunny_town_character_skill` stores the current XP/level projection keyed by `sunny_town_character.id`, and `sunny_town_character_skill_xp_ledger` stores idempotent XP awards. Broader stats, additional skills, manual allocation, and NPC skill automation remain deferred.
 
 ## Migration Layout
 
@@ -68,6 +76,10 @@ deploy/postgres/migrations/
   0012_cookie_recipe_inputs.sql
   0013_npc_job_production_blocked.sql
   0014_seed_cookie_keeper_input_storage.sql
+  0015_inventory_item_metadata.sql
+  0016_student_inventory_slots.sql
+  0017_storage_containers.sql
+  0018_character_progression.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.
@@ -122,3 +134,40 @@ docker compose -f deploy\docker-compose.yml up -d --build
 ```
 
 The Postgres init entrypoint only runs on an empty database volume. Existing volumes are migrated by HQ startup instead.
+
+## Inventory Catalog Metadata
+
+`inventory_item_type` includes item display and grid-inventory metadata:
+
+- `icon_key`: inventory UI icon or asset key, separate from Sunny Town equipment `visual_key`.
+- `max_stack`: maximum stack size for future slotted inventory operations.
+- `category`: item grouping for inventory UI and validation, currently `consumable`, `gear`, `tool`, `resource`, or `building`.
+
+Current seeded items use `max_stack = 1` for starter equipment/tools and `max_stack = 64` for stackable consumables, resources, and placed blocks.
+
+## Slotted Student Inventory
+
+`student_inventory_slot` stores the durable player inventory grid for Sunny Town.
+
+Current rules:
+
+- Player inventory has 30 slots.
+- Slot indexes are zero-based: `0` through `29`.
+- Occupied slots store `item_type_id` and positive `quantity`.
+- Empty slots are represented in API responses; empty rows do not need to be stored.
+- The same item type may exist in multiple slots.
+- `student_inventory_item` remains as an aggregate compatibility table while equipment, hotbar, pet, placement, and Sunny Town quantity flows are migrated safely.
+- Student crafting recipe availability and execution use `student_inventory_slot` as the authoritative quantity source.
+- Inventory mutation helpers update slot rows and aggregate rows in the same transaction.
+
+## Container Storage
+
+General chest/container storage is implemented according to `docs/current/CONTAINER_STORAGE.md`.
+
+Current schema:
+
+- `storage_container` owns stable container identity, access policy, slot count, revision, and fixture/placed-object/shop metadata.
+- `storage_container_slot` owns durable item stacks for each container slot.
+- Authored fixture containers should use deterministic IDs such as `fixture:<room_id>:<map_id>:<fixture_id>`.
+- Placed object containers should use IDs derived from the persisted placed object ID.
+- Cookie Shop `shop_stock_item` and `shop_input_storage_item` remain the current specialized backing tables until a deliberate migration folds them into general container slots.

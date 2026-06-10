@@ -42,3 +42,33 @@ func TestNewRoomInitializesMapFixturesAsWorldObjects(t *testing.T) {
 		t.Fatalf("input fixture snapshot = %#v, want input chest metadata", inputSnapshot)
 	}
 }
+
+func TestValidatedContainerAccessUsesServerWorldStateAndAcceptedPosition(t *testing.T) {
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	room := newRoom("sunny-town-main", maps["sunny-town-house-1"], make(chan rewardEvent, 1), make(chan resourceEvent, 1), make(chan npcJobProductionEvent, 1), nil)
+	player := &player{id: "player-1", appUserID: 123, x: 368, y: 304}
+
+	containerID, ok := room.validatedContainerAccessLocked(player, worldObjectSourceFixture, "cookie-shop-input-chest", "deposit")
+	if !ok {
+		t.Fatal("expected nearby player to access input chest for deposit")
+	}
+	if containerID != "fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest" {
+		t.Fatalf("containerID = %q, want stable fixture container id", containerID)
+	}
+
+	if _, ok := room.validatedContainerAccessLocked(player, worldObjectSourceFixture, "cookie-shop-output-chest", "withdraw"); ok {
+		t.Fatal("expected output chest withdraw to be rejected")
+	}
+	player.x = 64
+	player.y = 64
+	if _, ok := room.validatedContainerAccessLocked(player, worldObjectSourceFixture, "cookie-shop-input-chest", "deposit"); ok {
+		t.Fatal("expected far player to be rejected")
+	}
+	if _, ok := room.validatedContainerAccessLocked(player, worldObjectSourceFixture, "missing", "deposit"); ok {
+		t.Fatal("expected missing client-supplied object id to be rejected")
+	}
+}

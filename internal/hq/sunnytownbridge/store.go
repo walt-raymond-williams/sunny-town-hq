@@ -9,6 +9,7 @@ import (
 
 	hqcharacters "hq/internal/hq/characters"
 	hqinventory "hq/internal/hq/inventory"
+	hqprogression "hq/internal/hq/progression"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -72,7 +73,13 @@ func (store Store) CommitResource(ctx context.Context, request ResourceEventRequ
 		return ResourceEventResponse{}, errors.New("resource amount must be positive")
 	}
 
-	inserted, quantity, err := CommitStudentInventoryLedgerDelta(ctx, store.DB, InventoryLedgerRequest{
+	tx, err := store.DB.Begin(ctx)
+	if err != nil {
+		return ResourceEventResponse{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	inserted, quantity, err := CommitStudentInventoryLedgerDelta(ctx, tx, InventoryLedgerRequest{
 		EventID:   request.EventID,
 		AppUserID: request.AppUserID,
 		Source:    request.Source,
@@ -83,6 +90,14 @@ func (store Store) CommitResource(ctx context.Context, request ResourceEventRequ
 		NodeID:    request.NodeID,
 	})
 	if err != nil {
+		return ResourceEventResponse{}, err
+	}
+	if request.CharacterID > 0 {
+		if _, err := hqprogression.AwardMiningHarvestXPInTx(ctx, tx, request.EventID, request.CharacterID, request.RoomID, request.MapID, request.NodeID); err != nil {
+			return ResourceEventResponse{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return ResourceEventResponse{}, err
 	}
 

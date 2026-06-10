@@ -38,6 +38,7 @@ type RewardEventResponse struct {
 type ResourceEventRequest struct {
 	EventID     string `json:"event_id"`
 	AppUserID   int64  `json:"app_user_id"`
+	CharacterID int64  `json:"character_id,omitempty"`
 	Source      string `json:"source"`
 	RoomID      string `json:"room_id"`
 	MapID       string `json:"map_id"`
@@ -51,6 +52,18 @@ type ResourceEventResponse struct {
 	Duplicate   bool   `json:"duplicate"`
 	ResourceKey string `json:"resource_key"`
 	Quantity    int    `json:"quantity"`
+}
+
+type CharacterSkillXPRequest struct {
+	EventID     string `json:"event_id"`
+	CharacterID int64  `json:"character_id"`
+	Source      string `json:"source"`
+	ActivityKey string `json:"activity_key"`
+	SkillKey    string `json:"skill_key"`
+	XPAmount    int    `json:"xp_amount"`
+	RoomID      string `json:"room_id,omitempty"`
+	MapID       string `json:"map_id,omitempty"`
+	NodeID      string `json:"node_id,omitempty"`
 }
 
 type NPCJobProductionRequest struct {

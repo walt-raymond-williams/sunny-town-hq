@@ -1,4 +1,4 @@
-import type { StudentHotbar, StudentInventory } from './inventory'
+import type { ContainerInventorySlots, InventoryStorageRef, StudentHotbar, StudentInventory, StudentInventorySlots } from './inventory'
 
 export interface SunnyTownSession {
   roomId: string
@@ -118,7 +118,7 @@ export interface SunnyTownFixtureDefinition {
   reservesPlacement?: boolean
   locationId?: string
   shopId?: string
-  storageRole?: 'output' | 'input'
+  storageRole?: 'output' | 'input' | 'general'
   itemKey?: string
   tags?: string[]
 }
@@ -173,7 +173,7 @@ export interface SunnyTownWorldObject {
   name?: string
   locationId?: string
   shopId?: string
-  storageRole?: 'output' | 'input'
+  storageRole?: 'output' | 'input' | 'general'
   x: number
   y: number
   width?: number
@@ -193,7 +193,7 @@ export interface SunnyTownWorldObject {
 }
 
 export interface SunnyTownServerMessage {
-  type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed' | 'resource_committed' | 'resource_failed' | 'map_object_placed' | 'map_object_removed'
+  type: 'hello' | 'snapshot' | 'map_changed' | 'error' | 'reward_committed' | 'reward_failed' | 'resource_committed' | 'resource_failed' | 'map_object_placed' | 'map_object_removed' | 'container_opened' | 'container_transfer_committed'
   selfId?: string
   roomId?: string
   mapId?: string
@@ -218,6 +218,8 @@ export interface SunnyTownServerMessage {
   resourceKey?: 'rock' | 'crystal' | 'stone_block'
   quantity?: number
   reason?: string
+  inventory?: StudentInventorySlots
+  container?: ContainerInventorySlots
 }
 
 export interface SunnyTownMoveMessage {
@@ -248,5 +250,21 @@ export interface SunnyTownPlaceObjectMessage {
   itemKey: 'stone_block'
   gridX: number
   gridY: number
+  clientTimeMs: number
+}
+
+export interface SunnyTownContainerOpenMessage {
+  type: 'container_open'
+  objectSource: SunnyTownWorldObject['source']
+  objectId: string
+  clientTimeMs: number
+}
+
+export interface SunnyTownContainerTransferMessage {
+  type: 'container_transfer'
+  objectSource: SunnyTownWorldObject['source']
+  objectId: string
+  source: InventoryStorageRef
+  destination: InventoryStorageRef
   clientTimeMs: number
 }

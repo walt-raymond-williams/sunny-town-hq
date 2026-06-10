@@ -26,6 +26,9 @@ type EquipmentItemResponse struct {
 	Description string `json:"description"`
 	EquipSlot   string `json:"equipSlot"`
 	VisualKey   string `json:"visualKey"`
+	IconKey     string `json:"iconKey,omitempty"`
+	MaxStack    int    `json:"maxStack,omitempty"`
+	Category    string `json:"category,omitempty"`
 }
 
 type EquipmentSlotResponse struct {
@@ -61,7 +64,10 @@ func LoadStudentEquipment(ctx context.Context, db *pgxpool.Pool, userID int64) (
 				iit.name,
 				iit.description,
 				coalesce(iit.equip_slot, '') as equip_slot,
-				coalesce(iit.visual_key, '') as visual_key
+				coalesce(iit.visual_key, '') as visual_key,
+				coalesce(iit.icon_key, '') as icon_key,
+				coalesce(iit.max_stack, 0) as max_stack,
+				coalesce(iit.category, '') as category
 			from (values ('gear'), ('accessory'), ('tool')) as slots(slot)
 			left join student_equipped_item sei on sei.app_user_id = $1
 				and sei.slot = slots.slot
@@ -87,7 +93,10 @@ func LoadStudentEquipment(ctx context.Context, db *pgxpool.Pool, userID int64) (
 		var description *string
 		var equipSlot *string
 		var visualKey *string
-		if err := rows.Scan(&slot, &key, &name, &description, &equipSlot, &visualKey); err != nil {
+		var iconKey *string
+		var maxStack *int
+		var category *string
+		if err := rows.Scan(&slot, &key, &name, &description, &equipSlot, &visualKey, &iconKey, &maxStack, &category); err != nil {
 			return StudentEquipmentResponse{}, err
 		}
 
@@ -99,6 +108,9 @@ func LoadStudentEquipment(ctx context.Context, db *pgxpool.Pool, userID int64) (
 				Description: StringValue(description),
 				EquipSlot:   StringValue(equipSlot),
 				VisualKey:   StringValue(visualKey),
+				IconKey:     StringValue(iconKey),
+				MaxStack:    IntValue(maxStack),
+				Category:    StringValue(category),
 			}
 		}
 		response.Slots = append(response.Slots, slotResponse)
@@ -197,6 +209,13 @@ func UnequipStudentItem(ctx context.Context, db *pgxpool.Pool, userID int64, req
 func StringValue(value *string) string {
 	if value == nil {
 		return ""
+	}
+	return *value
+}
+
+func IntValue(value *int) int {
+	if value == nil {
+		return 0
 	}
 	return *value
 }

@@ -9,8 +9,21 @@ import (
 
 type fakeRecipeStorage struct {
 	consumeResults map[string]bool
+	quantities     map[string]int
 	consumed       []RecipeIngredient
 	produced       []RecipeIngredient
+}
+
+func (storage *fakeRecipeStorage) RecipeInputDescriptor() RecipeStorageDescriptor {
+	return RecipeStorageDescriptor{Kind: RecipeStorageKindMemory, Label: "test input storage"}
+}
+
+func (storage *fakeRecipeStorage) RecipeOutputDescriptor() RecipeStorageDescriptor {
+	return RecipeStorageDescriptor{Kind: RecipeStorageKindMemory, Label: "test output storage"}
+}
+
+func (storage *fakeRecipeStorage) RecipeItemQuantity(ctx context.Context, itemKey string) (int, error) {
+	return storage.quantities[itemKey], nil
 }
 
 func (storage *fakeRecipeStorage) ConsumeRecipeItem(ctx context.Context, itemKey string, quantity int) (bool, error) {
@@ -73,6 +86,13 @@ func TestExecuteRecipeStopsBeforeOutputWhenIngredientMissing(t *testing.T) {
 	err := executeRecipe(context.Background(), recipe, storage)
 	if !errors.Is(err, ErrInsufficientIngredient) {
 		t.Fatalf("executeRecipe error = %v, want ErrInsufficientIngredient", err)
+	}
+	var storageErr recipeStorageError
+	if !errors.As(err, &storageErr) {
+		t.Fatalf("executeRecipe error = %T, want recipeStorageError", err)
+	}
+	if storageErr.Storage.Label != "test input storage" || storageErr.ItemKey != "sugar" {
+		t.Fatalf("storage error = %#v, want sugar in test input storage", storageErr)
 	}
 	if len(storage.produced) != 0 {
 		t.Fatalf("produced = %#v, want no output when ingredients are missing", storage.produced)

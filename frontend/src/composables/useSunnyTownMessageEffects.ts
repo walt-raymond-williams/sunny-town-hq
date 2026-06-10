@@ -11,6 +11,8 @@ interface SunnyTownMessageEffectsOptions {
   error: Ref<string>
   gameToast: Ref<string>
   inventoryStore: SunnyTownMessageInventoryStore
+  progressionPanelOpen?: Ref<boolean>
+  refreshProgression?: () => Promise<void>
   starBalance: Ref<number>
   setTimeoutFn?: typeof window.setTimeout
 }
@@ -44,6 +46,7 @@ export function useSunnyTownMessageEffects(options: SunnyTownMessageEffectsOptio
       options.inventoryStore.setItemQuantity(resourceKey, message.quantity)
     }
     refreshCraftingIfOpen()
+    refreshProgressionIfOpen()
   }
 
   function applyResourceFailed() {
@@ -69,6 +72,12 @@ export function useSunnyTownMessageEffects(options: SunnyTownMessageEffectsOptio
   function refreshCraftingIfOpen() {
     if (options.craftingPanelOpen.value) {
       void options.inventoryStore.loadCraftingRecipes()
+    }
+  }
+
+  function refreshProgressionIfOpen() {
+    if (options.progressionPanelOpen?.value && options.refreshProgression) {
+      void options.refreshProgression()
     }
   }
 

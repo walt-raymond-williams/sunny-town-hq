@@ -14,7 +14,7 @@ Current implemented baseline:
 - `cookie-keeper-counter` remains the owned Cookie Keeper work anchor; the broader `cookie-shop` area is not NPC-owned.
 - `sunny-town-house-1` has authored fixtures `cookie-shop-output-chest` and `cookie-shop-input-chest` inside/associated with `cookie-shop`.
 - Sunny Town initializes that fixture as a runtime `worldObject` with source `fixture`, kind `chest`, and metadata `shopId: cookie-keeper-shop`, `storageRole: output`, `itemKey: cookie`, and `locationId: cookie-shop`.
-- Sunny Town also initializes `cookie-shop-input-chest` as a runtime chest `worldObject` with `shopId: cookie-keeper-shop`, `storageRole: input`, and `locationId: cookie-shop`. It has no `itemKey` yet because ingredient storage is not durable yet.
+- Sunny Town also initializes `cookie-shop-input-chest` as a runtime chest `worldObject` with `shopId: cookie-keeper-shop`, `storageRole: input`, and `locationId: cookie-shop`. Ingredient quantities are HQ-owned in `shop_input_storage_item`, not authored into the map fixture.
 - The frontend can render chest world objects from the normal `worldObjects` snapshot stream.
 - Players can inspect the nearby output chest with `F`; the read-only panel loads existing `cookie-keeper-shop` stock/capacity from `GET /api/student/shop/stock`.
 - Sunny Town emits service-authenticated `shopkeeper_stock` / `shop_stock_progress` NPC job production events when Cookie Keeper is at the work anchor.
@@ -22,10 +22,13 @@ Current implemented baseline:
 - HQ records accepted but blocked production attempts in `sunny_town_npc_job_production_blocked_ledger`.
 - HQ stores saleable Cookie Keeper cookies in durable `shop_stock_item` / `shop_stock_ledger` tables.
 - HQ stores Cookie Shop input ingredients in durable `shop_input_storage_item`.
+- HQ also seeds general `storage_container` identities for the Cookie Shop input and output chest fixtures so chest-grid and transfer APIs can address the fixtures by stable container ID.
 - Player purchases from `cookie-keeper-shop` consume durable stock before granting a cookie.
 - `cookie-keeper-shop` cookie output storage has a logical capacity of `64`.
 - `cookie-keeper-shop` input storage has a logical capacity of `64` total units.
 - Cookie production uses the shared `cookie` recipe: 1 flour + 1 sugar -> 1 cookie.
+- Player deposits into the `cookie-shop-input-chest` replenish Cookie Shop input storage through Sunny Town's validated container flow.
+- Input chest deposits accept Cookie Shop ingredients (`flour` and `sugar`) only, reject over-capacity deposits, and atomically consume the player inventory stack while incrementing `shop_input_storage_item`.
 - NPC production checks input ingredients and output capacity before mutating storage.
 - If ingredients are missing, HQ records a blocked production attempt with reason `missing_inputs` and does not consume partial inputs or mutate output stock.
 - If output storage is full, HQ records a blocked production attempt with reason `output_full` and does not consume inputs.
@@ -47,13 +50,13 @@ Current architecture decision:
 - Cookie production requires input ingredients in Cookie Shop input storage. Cookie Keeper can produce only while working in the shop and while ingredients/output capacity are available.
 - HQ crafting now has a shared recipe catalog/execution foundation in `internal/hq/inventory/crafting.go`.
 - The current `stone_block` player recipe still uses the existing `/api/student/crafting/...` behavior, but execution is routed through storage operations instead of being hard-coded to student inventory.
-- Shared recipe execution is intentionally storage-agnostic: current student crafting adapts `ConsumeStudentItem` / `IncrementStudentItem`, while future Cookie Shop work should add shop input/output storage operations.
-- Inventory redesign discovery in `docs/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md` agrees with this direction: chest fixtures are interaction metadata, durable quantities live in HQ, and future grid/container UI should wrap explicit storage endpoints rather than create Sunny Town-local inventory state.
+- Shared recipe execution is intentionally storage-agnostic: current student crafting adapts `ConsumeStudentItem` / `IncrementStudentItem` behind a `player_inventory` storage descriptor, while Cookie Shop production uses `shop_input_storage` as the recipe input descriptor and `shop_stock` as the output descriptor.
+- Archived inventory redesign discovery in `docs/archive/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md` agrees with this direction: chest fixtures are interaction metadata, durable quantities live in HQ, and grid/container UI wraps explicit storage endpoints rather than creating Sunny Town-local inventory state.
+- General container/chest identity, access validation, conflict handling, and implemented transfer behavior are defined in `docs/current/CONTAINER_STORAGE.md`.
 
 Next task for a fresh agent:
 
-- Add a way for gameplay to replenish Cookie Shop input storage, probably starting with a service/internal or narrow debug/admin path before player transfer UI.
-- Keep the storage source explicit: player-to-chest deposit and chest withdraw still need ownership/access rules before becoming player-facing.
+- Keep the storage source explicit: Cookie Shop input quantities live in `shop_input_storage_item`, not in fixture metadata or Sunny Town runtime state.
 - Do not create Cookie Keeper-held inventory.
 - Do not create Sunny Town fixture-local ingredient quantities.
 - If UI changes are made, show blocked/empty input state clearly instead of making the shop look broken.
@@ -103,7 +106,7 @@ Recommended next step:
 - Do not bake cookie recipe consumption directly into `CommitNPCJobProduction`.
 - Treat `cookie-shop-input-chest` as the physical interaction/ownership anchor for future ingredients, not as a local inventory source.
 - Define a clear future "production blocked: missing inputs" result for the NPC production path before mutating output stock.
-- Keep chest actions such as withdraw/deposit deferred until the sale path and ownership transfer rules are explicit.
+- At this slice, keep chest actions such as withdraw/deposit deferred until the sale path and ownership transfer rules are explicit.
 - The alternate branch is teacher lesson prep durable progress if broader NPC job gameplay becomes the priority.
 - Do not create a second fixture inventory source; keep durable quantities in HQ-owned stock/inventory tables.
 
@@ -126,10 +129,10 @@ Implemented notes:
 
 - Replaced the student-specific internal recipe structs with `RecipeDefinition` and `RecipeIngredient`.
 - Renamed the recipe list to `recipeCatalog` to make the shared catalog role explicit.
-- Added a storage-agnostic recipe executor that consumes required ingredients before producing output.
+- Added a storage-agnostic recipe executor that consumes required ingredients before producing output and carries explicit input/output storage descriptors through availability and execution.
 - Added `studentRecipeStorage` as the first adapter over existing student inventory functions.
 - Preserved the current `stone_block` API behavior and response shape.
-- Added unit tests proving shared execution can run against fake storage without a player `app_user_id`, and that missing ingredients stop output production.
+- Added unit tests proving shared execution can run against fake storage without a player `app_user_id`, and that missing ingredients stop output production while retaining the selected storage context.
 
 ## Immediate Next Slice: HQ-Owned Shop Input Storage
 
@@ -201,6 +204,8 @@ Implemented notes:
 
 ## Immediate Next Slice: Cookie Shop Input Replenishment
 
+Status: `Implemented`
+
 Recommended next step:
 
 - Give gameplay a controlled way to add ingredients to `shop_input_storage_item`.
@@ -214,6 +219,14 @@ Acceptance criteria for this next slice:
 - Replenishment cannot exceed the input storage capacity.
 - Player-facing flows, if added, validate ownership/access and do not create fixture-local quantities.
 - Existing recipe-aware production remains idempotent and atomic.
+
+Implemented notes:
+
+- The existing Sunny Town `container_open` flow now renders `cookie-shop-input-chest` from authoritative `shop_input_storage_item` rows instead of generic `storage_container_slot` rows.
+- The existing Sunny Town `container_transfer` deposit path validates live chest access before calling HQ; HQ then consumes the selected player inventory slot and increments Cookie Shop input storage in one transaction.
+- Cookie Shop input deposits currently accept only `flour` and `sugar`.
+- Over-capacity input deposits return `shop input storage is full` and roll back the player inventory mutation.
+- Withdrawing from Cookie Shop input storage remains out of scope.
 
 ## Slice: Authored Cookie Shop Area
 
@@ -299,28 +312,28 @@ Implemented notes:
 - The input chest is a blocking/reserved `chest` fixture tagged `storage`, `input`, and `cookie_shop`.
 - Map validation now requires input storage fixtures to include both shop and location metadata.
 - Sunny Town initializes the input chest into the normal runtime `worldObjects` stream and snapshots its storage metadata.
-- The input chest intentionally has no `itemKey` and no durable quantity yet. Future ingredient storage must be HQ-owned and attached to the shop/storage identity.
+- The input chest intentionally has no `itemKey`; durable ingredient quantities are HQ-owned and attached to the shop/storage identity in `shop_input_storage_item`.
 
-## Later Slice: Input Chest And Ingredients
+## Slice: Input Chest And Ingredients
 
 Goal: require ingredients before Cookie Keeper can produce cookies.
 
-Deferred intentionally. Do not implement this before the shared recipe execution foundation is stable.
+Status: `Implemented`
 
-Recommended future shape:
+Implemented notes:
 
-- Add HQ-owned Cookie Shop input storage.
-- Add a Cookie Shop workstation fixture, likely a stove/oven, as the player/NPC recipe interaction point.
-- Define cookie recipe requirements in the shared HQ recipe catalog.
-- Sunny Town can validate that Cookie Keeper is working at the right authored location/workstation, but HQ should decide whether required inputs exist and consume them atomically with production output.
-- If ingredients are missing, record/debug "worked but no inputs" or "production blocked" without mutating output stock.
-- Player crafting at a stove should call the same recipe definition and execution semantics, using player inventory or explicitly designed shop-storage transfer rules.
+- HQ-owned Cookie Shop input storage lives in `shop_input_storage_item`.
+- The shared HQ recipe catalog defines `cookie` as 1 flour + 1 sugar -> 1 cookie.
+- Sunny Town validates that Cookie Keeper is working at the authored work anchor, then HQ decides whether required inputs and output capacity are available.
+- Missing ingredients record a blocked production attempt with reason `missing_inputs` without mutating output stock.
+- Full output storage records a blocked production attempt with reason `output_full` without consuming inputs.
+- Player deposits into `cookie-shop-input-chest` use Sunny Town live access validation and HQ-owned player inventory/container transfer transactions.
+- A future Cookie Shop workstation or stove remains the likely player cooking interaction point; it is not required for the current NPC production or input replenishment flow.
 
 ## Non-Goals For Current Work
 
 - Do not persist raw NPC drive values, routes, goals, path indexes, or live position for this feature.
 - Do not create general NPC inventory for Cookie Keeper.
-- Do not require ingredients before the output storage loop is stable.
 - Do not create a separate Cookie Keeper-only recipe system.
 - Do not put recipe state or ingredient quantities in Sunny Town fixture/client state.
 - Do not build a broad building/ownership system before the Cookie Shop use case proves the needed fields.

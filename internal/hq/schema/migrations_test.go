@@ -57,12 +57,17 @@ func TestRunMigrationsIntegration(t *testing.T) {
 		t.Fatalf("RunMigrations() second run error = %v", err)
 	}
 
+	migrations, err := LoadMigrations("../../../deploy/postgres/migrations")
+	if err != nil {
+		t.Fatalf("load migrations: %v", err)
+	}
+
 	var migrationCount int
 	if err := db.QueryRow(ctx, "select count(*) from schema_migration").Scan(&migrationCount); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if migrationCount != 8 {
-		t.Fatalf("migration count = %d, want 8", migrationCount)
+	if migrationCount != len(migrations) {
+		t.Fatalf("migration count = %d, want %d", migrationCount, len(migrations))
 	}
 
 	var tableCount int
@@ -83,24 +88,66 @@ func TestRunMigrationsIntegration(t *testing.T) {
 					'student_star_ledger',
 					'inventory_item_type',
 					'student_inventory_item',
+					'student_inventory_slot',
 					'student_inventory_ledger',
 					'student_equipped_item',
 					'student_hotbar_slot',
 					'shop_stock_item',
 					'shop_stock_ledger',
 					'shop_input_storage_item',
+					'storage_container',
+					'storage_container_slot',
 					'student_sunny_town_position',
 					'sunny_town_map_object',
 					'sunny_town_character',
 					'sunny_town_npc_character',
 					'sunny_town_npc_job_production_ledger',
-					'sunny_town_npc_job_production_blocked_ledger'
+					'sunny_town_npc_job_production_blocked_ledger',
+					'sunny_town_skill_definition',
+					'sunny_town_character_skill',
+					'sunny_town_character_skill_xp_ledger'
 				)
 		`,
 	).Scan(&tableCount); err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if tableCount != 22 {
-		t.Fatalf("table count = %d, want 22", tableCount)
+	if tableCount != 28 {
+		t.Fatalf("table count = %d, want 28", tableCount)
+	}
+
+	var iconKey string
+	var maxStack int
+	var category string
+	var visualKey *string
+	if err := db.QueryRow(
+		ctx,
+		`
+			select icon_key, max_stack, category, visual_key
+			from inventory_item_type
+			where key = 'stone_block'
+		`,
+	).Scan(&iconKey, &maxStack, &category, &visualKey); err != nil {
+		t.Fatalf("load stone block metadata: %v", err)
+	}
+	if iconKey != "stone_block" || maxStack != 64 || category != "building" || visualKey != nil {
+		t.Fatalf("stone_block metadata iconKey=%q maxStack=%d category=%q visualKey=%v, want icon/stack/category and nil visual key", iconKey, maxStack, category, visualKey)
+	}
+
+	var hoodieIconKey string
+	var hoodieMaxStack int
+	var hoodieCategory string
+	var hoodieVisualKey string
+	if err := db.QueryRow(
+		ctx,
+		`
+			select icon_key, max_stack, category, visual_key
+			from inventory_item_type
+			where key = 'sunny_hoodie'
+		`,
+	).Scan(&hoodieIconKey, &hoodieMaxStack, &hoodieCategory, &hoodieVisualKey); err != nil {
+		t.Fatalf("load hoodie metadata: %v", err)
+	}
+	if hoodieIconKey != "sunny_hoodie" || hoodieMaxStack != 1 || hoodieCategory != "gear" || hoodieVisualKey != "sunny_hoodie" {
+		t.Fatalf("hoodie metadata iconKey=%q maxStack=%d category=%q visualKey=%q, want separate icon and visual metadata", hoodieIconKey, hoodieMaxStack, hoodieCategory, hoodieVisualKey)
 	}
 }

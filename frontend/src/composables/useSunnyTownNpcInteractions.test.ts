@@ -186,6 +186,9 @@ function createInventoryItem(overrides: Partial<InventoryItem> = {}): InventoryI
     quantity: 1,
     equipSlot: '',
     visualKey: '',
+    iconKey: 'rock',
+    maxStack: 64,
+    category: 'resource',
     equipped: false,
     ...overrides,
   }

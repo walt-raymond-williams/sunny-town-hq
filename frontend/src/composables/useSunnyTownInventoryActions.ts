@@ -9,6 +9,7 @@ interface SunnyTownInventoryStore {
   hotbarSlots: HotbarSlot[]
   items: InventoryItem[]
   craftRecipe: (recipeKey: string) => Promise<void>
+  dropInventorySlotOnEquipment: (slot: EquipmentSlot, equip: (slot: EquipmentSlot, itemKey: string) => Promise<void>) => Promise<boolean>
   equipItem: (slot: EquipmentSlot, itemKey: string) => Promise<void>
   loadCraftingRecipes: () => Promise<void>
   loadHotbar: () => Promise<void>
@@ -23,6 +24,8 @@ interface SunnyTownInventoryActionOptions {
   onHotbarUpdated: () => void
 }
 
+export type SunnyTownInventoryMenuTab = 'inventory' | 'crafting'
+
 export function hotbarIndexForEvent(event: Pick<KeyboardEvent, 'code'>): number | null {
   if (!/^Digit[1-5]$/.test(event.code)) {
     return null
@@ -35,6 +38,7 @@ export function useSunnyTownInventoryActions(
   options: SunnyTownInventoryActionOptions,
 ) {
   const inventoryOpen = ref(false)
+  const inventoryMenuTab = ref<SunnyTownInventoryMenuTab>('inventory')
   const craftingPanelOpen = ref(false)
   const showAllCraftingRecipes = ref(true)
   const selectedHotbarIndex = ref(0)
@@ -48,6 +52,7 @@ export function useSunnyTownInventoryActions(
   async function toggleInventory() {
     inventoryOpen.value = !inventoryOpen.value
     if (inventoryOpen.value) {
+      inventoryMenuTab.value = 'inventory'
       craftingPanelOpen.value = true
       await inventoryStore.loadInventory()
       await inventoryStore.loadHotbar()
@@ -62,6 +67,14 @@ export function useSunnyTownInventoryActions(
     }
   }
 
+  async function setInventoryMenuTab(tab: SunnyTownInventoryMenuTab) {
+    inventoryMenuTab.value = tab
+    if (tab === 'crafting') {
+      craftingPanelOpen.value = true
+      await inventoryStore.loadCraftingRecipes()
+    }
+  }
+
   async function craftInventoryRecipe(recipeKey: string) {
     await inventoryStore.craftRecipe(recipeKey)
     await inventoryStore.loadHotbar()
@@ -72,22 +85,16 @@ export function useSunnyTownInventoryActions(
     options.onHotbarSelectionChanged()
   }
 
-  async function equipInventoryItem(itemKey: string, slot: EquipmentSlot | '') {
-    if (!slot) {
-      return
-    }
-    await inventoryStore.equipItem(slot, itemKey)
-    options.onEquipmentChanged()
+  async function equipInventorySlotDrop(slot: EquipmentSlot) {
+    await inventoryStore.dropInventorySlotOnEquipment(slot, async (equipmentSlot, itemKey) => {
+      await inventoryStore.equipItem(equipmentSlot, itemKey)
+      options.onEquipmentChanged()
+    })
   }
 
   async function unequipInventorySlot(slot: EquipmentSlot) {
     await inventoryStore.unequipItem(slot)
     options.onEquipmentChanged()
-  }
-
-  async function assignInventoryItemToSelectedHotbarSlot(itemKey: string) {
-    await inventoryStore.setHotbarSlot(selectedHotbarIndex.value + 1, itemKey)
-    options.onHotbarUpdated()
   }
 
   async function clearSelectedHotbarSlot() {
@@ -96,16 +103,17 @@ export function useSunnyTownInventoryActions(
   }
 
   return {
-    assignInventoryItemToSelectedHotbarSlot,
     clearSelectedHotbarSlot,
     craftInventoryRecipe,
     craftingPanelOpen,
-    equipInventoryItem,
+    equipInventorySlotDrop,
+    inventoryMenuTab,
     inventoryOpen,
     placingStoneBlock,
     selectedHotbarIndex,
     selectedHotbarItemKey,
     selectHotbarSlot,
+    setInventoryMenuTab,
     showAllCraftingRecipes,
     stoneBlockQuantity,
     toggleCraftingPanel,

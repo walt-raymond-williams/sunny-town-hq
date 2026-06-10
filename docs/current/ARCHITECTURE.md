@@ -40,9 +40,13 @@ HQ owns durable state:
 - assignments, attempts, grading, and feedback
 - pet state
 - wallet stars and star ledger
-- inventory, equipment, hotbar, crafting, shops, and durable shop stock
+- inventory, equipment, hotbar, crafting, shops, durable shop input storage, and durable shop stock
 - persisted Sunny Town map objects
 - last accepted Sunny Town player position
+
+Sunny Town container/chest storage follows the contract in `docs/current/CONTAINER_STORAGE.md`: HQ owns durable container contents and slot transactions, while Sunny Town validates live proximity and access before any mutation.
+
+Sunny Town stats and skills progression follows `docs/current/STATS_SKILLS_PROGRESSION.md`: progression is activity-driven, attaches to shared `sunny_town_character` identity for players and NPCs, and does not use manual point allocation unless product direction changes.
 
 Sunny Town owns live realtime state:
 

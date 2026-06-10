@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	hqinventory "hq/internal/hq/inventory"
+	hqprogression "hq/internal/hq/progression"
 )
 
 type HTTPHandler struct {
@@ -62,6 +63,41 @@ func (handler HTTPHandler) HandleResourceEvent(w http.ResponseWriter, r *http.Re
 	if err != nil {
 		log.Printf("commit sunny town resource: %v", err)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "resource event could not be accepted"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (handler HTTPHandler) HandleCharacterSkillXP(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !handler.authorized(w, r) {
+		return
+	}
+
+	var request CharacterSkillXPRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "request body must be valid JSON"})
+		return
+	}
+
+	response, err := hqprogression.AwardSkillXP(r.Context(), handler.store.DB, hqprogression.AwardSkillXPRequest{
+		EventID:     request.EventID,
+		CharacterID: request.CharacterID,
+		Source:      request.Source,
+		ActivityKey: request.ActivityKey,
+		SkillKey:    request.SkillKey,
+		XPAmount:    request.XPAmount,
+		RoomID:      request.RoomID,
+		MapID:       request.MapID,
+		NodeID:      request.NodeID,
+	})
+	if err != nil {
+		log.Printf("award sunny town character skill xp: %v", err)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "character skill xp could not be awarded"})
 		return
 	}
 
@@ -170,6 +206,56 @@ func (handler HTTPHandler) HandleInventoryQuantity(w http.ResponseWriter, r *htt
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"item_key": itemKey, "quantity": quantity})
+}
+
+func (handler HTTPHandler) HandleContainerSlots(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !handler.authorized(w, r) {
+		return
+	}
+
+	containerID := strings.TrimSpace(r.URL.Query().Get("container_id"))
+	if containerID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "container_id is required"})
+		return
+	}
+
+	response, err := hqinventory.LoadContainerSlots(r.Context(), handler.store.DB, containerID)
+	if err != nil {
+		log.Printf("load sunny town container slots: %v", err)
+		writeJSON(w, hqinventory.StatusForInventoryStorageError(err), map[string]string{"error": hqinventory.InventoryStorageErrorMessage(err)})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (handler HTTPHandler) HandleContainerTransfer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !handler.authorized(w, r) {
+		return
+	}
+
+	var request hqinventory.ContainerTransferRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "request body must be valid JSON"})
+		return
+	}
+
+	response, err := hqinventory.TransferPlayerContainerStack(r.Context(), handler.store.DB, request)
+	if err != nil {
+		log.Printf("transfer sunny town container stack: %v", err)
+		writeJSON(w, hqinventory.StatusForInventoryStorageError(err), map[string]string{"error": hqinventory.InventoryStorageErrorMessage(err)})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (handler HTTPHandler) HandlePlayerPosition(w http.ResponseWriter, r *http.Request) {

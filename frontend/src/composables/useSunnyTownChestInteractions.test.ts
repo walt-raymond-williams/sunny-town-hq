@@ -6,42 +6,46 @@ import {
 } from './useSunnyTownChestInteractions'
 
 describe('useSunnyTownChestInteractions', () => {
-  it('finds the nearest inspectable output chest within its interaction radius', () => {
+  it('finds the nearest inspectable chest within its interaction radius', () => {
     const self = createPlayer({ x: 116, y: 116 })
     const far = createChest({ id: 'far', x: 260, y: 100 })
-    const near = createChest({ id: 'near', x: 96, y: 96, interactionRadius: 48 })
+    const near = createChest({ id: 'near', x: 96, y: 96, interactionRadius: 48, storageRole: 'input' })
     const inactive = createChest({ id: 'inactive', x: 112, y: 112, active: false })
-    const input = createChest({ id: 'input', x: 112, y: 112, storageRole: 'input' })
+    const rock = { ...createChest({ id: 'rock', x: 112, y: 112 }), kind: 'rock_node' as const }
 
-    expect(nearestSunnyTownChest([far, inactive, input, near], self)?.id).toBe('near')
+    expect(nearestSunnyTownChest([far, inactive, rock, near], self)?.id).toBe('near')
     expect(nearestSunnyTownChest([far], self)).toBeNull()
     expect(nearestSunnyTownChest([near], null)).toBeNull()
   })
 
-  it('opens a chest and loads its backing shop stock', async () => {
-    const loadShopStock = vi.fn().mockResolvedValue({
-      shopId: 'cookie-keeper-shop',
-      items: [{ itemKey: 'cookie', quantity: 12, capacity: 64 }],
-    })
-    const interactions = useSunnyTownChestInteractions({ loadShopStock })
+  it('opens a chest and requests its container slots', () => {
+    const sendOpen = vi.fn().mockReturnValue(true)
+    const interactions = useSunnyTownChestInteractions({ sendOpen })
     const chest = createChest()
 
-    await expect(interactions.inspectChest(chest)).resolves.toBe(true)
+    expect(interactions.inspectChest(chest)).toBe(true)
 
     expect(interactions.activeChest.value?.id).toBe('cookie-shop-output-chest')
-    expect(loadShopStock).toHaveBeenCalledWith('cookie-keeper-shop')
-    expect(interactions.activeChestItemKey.value).toBe('cookie')
-    expect(interactions.activeChestQuantity.value).toBe(12)
-    expect(interactions.activeChestCapacity.value).toBe(64)
+    expect(sendOpen).toHaveBeenCalledWith(chest)
+    expect(interactions.isLoadingChest.value).toBe(true)
+
+    interactions.applyContainerOpened({
+      containerId: 'fixture:sunny-town-main:sunny-town-house-1:cookie-shop-output-chest',
+      slotCount: 1,
+      revision: 1,
+      slots: [{ slotIndex: 0, item: null }],
+    })
+
+    expect(interactions.containerSlots.value?.slotCount).toBe(1)
     expect(interactions.isLoadingChest.value).toBe(false)
   })
 
-  it('closes an active chest when nearby chest changes', async () => {
+  it('closes an active chest when nearby chest changes', () => {
     const interactions = useSunnyTownChestInteractions({
-      loadShopStock: vi.fn().mockResolvedValue({ shopId: 'shop-1', items: [] }),
+      sendOpen: vi.fn().mockReturnValue(true),
     })
 
-    await interactions.inspectChest(createChest({ id: 'first' }))
+    interactions.inspectChest(createChest({ id: 'first' }))
     interactions.refreshNearby(createChest({ id: 'second' }))
 
     expect(interactions.activeChest.value).toBeNull()

@@ -176,6 +176,7 @@ func (srv *Server) commitResource(ctx context.Context, event resourceEvent) (res
 	return srv.hq.CommitResource(ctx, resourceCommitRequest{
 		EventID:     event.eventID,
 		AppUserID:   event.appUserID,
+		CharacterID: event.characterID,
 		Source:      "sunny_town_mining",
 		RoomID:      event.roomID,
 		MapID:       event.mapID,

@@ -12,7 +12,8 @@ Build a Playwright end-to-end test suite that verifies the user-facing workflows
 - `docs/TEST_CASE_COVERAGE_MATRIX.md`
 - `docs/TESTING_GUIDELINES.md`
 - `docs/SUNNY_TOWN_ARCHITECTURE.md`
-- `docs/INVENTORY_AND_EQUIPMENT.md`
+- `docs/current/API.md`
+- `docs/current/DATABASE.md`
 
 After each Playwright test is made to pass, compare the test behavior against the original requirement or test case it claims to cover. If the test is weaker than the requirement, either strengthen the test or explicitly document the remaining gap.
 

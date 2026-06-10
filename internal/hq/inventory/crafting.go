@@ -3,6 +3,7 @@ package inventory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,23 +25,43 @@ type CraftRecipeRequest struct {
 	RecipeKey string `json:"recipeKey"`
 }
 
+const (
+	RecipeStorageKindPlayerInventory = "player_inventory"
+	RecipeStorageKindShopInput       = "shop_input_storage"
+	RecipeStorageKindShopStock       = "shop_stock"
+	RecipeStorageKindMemory          = "memory"
+)
+
+type RecipeStorageDescriptor struct {
+	Kind      string `json:"kind"`
+	AppUserID int64  `json:"appUserId,omitempty"`
+	ShopID    string `json:"shopId,omitempty"`
+	Label     string `json:"label,omitempty"`
+}
+
 type CraftingIngredientResponse struct {
 	ItemKey     string `json:"itemKey"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	IconKey     string `json:"iconKey,omitempty"`
+	MaxStack    int    `json:"maxStack,omitempty"`
+	Category    string `json:"category,omitempty"`
 	Required    int    `json:"required"`
 	Owned       int    `json:"owned"`
 }
 
 type CraftingRecipeResponse struct {
-	Key         string                       `json:"key"`
-	Name        string                       `json:"name"`
-	Description string                       `json:"description"`
-	OutputKey   string                       `json:"outputKey"`
-	OutputName  string                       `json:"outputName"`
-	Quantity    int                          `json:"quantity"`
-	CanCraft    bool                         `json:"canCraft"`
-	Ingredients []CraftingIngredientResponse `json:"ingredients"`
+	Key            string                       `json:"key"`
+	Name           string                       `json:"name"`
+	Description    string                       `json:"description"`
+	OutputKey      string                       `json:"outputKey"`
+	OutputName     string                       `json:"outputName"`
+	OutputIconKey  string                       `json:"outputIconKey,omitempty"`
+	OutputMaxStack int                          `json:"outputMaxStack,omitempty"`
+	OutputCategory string                       `json:"outputCategory,omitempty"`
+	Quantity       int                          `json:"quantity"`
+	CanCraft       bool                         `json:"canCraft"`
+	Ingredients    []CraftingIngredientResponse `json:"ingredients"`
 }
 
 type CraftingRecipesResponse struct {
@@ -48,8 +69,8 @@ type CraftingRecipesResponse struct {
 }
 
 type CraftRecipeResponse struct {
-	Inventory StudentResponse          `json:"inventory"`
-	Recipes   []CraftingRecipeResponse `json:"recipes"`
+	Inventory StudentInventorySlotsResponse `json:"inventory"`
+	Recipes   []CraftingRecipeResponse      `json:"recipes"`
 }
 
 type RecipeDefinition struct {
@@ -66,8 +87,16 @@ type RecipeIngredient struct {
 }
 
 type recipeStorage interface {
+	RecipeInputDescriptor() RecipeStorageDescriptor
+	RecipeOutputDescriptor() RecipeStorageDescriptor
+	RecipeItemQuantity(ctx context.Context, itemKey string) (int, error)
 	ConsumeRecipeItem(ctx context.Context, itemKey string, quantity int) (bool, error)
 	ProduceRecipeItem(ctx context.Context, itemKey string, quantity int) error
+}
+
+type RecipeAvailabilityStorage interface {
+	RecipeInputDescriptor() RecipeStorageDescriptor
+	RecipeItemQuantity(ctx context.Context, itemKey string) (int, error)
 }
 
 type recipePreparingStorage interface {
@@ -75,7 +104,7 @@ type recipePreparingStorage interface {
 }
 
 type studentRecipeStorage struct {
-	querier Querier
+	querier inventoryMutationQuerier
 	userID  int64
 }
 
@@ -100,7 +129,11 @@ var recipeCatalog = []RecipeDefinition{
 	},
 }
 
-func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (CraftingRecipesResponse, error) {
+func LoadCraftingRecipes(ctx context.Context, querier inventoryMutationQuerier, userID int64) (CraftingRecipesResponse, error) {
+	return LoadCraftingRecipesForStorage(ctx, querier, studentRecipeStorage{querier: querier, userID: userID})
+}
+
+func LoadCraftingRecipesForStorage(ctx context.Context, querier Loader, storage RecipeAvailabilityStorage) (CraftingRecipesResponse, error) {
 	itemKeys := map[string]bool{}
 	for _, recipe := range recipeCatalog {
 		if !recipe.AvailableToStudentUI {
@@ -112,7 +145,7 @@ func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (Cra
 		}
 	}
 
-	ownedItems, err := loadCraftingItemMetadata(ctx, querier, userID, itemKeys)
+	ownedItems, err := loadCraftingItemMetadata(ctx, querier, itemKeys)
 	if err != nil {
 		return CraftingRecipesResponse{}, err
 	}
@@ -124,17 +157,29 @@ func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (Cra
 		}
 		output := ownedItems[recipe.OutputKey]
 		recipeResponse := CraftingRecipeResponse{
-			Key:         recipe.Key,
-			Name:        output.Name,
-			Description: output.Description,
-			OutputKey:   recipe.OutputKey,
-			OutputName:  output.Name,
-			Quantity:    recipe.Quantity,
-			CanCraft:    true,
-			Ingredients: []CraftingIngredientResponse{},
+			Key:            recipe.Key,
+			Name:           output.Name,
+			Description:    output.Description,
+			OutputKey:      recipe.OutputKey,
+			OutputName:     output.Name,
+			OutputIconKey:  output.IconKey,
+			OutputMaxStack: output.MaxStack,
+			OutputCategory: output.Category,
+			Quantity:       recipe.Quantity,
+			CanCraft:       true,
+			Ingredients:    []CraftingIngredientResponse{},
 		}
 		for _, ingredient := range recipe.Ingredients {
 			item := ownedItems[ingredient.ItemKey]
+			quantity, err := storage.RecipeItemQuantity(ctx, ingredient.ItemKey)
+			if err != nil {
+				return CraftingRecipesResponse{}, recipeStorageError{
+					Storage: storage.RecipeInputDescriptor(),
+					ItemKey: ingredient.ItemKey,
+					Err:     err,
+				}
+			}
+			item.Quantity = quantity
 			if item.Quantity < ingredient.Quantity {
 				recipeResponse.CanCraft = false
 			}
@@ -142,6 +187,9 @@ func LoadCraftingRecipes(ctx context.Context, querier Loader, userID int64) (Cra
 				ItemKey:     ingredient.ItemKey,
 				Name:        item.Name,
 				Description: item.Description,
+				IconKey:     item.IconKey,
+				MaxStack:    item.MaxStack,
+				Category:    item.Category,
 				Required:    ingredient.Quantity,
 				Owned:       item.Quantity,
 			})
@@ -173,7 +221,7 @@ func CraftStudentRecipe(ctx context.Context, db *pgxpool.Pool, userID int64, req
 		return CraftRecipeResponse{}, err
 	}
 
-	inventory, err := LoadStudent(ctx, tx, userID)
+	inventory, err := LoadStudentSlots(ctx, tx, userID)
 	if err != nil {
 		return CraftRecipeResponse{}, err
 	}
@@ -197,6 +245,8 @@ func CraftingErrorMessage(err error) string {
 		return "recipe not found"
 	case errors.Is(err, ErrInsufficientIngredient):
 		return "not enough ingredients"
+	case errors.Is(err, ErrInventoryFull):
+		return "not enough room in inventory"
 	default:
 		return "crafting could not be completed"
 	}
@@ -214,21 +264,40 @@ func recipeByKey(key string) (RecipeDefinition, bool) {
 func executeRecipe(ctx context.Context, recipe RecipeDefinition, storage recipeStorage) error {
 	if preparingStorage, ok := storage.(recipePreparingStorage); ok {
 		if err := preparingStorage.PrepareRecipe(ctx, recipe); err != nil {
-			return err
+			descriptor := storage.RecipeInputDescriptor()
+			if errors.Is(err, ErrRecipeOutputFull) || errors.Is(err, ErrInventoryFull) {
+				descriptor = storage.RecipeOutputDescriptor()
+			}
+			return recipeStorageError{Storage: descriptor, Err: err}
 		}
 	}
 
 	for _, ingredient := range recipe.Ingredients {
 		consumed, err := storage.ConsumeRecipeItem(ctx, ingredient.ItemKey, ingredient.Quantity)
 		if err != nil {
-			return err
+			return recipeStorageError{
+				Storage: storage.RecipeInputDescriptor(),
+				ItemKey: ingredient.ItemKey,
+				Err:     err,
+			}
 		}
 		if !consumed {
-			return ErrInsufficientIngredient
+			return recipeStorageError{
+				Storage: storage.RecipeInputDescriptor(),
+				ItemKey: ingredient.ItemKey,
+				Err:     ErrInsufficientIngredient,
+			}
 		}
 	}
 
-	return storage.ProduceRecipeItem(ctx, recipe.OutputKey, recipe.Quantity)
+	if err := storage.ProduceRecipeItem(ctx, recipe.OutputKey, recipe.Quantity); err != nil {
+		return recipeStorageError{
+			Storage: storage.RecipeOutputDescriptor(),
+			ItemKey: recipe.OutputKey,
+			Err:     err,
+		}
+	}
+	return nil
 }
 
 func scaledRecipe(recipe RecipeDefinition, amount int) RecipeDefinition {
@@ -255,13 +324,82 @@ func (storage studentRecipeStorage) ProduceRecipeItem(ctx context.Context, itemK
 	return IncrementStudentItem(ctx, storage.querier, storage.userID, itemKey, quantity)
 }
 
+func (storage studentRecipeStorage) RecipeInputDescriptor() RecipeStorageDescriptor {
+	return RecipeStorageDescriptor{
+		Kind:      RecipeStorageKindPlayerInventory,
+		AppUserID: storage.userID,
+		Label:     "player inventory",
+	}
+}
+
+func (storage studentRecipeStorage) RecipeOutputDescriptor() RecipeStorageDescriptor {
+	return storage.RecipeInputDescriptor()
+}
+
+func (storage studentRecipeStorage) RecipeItemQuantity(ctx context.Context, itemKey string) (int, error) {
+	var quantity int
+	err := storage.querier.QueryRow(
+		ctx,
+		`
+			select coalesce(sum(sis.quantity), 0)::integer
+			from inventory_item_type iit
+			left join student_inventory_slot sis on sis.item_type_id = iit.id
+				and sis.app_user_id = $1
+			where iit.key = $2
+		`,
+		storage.userID,
+		itemKey,
+	).Scan(&quantity)
+	return quantity, err
+}
+
+type recipeStorageError struct {
+	Storage RecipeStorageDescriptor
+	ItemKey string
+	Err     error
+}
+
+func (err recipeStorageError) Error() string {
+	storage := recipeStorageLabel(err.Storage)
+	if err.ItemKey != "" {
+		return fmt.Sprintf("%s in %s for %s", err.Err, storage, err.ItemKey)
+	}
+	return fmt.Sprintf("%s in %s", err.Err, storage)
+}
+
+func (err recipeStorageError) Unwrap() error {
+	return err.Err
+}
+
+func recipeStorageLabel(storage RecipeStorageDescriptor) string {
+	if storage.Label != "" {
+		return storage.Label
+	}
+	switch storage.Kind {
+	case RecipeStorageKindPlayerInventory:
+		return "player inventory"
+	case RecipeStorageKindShopInput:
+		return "shop input storage"
+	case RecipeStorageKindShopStock:
+		return "shop stock"
+	default:
+		if storage.Kind != "" {
+			return storage.Kind
+		}
+		return "recipe storage"
+	}
+}
+
 type craftingItemMetadata struct {
 	Name        string
 	Description string
+	IconKey     string
+	MaxStack    int
+	Category    string
 	Quantity    int
 }
 
-func loadCraftingItemMetadata(ctx context.Context, querier Loader, userID int64, itemKeys map[string]bool) (map[string]craftingItemMetadata, error) {
+func loadCraftingItemMetadata(ctx context.Context, querier Loader, itemKeys map[string]bool) (map[string]craftingItemMetadata, error) {
 	keys := make([]string, 0, len(itemKeys))
 	for key := range itemKeys {
 		keys = append(keys, key)
@@ -273,13 +411,12 @@ func loadCraftingItemMetadata(ctx context.Context, querier Loader, userID int64,
 			select iit.key,
 				iit.name,
 				iit.description,
-				coalesce(sii.quantity, 0) as quantity
+				coalesce(iit.icon_key, '') as icon_key,
+				coalesce(iit.max_stack, 0) as max_stack,
+				coalesce(iit.category, '') as category
 			from inventory_item_type iit
-			left join student_inventory_item sii on sii.item_type_id = iit.id
-				and sii.app_user_id = $1
-			where iit.key = any($2)
+			where iit.key = any($1)
 		`,
-		userID,
 		keys,
 	)
 	if err != nil {
@@ -291,7 +428,7 @@ func loadCraftingItemMetadata(ctx context.Context, querier Loader, userID int64,
 	for rows.Next() {
 		var key string
 		var item craftingItemMetadata
-		if err := rows.Scan(&key, &item.Name, &item.Description, &item.Quantity); err != nil {
+		if err := rows.Scan(&key, &item.Name, &item.Description, &item.IconKey, &item.MaxStack, &item.Category); err != nil {
 			return nil, err
 		}
 		items[key] = item

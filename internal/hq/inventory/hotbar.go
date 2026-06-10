@@ -22,6 +22,9 @@ type HotbarItemResponse struct {
 	Quantity    int    `json:"quantity"`
 	EquipSlot   string `json:"equipSlot,omitempty"`
 	VisualKey   string `json:"visualKey,omitempty"`
+	IconKey     string `json:"iconKey,omitempty"`
+	MaxStack    int    `json:"maxStack,omitempty"`
+	Category    string `json:"category,omitempty"`
 }
 
 type HotbarSlotResponse struct {
@@ -52,7 +55,10 @@ func LoadStudentHotbar(ctx context.Context, db *pgxpool.Pool, userID int64) (Stu
 				iit.description,
 				coalesce(sii.quantity, 0) as quantity,
 				coalesce(iit.equip_slot, '') as equip_slot,
-				coalesce(iit.visual_key, '') as visual_key
+				coalesce(iit.visual_key, '') as visual_key,
+				coalesce(iit.icon_key, '') as icon_key,
+				coalesce(iit.max_stack, 0) as max_stack,
+				coalesce(iit.category, '') as category
 			from generate_series(1, $2) as slots(slot_index)
 			left join student_hotbar_slot shs on shs.app_user_id = $1
 				and shs.slot_index = slots.slot_index
@@ -79,7 +85,10 @@ func LoadStudentHotbar(ctx context.Context, db *pgxpool.Pool, userID int64) (Stu
 		var quantity int
 		var equipSlot string
 		var visualKey string
-		if err := rows.Scan(&slot, &key, &name, &description, &quantity, &equipSlot, &visualKey); err != nil {
+		var iconKey string
+		var maxStack int
+		var category string
+		if err := rows.Scan(&slot, &key, &name, &description, &quantity, &equipSlot, &visualKey, &iconKey, &maxStack, &category); err != nil {
 			return StudentHotbarResponse{}, err
 		}
 
@@ -92,6 +101,9 @@ func LoadStudentHotbar(ctx context.Context, db *pgxpool.Pool, userID int64) (Stu
 				Quantity:    quantity,
 				EquipSlot:   equipSlot,
 				VisualKey:   visualKey,
+				IconKey:     iconKey,
+				MaxStack:    maxStack,
+				Category:    category,
 			}
 		}
 		response.Slots = append(response.Slots, slotResponse)

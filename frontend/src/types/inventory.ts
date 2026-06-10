@@ -5,11 +5,59 @@ export interface InventoryItem {
   quantity: number
   equipSlot: EquipmentSlot | ''
   visualKey: string
+  iconKey: string
+  maxStack: number
+  category: string
   equipped: boolean
 }
 
 export interface StudentInventory {
   items: InventoryItem[]
+}
+
+export interface InventorySlot {
+  slotIndex: number
+  item: InventoryItem | null
+}
+
+export interface StudentInventorySlots {
+  slotCount: number
+  slots: InventorySlot[]
+  items: InventoryItem[]
+}
+
+export interface ContainerInventorySlots {
+  containerId: string
+  slotCount: number
+  revision: number
+  slots: InventorySlot[]
+}
+
+export type InventoryStorageKind = 'player_inventory' | 'container'
+
+export interface InventoryStorageRef {
+  kind: InventoryStorageKind
+  containerId?: string
+  slotIndex: number
+}
+
+export type InventoryMoveMode = 'move' | 'swap' | 'merge' | 'split' | 'auto'
+
+export interface InventoryMoveRequest {
+  source: InventoryStorageRef
+  destination: InventoryStorageRef
+  mode: InventoryMoveMode
+  quantity?: number
+}
+
+export interface InventorySlotItem {
+  key: string
+  name: string
+  description: string
+  iconKey: string
+  quantity?: number
+  maxStack?: number
+  category?: string
 }
 
 export interface HotbarSlot {
@@ -25,6 +73,9 @@ export interface CraftingIngredient {
   itemKey: string
   name: string
   description: string
+  iconKey: string
+  maxStack: number
+  category: string
   required: number
   owned: number
 }
@@ -35,13 +86,16 @@ export interface CraftingRecipe {
   description: string
   outputKey: string
   outputName: string
+  outputIconKey: string
+  outputMaxStack: number
+  outputCategory: string
   quantity: number
   canCraft: boolean
   ingredients: CraftingIngredient[]
 }
 
 export interface CraftRecipeResult {
-  inventory: StudentInventory
+  inventory: StudentInventorySlots
   recipes: CraftingRecipe[]
 }
 
@@ -53,6 +107,9 @@ export interface EquipmentItem {
   description: string
   equipSlot: EquipmentSlot
   visualKey: string
+  iconKey: string
+  maxStack: number
+  category: string
 }
 
 export interface EquippedSlot {

@@ -577,3 +577,36 @@ func (storage shopRecipeStorage) ProduceRecipeItem(ctx context.Context, itemKey 
 	})
 	return err
 }
+
+func (storage shopRecipeStorage) RecipeInputDescriptor() RecipeStorageDescriptor {
+	return RecipeStorageDescriptor{
+		Kind:   RecipeStorageKindShopInput,
+		ShopID: storage.shopID,
+		Label:  "shop input storage",
+	}
+}
+
+func (storage shopRecipeStorage) RecipeOutputDescriptor() RecipeStorageDescriptor {
+	return RecipeStorageDescriptor{
+		Kind:   RecipeStorageKindShopStock,
+		ShopID: storage.shopID,
+		Label:  "shop stock",
+	}
+}
+
+func (storage shopRecipeStorage) RecipeItemQuantity(ctx context.Context, itemKey string) (int, error) {
+	var quantity int
+	err := storage.querier.QueryRow(
+		ctx,
+		`
+			select coalesce(sisi.quantity, 0)
+			from inventory_item_type iit
+			left join shop_input_storage_item sisi on sisi.item_type_id = iit.id
+				and sisi.shop_id = $1
+			where iit.key = $2
+		`,
+		storage.shopID,
+		itemKey,
+	).Scan(&quantity)
+	return quantity, err
+}

@@ -23,8 +23,13 @@ Important columns:
 - `description`: display text.
 - `equip_slot`: nullable equipment slot. Current values are `gear`, `accessory`, and `tool`.
 - `visual_key`: nullable Sunny Town render key.
+- `icon_key`: nullable inventory/UI icon or asset key. Current seeded values match existing frontend icon suffixes.
+- `max_stack`: nullable maximum stack size for future slotted inventory behavior.
+- `category`: nullable inventory category. Current values include `consumable`, `gear`, `tool`, `resource`, and `building`.
 
 If `equip_slot` is null, the item is not equippable.
+
+`visual_key` is reserved for avatar/equipment rendering. Inventory UI should use `icon_key` for item icons instead of overloading `visual_key`.
 
 Current seeded item types:
 
@@ -35,7 +40,7 @@ Current seeded item types:
 
 ### `student_inventory_item`
 
-This table stores per-student item quantities.
+This table stores per-student aggregate item quantities.
 
 Primary key:
 
@@ -47,6 +52,24 @@ Rules:
 - API responses only show inventory rows with quantity greater than zero.
 - Equippable items are not consumed when equipped.
 - Cookies are consumed by pet feeding.
+- This remains the aggregate compatibility table while slotted inventory rolls out.
+
+### `student_inventory_slot`
+
+This table stores the durable player inventory grid.
+
+Primary key:
+
+- `(app_user_id, slot_index)`
+
+Rules:
+
+- Current player inventory has 30 slots.
+- Slot indexes are zero-based: `0` through `29`.
+- Occupied slots store `item_type_id` and positive `quantity`.
+- Empty slots are returned by the slot API even when empty rows are not stored.
+- The same item type may appear in multiple slots as separate stacks.
+- Inventory mutation helpers update this table and `student_inventory_item` together so current aggregate quantity flows remain compatible.
 
 ### `student_equipped_item`
 
@@ -127,6 +150,68 @@ Notes:
 - Non-equippable items have no `equipSlot` or `visualKey`.
 - `equipped` is true when the item is currently equipped in any slot.
 - Items with quantity zero are omitted.
+
+### `GET /api/student/inventory/slots`
+
+Student-authenticated endpoint.
+
+Returns all 30 player inventory slots plus the current aggregate item summary:
+
+```json
+{
+  "slotCount": 30,
+  "slots": [
+    {
+      "slotIndex": 0,
+      "item": {
+        "key": "rock",
+        "name": "Rock",
+        "description": "A sturdy rock from Forest Crossing.",
+        "quantity": 12,
+        "iconKey": "rock",
+        "maxStack": 64,
+        "category": "resource"
+      }
+    },
+    {
+      "slotIndex": 1,
+      "item": null
+    }
+  ],
+  "items": []
+}
+```
+
+Notes:
+
+- Empty slots have `item: null`.
+- Slot rows use zero-based `slotIndex`.
+- `items` follows the same aggregate item shape as `GET /api/student/inventory`.
+
+### `POST /api/student/inventory/move`
+
+Student-authenticated endpoint.
+
+Moves, swaps, or merges inventory stacks transactionally.
+
+Request:
+
+```json
+{
+  "source": { "kind": "player_inventory", "slotIndex": 0 },
+  "destination": { "kind": "player_inventory", "slotIndex": 5 },
+  "mode": "move"
+}
+```
+
+Modes:
+
+- `move`: source must be occupied and destination must be empty.
+- `swap`: source and destination must both be occupied.
+- `merge`: source and destination must both be occupied by the same item type, and the destination stack must have room under `maxStack`.
+- `auto`: server chooses move, merge, or swap based on current slot state.
+
+Returns the updated slotted inventory response. Stack splitting is not part of this endpoint yet.
 
 ### `GET /api/student/equipment`
 
@@ -246,6 +331,8 @@ Current recipes:
 ### `GET /api/student/crafting/recipes`
 
 Returns all known recipes with current ingredient ownership and `canCraft`.
+
+Recipe outputs and ingredients include item display metadata (`iconKey`, stack metadata, and category) so future slot UI can render recipe items without hard-coded catalog lookups.
 
 ### `POST /api/student/crafting/craft`
 

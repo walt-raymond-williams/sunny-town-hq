@@ -10,6 +10,7 @@ import (
 	hqhttpapi "hq/internal/hq/httpapi"
 	hqinventory "hq/internal/hq/inventory"
 	hqpet "hq/internal/hq/pet"
+	hqprogression "hq/internal/hq/progression"
 	hqsunnytownbridge "hq/internal/hq/sunnytownbridge"
 )
 
@@ -38,6 +39,8 @@ func (app *app) routes(webRoot string) http.Handler {
 		RequireRole: hqauth.RequireRole,
 	})
 	apiMux.HandleFunc("/api/student/inventory", inventoryHandlers.HandleStudentInventory)
+	apiMux.HandleFunc("/api/student/inventory/slots", inventoryHandlers.HandleStudentInventorySlots)
+	apiMux.HandleFunc("/api/student/inventory/move", inventoryHandlers.HandleStudentInventoryMove)
 	apiMux.HandleFunc("/api/student/hotbar", inventoryHandlers.HandleStudentHotbar)
 	apiMux.HandleFunc("/api/student/crafting/recipes", inventoryHandlers.HandleStudentCraftingRecipes)
 	apiMux.HandleFunc("/api/student/crafting/craft", inventoryHandlers.HandleCraftStudentRecipe)
@@ -46,6 +49,11 @@ func (app *app) routes(webRoot string) http.Handler {
 	apiMux.HandleFunc("/api/student/equipment/unequip", inventoryHandlers.HandleUnequipStudentItem)
 	apiMux.HandleFunc("/api/student/shop/purchase", inventoryHandlers.HandleStudentShopPurchase)
 	apiMux.HandleFunc("/api/student/shop/stock", inventoryHandlers.HandleStudentShopStock)
+	progressionHandlers := hqprogression.NewHTTPHandler(hqprogression.HTTPHandlerConfig{
+		Store:       app.db,
+		RequireRole: hqauth.RequireRole,
+	})
+	apiMux.HandleFunc("/api/student/sunny-town/progression", progressionHandlers.HandleStudentProgression)
 	apiMux.HandleFunc("/api/student/pet/feed", petHandlers.HandleFeedStudentPet)
 	apiMux.HandleFunc("/api/student/sunny-town/session", app.handleSunnyTownSession)
 	assignmentHandlers := hqassignments.NewHTTPHandler(hqassignments.HTTPHandlerConfig{
@@ -74,10 +82,13 @@ func (app *app) routes(webRoot string) http.Handler {
 	)
 	mux.HandleFunc("/api/internal/sunny-town/reward-events", sunnyTownBridge.HandleRewardEvent)
 	mux.HandleFunc("/api/internal/sunny-town/resource-events", sunnyTownBridge.HandleResourceEvent)
+	mux.HandleFunc("/api/internal/sunny-town/character-skill-xp", sunnyTownBridge.HandleCharacterSkillXP)
 	mux.HandleFunc("/api/internal/sunny-town/npc-job-production", sunnyTownBridge.HandleNPCJobProduction)
 	mux.HandleFunc("/api/internal/sunny-town/npc-job-production/progress", sunnyTownBridge.HandleNPCJobProductionProgress)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", sunnyTownBridge.HandleStudentEquipment)
 	mux.HandleFunc("/api/internal/sunny-town/inventory-quantity", sunnyTownBridge.HandleInventoryQuantity)
+	mux.HandleFunc("/api/internal/sunny-town/container-slots", sunnyTownBridge.HandleContainerSlots)
+	mux.HandleFunc("/api/internal/sunny-town/container-transfer", sunnyTownBridge.HandleContainerTransfer)
 	mux.HandleFunc("/api/internal/sunny-town/player-position", sunnyTownBridge.HandlePlayerPosition)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects", sunnyTownBridge.HandleMapObjects)
 	mux.HandleFunc("/api/internal/sunny-town/npc-characters/ensure", sunnyTownBridge.HandleEnsureNPCCharacters)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { normalizeContainerInventorySlots, normalizeStudentInventorySlots } from '../../api/inventoryApi'
 import {
   hotbarIndexForEvent,
   useSunnyTownInventoryActions,
@@ -28,8 +29,12 @@ import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useSunnyTownToolUseAnimation } from '../../composables/useSunnyTownToolUseAnimation'
 import { useSunnyTownWorldState } from '../../composables/useSunnyTownWorldState'
 import { useRouteAccess } from '../../composables/useRouteAccess'
+import { useCharacterProgressionStore } from '../../stores/characterProgression'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
+import type { InventoryStorageRef } from '../../types/inventory'
 import type {
+  SunnyTownContainerOpenMessage,
+  SunnyTownContainerTransferMessage,
   SunnyTownEquipmentChangedMessage,
   SunnyTownMap,
   SunnyTownMoveMessage,
@@ -63,6 +68,7 @@ const toolUseDurationMs = 360
 
 const router = useRouter()
 const { ensureStudentAccess } = useRouteAccess()
+const progressionStore = useCharacterProgressionStore()
 const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
 const localPlayerState = useSunnyTownLocalPlayer()
@@ -70,7 +76,9 @@ const placement = useSunnyTownPlacement()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
 const worldState = useSunnyTownWorldState()
-const chestInteractions = useSunnyTownChestInteractions()
+const chestInteractions = useSunnyTownChestInteractions({
+  sendOpen: sendChestOpen,
+})
 const selfId = ref('')
 const starBalance = ref(0)
 const gameToast = ref('')
@@ -123,16 +131,21 @@ const {
 })
 const {
   activeChest,
-  activeChestCapacity,
-  activeChestItemKey,
-  activeChestQuantity,
+  applyContainerError,
+  applyContainerOpened,
+  applyContainerTransferCommitted,
+  canDepositIntoActiveChest,
+  canWithdrawFromActiveChest,
   chestError,
   closeChest,
+  containerSlots,
   hasActiveOverlay: hasActiveChestOverlay,
   inspectChest,
   isLoadingChest,
+  isTransferringChestSlot,
   nearbyChest,
   refreshNearby: refreshNearbyChest,
+  startContainerTransfer,
 } = chestInteractions
 const canvas = ref<HTMLCanvasElement | null>(null)
 const {
@@ -147,16 +160,17 @@ const {
 } = worldState
 const placementHoverGrid = placement.hoverGrid
 const {
-  assignInventoryItemToSelectedHotbarSlot,
   clearSelectedHotbarSlot,
   craftInventoryRecipe,
   craftingPanelOpen,
-  equipInventoryItem,
+  equipInventorySlotDrop,
   inventoryOpen,
+  inventoryMenuTab,
   placingStoneBlock,
   selectedHotbarIndex,
   selectedHotbarItemKey,
   selectHotbarSlot,
+  setInventoryMenuTab,
   showAllCraftingRecipes,
   stoneBlockQuantity,
   toggleCraftingPanel,
@@ -188,6 +202,8 @@ const messageEffects = useSunnyTownMessageEffects({
   error,
   gameToast,
   inventoryStore,
+  progressionPanelOpen: inventoryOpen,
+  refreshProgression: () => progressionStore.loadProgression(),
   starBalance,
 })
 
@@ -271,11 +287,26 @@ function handleServerMessage(message: SunnyTownServerMessage) {
     draw()
     return
   }
+  if (message.type === 'container_opened') {
+    applyContainerOpened(message.container ? normalizeContainerInventorySlots(message.container) : null)
+    return
+  }
+  if (message.type === 'container_transfer_committed') {
+    if (message.inventory) {
+      inventoryStore.setInventorySlots(normalizeStudentInventorySlots(message.inventory))
+    }
+    applyContainerTransferCommitted(message.container ? normalizeContainerInventorySlots(message.container) : null)
+    return
+  }
   if (message.type === 'resource_failed') {
     messageEffects.applyResourceFailed()
     return
   }
   if (message.type === 'error') {
+    if (activeChest.value && message.code?.startsWith('container_')) {
+      applyContainerError(chestErrorMessage(message.code))
+      return
+    }
     error.value = message.code || 'Sunny Town received an invalid message'
   }
 }
@@ -463,11 +494,43 @@ async function handlePrimaryInteraction() {
   if (interactWithNearbyNpc()) {
     return
   }
-  if (await inspectChest(nearestChestToSelf())) {
+  if (inspectChest(nearestChestToSelf())) {
     handleInputCancel()
     return
   }
   useEquippedTool()
+}
+
+function sendChestOpen(chest: SunnyTownWorldObject): boolean {
+  if (!isSunnyTownSocketOpen()) {
+    return false
+  }
+  const message: SunnyTownContainerOpenMessage = {
+    type: 'container_open',
+    objectSource: chest.source,
+    objectId: chest.id,
+    clientTimeMs: Date.now(),
+  }
+  return sendSunnyTownMessage(JSON.stringify(message))
+}
+
+function transferChestStack(source: InventoryStorageRef, destination: InventoryStorageRef) {
+  if (!activeChest.value || !isSunnyTownSocketOpen()) {
+    applyContainerError('Sunny Town connection is not ready.')
+    return
+  }
+  startContainerTransfer()
+  const message: SunnyTownContainerTransferMessage = {
+    type: 'container_transfer',
+    objectSource: activeChest.value.source,
+    objectId: activeChest.value.id,
+    source,
+    destination,
+    clientTimeMs: Date.now(),
+  }
+  if (!sendSunnyTownMessage(JSON.stringify(message))) {
+    applyContainerError('Sunny Town connection is not ready.')
+  }
 }
 
 function interactWithNearbyNpc(): boolean {
@@ -664,6 +727,16 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable
 }
 
+function chestErrorMessage(code: string): string {
+  const messages: Record<string, string> = {
+    container_access_denied: 'Move closer to the chest to use this storage.',
+    container_open_failed: 'Storage could not be opened.',
+    container_transfer_failed: 'That item could not be moved.',
+    invalid_container_transfer: 'That storage move is not allowed.',
+  }
+  return messages[code] || 'Storage action failed.'
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
@@ -740,26 +813,30 @@ function backToPet() {
       />
       <SunnyTownChestPanel
         v-if="activeChest"
-        :capacity="activeChestCapacity"
+        :can-deposit="canDepositIntoActiveChest"
+        :can-withdraw="canWithdrawFromActiveChest"
         :chest="activeChest"
+        :container="containerSlots"
         :error="chestError"
         :is-loading="isLoadingChest"
-        :item-key="activeChestItemKey"
-        :quantity="activeChestQuantity"
+        :is-transferring="isTransferringChestSlot"
         @close="closeChest"
+        @transfer="transferChestStack"
       />
       <SunnyTownInventoryPanel
         v-if="inventoryOpen"
+        :active-tab="inventoryMenuTab"
         :crafting-panel-open="craftingPanelOpen"
         :selected-hotbar-index="selectedHotbarIndex"
         :show-all-crafting-recipes="showAllCraftingRecipes"
-        @assign-hotbar="assignInventoryItemToSelectedHotbarSlot"
         @clear-hotbar="clearSelectedHotbarSlot"
         @close="inventoryOpen = false"
         @craft-recipe="craftInventoryRecipe"
-        @equip-item="equipInventoryItem"
+        @equip-inventory-slot-drop="equipInventorySlotDrop"
+        @select-hotbar-slot="selectHotbarSlot"
         @toggle-crafting-panel="toggleCraftingPanel"
         @unequip-slot="unequipInventorySlot"
+        @update-active-tab="setInventoryMenuTab"
         @update-show-all-crafting-recipes="showAllCraftingRecipes = $event"
       />
   </SunnyTownHud>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HotbarSlot } from '../../types/inventory'
+import SunnyTownInventorySlot from './SunnyTownInventorySlot.vue'
 
 defineProps<{
   connected: boolean
@@ -55,29 +56,20 @@ defineEmits<{
         <span>Move with arrow keys or WASD - 1-5 select - E inventory - F/click use</span>
       </div>
       <div class="sunny-town-hotbar" aria-label="Hotbar">
-        <button
+        <SunnyTownInventorySlot
           v-for="(slot, index) in hotbarSlots"
           :key="slot.slot"
           class="sunny-town-hotbar__slot"
           :class="{
-            'sunny-town-hotbar__slot--selected': selectedHotbarIndex === index,
             'sunny-town-hotbar__slot--empty-item': slot.item && slot.item.quantity < 1,
           }"
-          type="button"
+          :item="slot.item"
+          :quantity="slot.item?.quantity"
+          :selected="selectedHotbarIndex === index"
+          :slot-label="String(slot.slot)"
+          variant="compact"
           @click="$emit('selectHotbarSlot', index)"
-        >
-          <span class="sunny-town-hotbar__number">{{ slot.slot }}</span>
-          <span
-            v-if="slot.item"
-            class="inventory-item__icon"
-            :class="`inventory-item__icon--${slot.item.key}`"
-            aria-hidden="true"
-          />
-          <span v-else class="sunny-town-hotbar__empty" aria-hidden="true" />
-          <strong v-if="slot.item && (slot.item.quantity > 1 || slot.item.quantity < 1)" class="sunny-town-hotbar__quantity">
-            {{ slot.item.quantity }}
-          </strong>
-        </button>
+        />
       </div>
       <slot />
     </div>
