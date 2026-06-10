@@ -256,6 +256,7 @@ func (client *client) handleToolUse(message clientMessage) {
 			event = &resourceEvent{
 				eventID:     eventID,
 				appUserID:   player.appUserID,
+				characterID: player.characterID,
 				roomID:      room.id,
 				mapID:       room.gameMap.ID,
 				nodeID:      target.id,

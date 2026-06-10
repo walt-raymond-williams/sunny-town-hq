@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import type { CharacterProgressionSkill } from '../../api/characterProgressionApi'
 import type { EquipmentSlot, EquippedSlot } from '../../types/inventory'
 import SunnyTownInventorySlot from './SunnyTownInventorySlot.vue'
 
@@ -8,6 +10,9 @@ const props = defineProps<{
   invalidDropSlot: EquipmentSlot | null
   isUpdatingEquipment: boolean
   pendingDropSlot: EquipmentSlot | null
+  progressionError: string
+  progressionLoading: boolean
+  skills: CharacterProgressionSkill[]
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +22,15 @@ const emit = defineEmits<{
   setDropTarget: [slot: EquipmentSlot]
   unequip: [slot: EquipmentSlot]
 }>()
+
+const miningSkill = computed(() => props.skills.find((skill) => skill.key === 'mining') || null)
+const miningProgress = computed(() => {
+  const skill = miningSkill.value
+  if (!skill || skill.nextLevelXp < 1) {
+    return 0
+  }
+  return Math.min(100, Math.round((skill.currentLevelXp / skill.nextLevelXp) * 100))
+})
 </script>
 
 <template>
@@ -88,18 +102,27 @@ const emit = defineEmits<{
     </div>
     <div class="sunny-town-character-preview__sheet" aria-label="Character growth">
       <p class="sunny-town-character-preview__title">Character</p>
+      <p v-if="progressionError" class="sunny-town-character-preview__error">{{ progressionError }}</p>
       <div class="sunny-town-character-preview__stats" aria-label="Stats-ready character area">
         <div class="sunny-town-character-preview__stat">
           <span>Stats</span>
-          <span class="sunny-town-character-preview__rail" aria-hidden="true" />
         </div>
         <div class="sunny-town-character-preview__stat">
-          <span>Skills</span>
-          <span class="sunny-town-character-preview__rail" aria-hidden="true" />
+          <span v-if="progressionLoading">Mining</span>
+          <template v-else-if="miningSkill">
+            <span>{{ miningSkill.name }} Lv {{ miningSkill.level }}</span>
+            <strong>{{ miningSkill.currentLevelXp }}/{{ miningSkill.nextLevelXp }}</strong>
+          </template>
+          <span v-else>Mining</span>
+          <span
+            class="sunny-town-character-preview__rail"
+            :class="{ 'sunny-town-character-preview__rail--filled': miningSkill }"
+            :style="{ '--progress': `${miningProgress}%` }"
+            aria-hidden="true"
+          />
         </div>
         <div class="sunny-town-character-preview__stat">
           <span>Traits</span>
-          <span class="sunny-town-character-preview__rail" aria-hidden="true" />
         </div>
       </div>
     </div>

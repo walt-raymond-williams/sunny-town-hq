@@ -9,6 +9,7 @@ import (
 
 	hqcharacters "hq/internal/hq/characters"
 	hqinventory "hq/internal/hq/inventory"
+	hqprogression "hq/internal/hq/progression"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -90,6 +91,11 @@ func (store Store) CommitResource(ctx context.Context, request ResourceEventRequ
 	})
 	if err != nil {
 		return ResourceEventResponse{}, err
+	}
+	if request.CharacterID > 0 {
+		if _, err := hqprogression.AwardMiningHarvestXPInTx(ctx, tx, request.EventID, request.CharacterID, request.RoomID, request.MapID, request.NodeID); err != nil {
+			return ResourceEventResponse{}, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return ResourceEventResponse{}, err

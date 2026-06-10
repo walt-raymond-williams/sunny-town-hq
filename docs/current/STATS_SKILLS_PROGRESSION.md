@@ -1,6 +1,6 @@
 # Sunny Town Stats And Skills Progression
 
-This is the accepted first design model for Sunny Town character progression. It is intentionally a design contract, not an implemented schema.
+This is the accepted first design model for Sunny Town character progression. The first vertical slice, mining XP for player characters, is now implemented.
 
 ## Direction
 
@@ -119,6 +119,8 @@ HQ should evaluate durable requirements when the action mutates HQ-owned state. 
 
 Recommended first implementation: mining XP for player characters.
 
+Status: `Implemented`
+
 Why this slice:
 
 - Mining already has server-authoritative validation in Sunny Town.
@@ -135,6 +137,16 @@ Suggested scope:
 5. Render real `mining` progress in the character panel.
 
 Do not add manual allocation, global character levels, broad balancing formulas, or NPC skill automation in the first slice.
+
+Implemented notes:
+
+- Migration `0018_character_progression.sql` adds `sunny_town_skill_definition`, `sunny_town_character_skill`, and `sunny_town_character_skill_xp_ledger`.
+- The first seeded skill is `mining`, with `100` XP per level.
+- Successful Sunny Town mining resource harvest commits award `10` mining XP in the same HQ transaction as the resource inventory ledger update when Sunny Town includes the validated player `character_id`.
+- XP award event IDs use the resource event identity and are idempotent; duplicate resource commit retries do not double-award XP.
+- HQ exposes `GET /api/student/sunny-town/progression` for the authenticated student's current character progression.
+- HQ exposes service-authenticated `POST /api/internal/sunny-town/character-skill-xp` for future server-validated progression events.
+- The Sunny Town character panel renders real Mining level and XP progress instead of placeholder skill progress.
 
 ## Open Questions
 

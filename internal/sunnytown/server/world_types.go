@@ -238,6 +238,7 @@ type rewardEvent struct {
 type resourceEvent struct {
 	eventID     string
 	appUserID   int64
+	characterID int64
 	roomID      string
 	mapID       string
 	nodeID      string

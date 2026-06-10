@@ -102,14 +102,17 @@ func TestRunMigrationsIntegration(t *testing.T) {
 					'sunny_town_character',
 					'sunny_town_npc_character',
 					'sunny_town_npc_job_production_ledger',
-					'sunny_town_npc_job_production_blocked_ledger'
+					'sunny_town_npc_job_production_blocked_ledger',
+					'sunny_town_skill_definition',
+					'sunny_town_character_skill',
+					'sunny_town_character_skill_xp_ledger'
 				)
 		`,
 	).Scan(&tableCount); err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if tableCount != 25 {
-		t.Fatalf("table count = %d, want 25", tableCount)
+	if tableCount != 28 {
+		t.Fatalf("table count = %d, want 28", tableCount)
 	}
 
 	var iconKey string

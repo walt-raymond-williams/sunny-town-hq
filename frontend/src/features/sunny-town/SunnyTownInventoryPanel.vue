@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { SunnyTownInventoryMenuTab } from '../../composables/useSunnyTownInventoryActions'
+import { useCharacterProgressionStore } from '../../stores/characterProgression'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { EquipmentSlot } from '../../types/inventory'
 import SunnyTownCharacterPreview from './SunnyTownCharacterPreview.vue'
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 }>()
 
 const inventoryStore = useStudentInventoryStore()
+const progressionStore = useCharacterProgressionStore()
 const selectedInventorySlotIndex = ref<number | null>(null)
 const splitQuantity = ref(1)
 const selectedHotbarItem = computed(() => inventoryStore.hotbarSlots[props.selectedHotbarIndex]?.item || null)
@@ -50,6 +52,10 @@ const visibleCraftingRecipes = computed(() => (
 watch(selectedStackQuantity, (quantity) => {
   splitQuantity.value = quantity > 1 ? Math.max(1, Math.floor(quantity / 2)) : 1
 }, { immediate: true })
+
+onMounted(() => {
+  void progressionStore.loadProgression()
+})
 
 function handleInventorySlotDragStart(slotIndex: number, event: DragEvent) {
   if (!inventoryStore.startInventorySlotDrag(slotIndex)) {
@@ -210,6 +216,9 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
           :invalid-drop-slot="inventoryStore.invalidEquipmentDropSlot"
           :is-updating-equipment="inventoryStore.isUpdatingEquipment"
           :pending-drop-slot="inventoryStore.pendingEquipmentDropSlot"
+          :progression-error="progressionStore.error"
+          :progression-loading="progressionStore.isLoading"
+          :skills="progressionStore.skills"
           @cancel-drag="inventoryStore.cancelInventorySlotDrag()"
           @clear-drop-target="inventoryStore.clearEquipmentDropTarget"
           @drop-equipment="handleEquipmentSlotDrop"

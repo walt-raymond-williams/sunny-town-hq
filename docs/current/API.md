@@ -20,6 +20,7 @@ Current route groups:
 - `/api/student/equipment/...`
 - `/api/student/shop/purchase`
 - `/api/student/shop/stock`
+- `/api/student/sunny-town/progression`
 - `/api/student/pet/feed`
 - `/api/student/sunny-town/session`
 - `/api/student/assignments/...`
@@ -38,6 +39,7 @@ Current public API handler ownership:
 - Identity/session helper routes: `cmd/hq/handlers.go`, backed by `internal/hq/auth` and `internal/hq/users`
 - Student profile and pet actions: `internal/hq/pet`
 - Inventory, hotbar, crafting, equipment, wallet, stock-backed shop purchases, and shop stock persistence: `internal/hq/inventory`
+- Sunny Town character progression read APIs: `internal/hq/progression`
 - Assignments and grading commands: `internal/hq/assignments`
 - Sunny Town session creation: `cmd/hq/handlers.go`, coordinated with `internal/hq/pet`, `internal/hq/inventory`, `internal/hq/sunnytownbridge`, and `internal/sunnytownauth`
 
@@ -60,6 +62,25 @@ Inventory item payloads returned by student inventory, hotbar, equipment, and cr
 ```
 
 `visualKey` remains the Sunny Town avatar/equipment render key. Inventory icons should use `iconKey`.
+
+`GET /api/student/sunny-town/progression` returns the authenticated student's current Sunny Town character progression. The first implemented skill is `mining`:
+
+```json
+{
+  "characterId": 42,
+  "skills": [
+    {
+      "key": "mining",
+      "name": "Mining",
+      "description": "Breaking rocks, harvesting stone and crystal, and using pickaxes.",
+      "xp": 10,
+      "level": 1,
+      "currentLevelXp": 10,
+      "nextLevelXp": 100
+    }
+  ]
+}
+```
 
 `GET /api/student/inventory/slots` returns the durable player inventory grid while preserving an aggregate summary for compatibility:
 
@@ -144,6 +165,7 @@ Current Sunny Town internal groups:
 
 - `/api/internal/sunny-town/reward-events`
 - `/api/internal/sunny-town/resource-events`
+- `/api/internal/sunny-town/character-skill-xp`
 - `/api/internal/sunny-town/npc-job-production`
 - `/api/internal/sunny-town/npc-job-production/progress`
 - `/api/internal/sunny-town/student-equipment`
@@ -190,6 +212,8 @@ The response includes updated `inventory` slots and updated `container` slots. S
 
 Cookie Shop input chests are a specialized container projection: `fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest` loads from `shop_input_storage_item`, and player deposits atomically consume the source player inventory stack while incrementing Cookie Shop input storage. The first supported ingredients are `flour` and `sugar`; deposits that would exceed the input capacity fail without partial mutation. Cookie Shop input withdraw remains out of scope.
 
+`POST /api/internal/sunny-town/character-skill-xp` is service-authenticated and awards idempotent character skill XP by `event_id`. It currently supports `skill_key: "mining"`. Normal mining harvests award XP inside the existing `/api/internal/sunny-town/resource-events` transaction when Sunny Town includes `character_id`; the standalone endpoint exists for future validated progression events.
+
 ## Sunny Town WebSocket
 
 Sunny Town exposes realtime gameplay at:
@@ -200,7 +224,7 @@ Sunny Town exposes realtime gameplay at:
 
 Browsers receive a short-lived join token from HQ before connecting. The token includes the authenticated `app_user_id` and the linked Sunny Town `character_id`. Sunny Town uses the character ID for realtime player identity while current durable inventory, wallet, and student-owned actions continue to use the app user ID. Client messages are requests; Sunny Town validates gameplay effects against server-accepted position and equipped/owned tools before committing durable effects to HQ.
 
-Future stats/skills APIs should follow `docs/current/STATS_SKILLS_PROGRESSION.md`: Sunny Town validates realtime action context first, then calls service-authenticated HQ endpoints to award idempotent character XP or evaluate durable requirements in the same transaction as HQ-owned mutations. Public student read APIs should expose only the authenticated student's current character progression.
+Stats/skills APIs follow `docs/current/STATS_SKILLS_PROGRESSION.md`: Sunny Town validates realtime action context first, then calls service-authenticated HQ endpoints to award idempotent character XP or evaluate durable requirements in the same transaction as HQ-owned mutations. Public student read APIs expose only the authenticated student's current character progression. Successful mining harvest resource events award `10` mining XP once per event.
 
 Container UI messages:
 

@@ -178,6 +178,28 @@ Tables, constraints, and indexes:
 
 Migration targets: `0006_sunny_town_characters.sql`, `0007_sunny_town_npc_characters.sql`
 
+### Sunny Town Character Progression
+
+Owner: `internal/hq/progression`, coordinated with `internal/hq/sunnytownbridge` and Sunny Town server-validated gameplay events.
+
+Tables, constraints, and indexes:
+
+- `sunny_town_skill_definition`
+- `sunny_town_skill_definition_key_check`
+- `sunny_town_skill_definition_display_name_check`
+- `sunny_town_skill_definition_xp_per_level_check`
+- `sunny_town_character_skill`
+- `sunny_town_character_skill_xp_check`
+- `sunny_town_character_skill_level_check`
+- `sunny_town_character_skill_xp_ledger`
+- `sunny_town_character_skill_xp_event_id_check`
+- `sunny_town_character_skill_xp_source_check`
+- `sunny_town_character_skill_xp_activity_key_check`
+- `sunny_town_character_skill_xp_amount_check`
+- `sunny_town_character_skill_xp_ledger_character_idx`
+
+Migration target: `0018_character_progression.sql`
+
 ## Migration Notes
 
 - Preserve statement order when adding future schema migrations.

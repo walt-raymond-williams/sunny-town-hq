@@ -50,6 +50,7 @@ type RewardCommitResponse struct {
 type ResourceCommitRequest struct {
 	EventID     string `json:"event_id"`
 	AppUserID   int64  `json:"app_user_id"`
+	CharacterID int64  `json:"character_id,omitempty"`
 	Source      string `json:"source"`
 	RoomID      string `json:"room_id"`
 	MapID       string `json:"map_id"`

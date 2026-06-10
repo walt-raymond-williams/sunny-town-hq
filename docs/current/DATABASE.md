@@ -50,8 +50,11 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `sunny_town_npc_character`: durable NPC character mapping by room and NPC key
 - `sunny_town_npc_job_production_ledger`: idempotent durable NPC job production events
 - `sunny_town_npc_job_production_blocked_ledger`: idempotent durable NPC job production attempts blocked by storage/recipe state
+- `sunny_town_skill_definition`: durable skill vocabulary and starter XP curve metadata
+- `sunny_town_character_skill`: current character skill XP/level projection
+- `sunny_town_character_skill_xp_ledger`: idempotent character skill XP award records
 
-Stats and skills progression is not implemented yet. The accepted design in `docs/current/STATS_SKILLS_PROGRESSION.md` expects future durable state and ledger tables to key progression by `sunny_town_character.id`, not by player-only or NPC-only identities.
+Stats and skills progression is implemented for the first mining slice. `sunny_town_skill_definition` seeds `mining`, `sunny_town_character_skill` stores the current XP/level projection keyed by `sunny_town_character.id`, and `sunny_town_character_skill_xp_ledger` stores idempotent XP awards. Broader stats, additional skills, manual allocation, and NPC skill automation remain deferred.
 
 ## Migration Layout
 
@@ -76,6 +79,7 @@ deploy/postgres/migrations/
   0015_inventory_item_metadata.sql
   0016_student_inventory_slots.sql
   0017_storage_containers.sql
+  0018_character_progression.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.
