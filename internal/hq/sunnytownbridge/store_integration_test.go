@@ -560,6 +560,43 @@ func TestContainerTransferEndpointUsesServiceAuthenticatedRequest(t *testing.T) 
 	}
 }
 
+func TestContainerSlotsEndpointUsesServiceAuthenticatedRequest(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into storage_container (
+				id,
+				kind,
+				room_id,
+				map_id,
+				fixture_id,
+				slot_count,
+				access_policy
+			)
+			values ('fixture:sunny-town-main:sunny-town-house-1:test-chest', 'fixture', 'sunny-town-main', 'sunny-town-house-1', 'test-chest', 10, 'room_shared')
+		`,
+	); err != nil {
+		t.Fatalf("seed storage container: %v", err)
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/internal/sunny-town/container-slots?container_id=fixture:sunny-town-main:sunny-town-house-1:test-chest", nil)
+	request.Header.Set("X-HQ-Service-Secret", "test-secret")
+	response := httptest.NewRecorder()
+
+	NewHTTPHandler(Store{DB: db}, "test-secret").HandleContainerSlots(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s, want 200", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"slotCount":10`) {
+		t.Fatalf("body = %s, want container slots", response.Body.String())
+	}
+}
+
 func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
 	db, cleanup := testBridgeDB(t)
 	defer cleanup()

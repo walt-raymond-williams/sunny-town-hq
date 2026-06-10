@@ -64,6 +64,111 @@ func (client *client) ownsInventoryItem(ctx context.Context, appUserID int64, it
 	return player.inventory[itemKey] > 0, nil
 }
 
+func (client *client) handleContainerOpen(message clientMessage) {
+	room := client.currentRoom()
+	if room == nil {
+		client.trySend(serverMessage{Type: "error", Code: "not_in_room"})
+		return
+	}
+	if client.server == nil {
+		client.trySend(serverMessage{Type: "error", Code: "container_open_failed"})
+		return
+	}
+
+	room.mu.Lock()
+	player := room.players[client.id]
+	containerID, ok := room.validatedContainerAccessLocked(player, message.ObjectSource, message.ObjectID, "read")
+	room.mu.Unlock()
+	if !ok {
+		client.trySend(serverMessage{Type: "error", Code: "container_access_denied"})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	container, err := client.server.hq.LoadContainerSlots(ctx, containerID)
+	cancel()
+	if err != nil {
+		log.Printf("open container player=%s object=%s:%s container=%s: %v", client.id, message.ObjectSource, message.ObjectID, containerID, err)
+		client.trySend(serverMessage{Type: "error", Code: "container_open_failed"})
+		return
+	}
+	client.trySend(serverMessage{
+		Type:      "container_opened",
+		Container: &container,
+	})
+}
+
+func (client *client) handleContainerTransfer(message clientMessage) {
+	room := client.currentRoom()
+	if room == nil {
+		client.trySend(serverMessage{Type: "error", Code: "not_in_room"})
+		return
+	}
+	if client.server == nil {
+		client.trySend(serverMessage{Type: "error", Code: "container_transfer_failed"})
+		return
+	}
+
+	action := containerTransferAction(message.Source, message.Destination)
+	if action == "" {
+		client.trySend(serverMessage{Type: "error", Code: "invalid_container_transfer"})
+		return
+	}
+
+	room.mu.Lock()
+	player := room.players[client.id]
+	if player == nil {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
+		return
+	}
+	appUserID := player.appUserID
+	containerID, ok := room.validatedContainerAccessLocked(player, message.ObjectSource, message.ObjectID, action)
+	room.mu.Unlock()
+	if !ok {
+		client.trySend(serverMessage{Type: "error", Code: "container_access_denied"})
+		return
+	}
+
+	source := message.Source
+	destination := message.Destination
+	if source.Kind == "container" {
+		source.ContainerID = containerID
+	}
+	if destination.Kind == "container" {
+		destination.ContainerID = containerID
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	transferred, err := client.server.hq.TransferContainerStack(ctx, containerTransferRequest{
+		AppUserID:   appUserID,
+		Source:      source,
+		Destination: destination,
+		Mode:        "auto",
+	})
+	cancel()
+	if err != nil {
+		log.Printf("transfer container player=%s object=%s:%s container=%s source=%#v destination=%#v: %v", client.id, message.ObjectSource, message.ObjectID, containerID, source, destination, err)
+		client.trySend(serverMessage{Type: "error", Code: "container_transfer_failed"})
+		return
+	}
+	client.trySend(serverMessage{
+		Type:      "container_transfer_committed",
+		Inventory: &transferred.Inventory,
+		Container: &transferred.Container,
+	})
+}
+
+func containerTransferAction(source, destination storageSlotRef) string {
+	if source.Kind == "player_inventory" && destination.Kind == "container" {
+		return "deposit"
+	}
+	if source.Kind == "container" && destination.Kind == "player_inventory" {
+		return "withdraw"
+	}
+	return ""
+}
+
 func (client *client) handleToolUse(message clientMessage) {
 	toolKey := strings.TrimSpace(message.ToolKey)
 	if toolKey == "" {

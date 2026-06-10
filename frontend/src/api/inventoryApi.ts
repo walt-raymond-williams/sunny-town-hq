@@ -1,5 +1,5 @@
 import { authJson, jsonOptions } from './http'
-import type { EquipmentSlot, InventoryItem, InventoryMoveRequest, InventorySlot, StudentInventory, StudentInventorySlots } from '../types/inventory'
+import type { ContainerInventorySlots, EquipmentSlot, InventoryItem, InventoryMoveRequest, InventorySlot, StudentInventory, StudentInventorySlots } from '../types/inventory'
 
 export interface InventoryItemResponse {
   key?: string
@@ -27,6 +27,13 @@ export interface StudentInventorySlotsResponse {
   slotCount?: number
   slots?: InventorySlotResponse[]
   items?: InventoryItemResponse[]
+}
+
+export interface ContainerInventorySlotsResponse {
+  containerId?: string
+  slotCount?: number
+  revision?: number
+  slots?: InventorySlotResponse[]
 }
 
 export async function getStudentInventory(): Promise<StudentInventory> {
@@ -59,6 +66,16 @@ export function normalizeStudentInventorySlots(response: StudentInventorySlotsRe
   }
 }
 
+export function normalizeContainerInventorySlots(response: ContainerInventorySlotsResponse): ContainerInventorySlots {
+  const slotCount = response.slotCount ?? 0
+  return {
+    containerId: response.containerId || '',
+    slotCount,
+    revision: response.revision ?? 0,
+    slots: normalizeInventorySlots(response.slots || [], slotCount),
+  }
+}
+
 export function normalizeInventoryItem(item: InventoryItemResponse): InventoryItem {
   return {
     key: item.key || '',
@@ -74,7 +91,7 @@ export function normalizeInventoryItem(item: InventoryItemResponse): InventoryIt
   }
 }
 
-function normalizeInventorySlots(slots: InventorySlotResponse[], slotCount: number): InventorySlot[] {
+export function normalizeInventorySlots(slots: InventorySlotResponse[], slotCount: number): InventorySlot[] {
   const byIndex = new Map(slots.map((slot) => [slot.slotIndex ?? -1, slot]))
   return Array.from({ length: slotCount }, (_, slotIndex) => {
     const slot = byIndex.get(slotIndex)

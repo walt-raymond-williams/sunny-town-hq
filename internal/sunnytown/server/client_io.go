@@ -44,6 +44,10 @@ func (client *client) readPump() {
 			client.handleToolUse(message)
 		case "place_object":
 			client.handlePlaceObject(message)
+		case "container_open":
+			client.handleContainerOpen(message)
+		case "container_transfer":
+			client.handleContainerTransfer(message)
 		case "ping":
 			_ = client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		default:

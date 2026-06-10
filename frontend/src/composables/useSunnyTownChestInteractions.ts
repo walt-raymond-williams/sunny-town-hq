@@ -1,17 +1,9 @@
 import { computed, ref } from 'vue'
+import type { ContainerInventorySlots } from '../types/inventory'
 import type { SunnyTownPlayer, SunnyTownWorldObject } from '../types/sunnyTown'
 
-interface ShopStockResult {
-  shopId: string
-  items: Array<{
-    itemKey: string
-    quantity: number
-    capacity: number
-  }>
-}
-
 interface SunnyTownChestInteractionOptions {
-  loadShopStock?: (shopId: string) => Promise<ShopStockResult>
+  sendOpen?: (chest: SunnyTownWorldObject) => boolean
 }
 
 export function useSunnyTownChestInteractions(options: SunnyTownChestInteractionOptions = {}) {
@@ -19,17 +11,12 @@ export function useSunnyTownChestInteractions(options: SunnyTownChestInteraction
   const activeChest = ref<SunnyTownWorldObject | null>(null)
   const chestOpen = ref(false)
   const chestError = ref('')
-  const chestStock = ref<Record<string, number>>({})
-  const chestStockCapacity = ref<Record<string, number>>({})
+  const containerSlots = ref<ContainerInventorySlots | null>(null)
   const isLoadingChest = ref(false)
+  const isTransferringChestSlot = ref(false)
 
-  const activeChestItemKey = computed(() => activeChest.value?.itemKey || '')
-  const activeChestQuantity = computed(() => (
-    activeChestItemKey.value ? chestStock.value[activeChestItemKey.value] ?? 0 : 0
-  ))
-  const activeChestCapacity = computed(() => (
-    activeChestItemKey.value ? chestStockCapacity.value[activeChestItemKey.value] ?? 0 : 0
-  ))
+  const canDepositIntoActiveChest = computed(() => activeChest.value?.storageRole === 'input' || activeChest.value?.storageRole === 'general')
+  const canWithdrawFromActiveChest = computed(() => activeChest.value?.storageRole === 'general')
 
   function hasActiveOverlay(): boolean {
     return Boolean(activeChest.value)
@@ -39,35 +26,65 @@ export function useSunnyTownChestInteractions(options: SunnyTownChestInteraction
     activeChest.value = null
     chestOpen.value = false
     chestError.value = ''
-    chestStock.value = {}
-    chestStockCapacity.value = {}
+    containerSlots.value = null
     isLoadingChest.value = false
+    isTransferringChestSlot.value = false
   }
 
-  async function inspectChest(chest: SunnyTownWorldObject | null): Promise<boolean> {
+  function inspectChest(chest: SunnyTownWorldObject | null): boolean {
     if (activeChest.value) {
       return true
     }
-    if (!chest || !chest.shopId) {
+    if (!chest) {
       return false
     }
     activeChest.value = chest
     chestOpen.value = true
     chestError.value = ''
-    chestStock.value = {}
-    chestStockCapacity.value = {}
+    containerSlots.value = null
     isLoadingChest.value = true
 
-    try {
-      const stock = await loadShopStock(chest.shopId)
-      chestStock.value = Object.fromEntries(stock.items.map((item) => [item.itemKey, item.quantity]))
-      chestStockCapacity.value = Object.fromEntries(stock.items.map((item) => [item.itemKey, item.capacity]))
-    } catch (caught) {
-      chestError.value = errorMessage(caught)
-    } finally {
+    if (!options.sendOpen?.(chest)) {
       isLoadingChest.value = false
+      chestError.value = 'Sunny Town connection is not ready.'
     }
     return true
+  }
+
+  function applyContainerOpened(container: ContainerInventorySlots | null | undefined) {
+    if (!activeChest.value) {
+      return
+    }
+    if (!container) {
+      chestError.value = 'Storage could not be loaded.'
+      isLoadingChest.value = false
+      return
+    }
+    containerSlots.value = container
+    chestError.value = ''
+    isLoadingChest.value = false
+  }
+
+  function startContainerTransfer() {
+    isTransferringChestSlot.value = true
+    chestError.value = ''
+  }
+
+  function applyContainerTransferCommitted(container: ContainerInventorySlots | null | undefined) {
+    isTransferringChestSlot.value = false
+    if (container) {
+      containerSlots.value = container
+    }
+    chestError.value = ''
+  }
+
+  function applyContainerError(message: string) {
+    if (!activeChest.value) {
+      return
+    }
+    chestError.value = message
+    isLoadingChest.value = false
+    isTransferringChestSlot.value = false
   }
 
   function refreshNearby(nextNearbyChest: SunnyTownWorldObject | null) {
@@ -77,29 +94,24 @@ export function useSunnyTownChestInteractions(options: SunnyTownChestInteraction
     }
   }
 
-  async function loadShopStock(shopId: string): Promise<ShopStockResult> {
-    if (options.loadShopStock) {
-      return options.loadShopStock(shopId)
-    }
-    const shopApi = await import('../api/shopApi')
-    return shopApi.getShopStock(shopId)
-  }
-
   return {
     activeChest,
-    activeChestCapacity,
-    activeChestItemKey,
-    activeChestQuantity,
+    applyContainerError,
+    applyContainerOpened,
+    applyContainerTransferCommitted,
+    canDepositIntoActiveChest,
+    canWithdrawFromActiveChest,
     chestError,
     chestOpen,
-    chestStock,
-    chestStockCapacity,
     closeChest,
+    containerSlots,
     hasActiveOverlay,
     inspectChest,
     isLoadingChest,
+    isTransferringChestSlot,
     nearbyChest,
     refreshNearby,
+    startContainerTransfer,
   }
 }
 
@@ -114,7 +126,7 @@ export function nearestSunnyTownChest(
   let nearest: SunnyTownWorldObject | null = null
   let nearestDistance = Number.POSITIVE_INFINITY
   for (const object of objects) {
-    if (!isInspectableOutputChest(object)) {
+    if (!isInspectableChest(object)) {
       continue
     }
     const center = worldObjectCenter(object)
@@ -128,14 +140,12 @@ export function nearestSunnyTownChest(
   return nearest
 }
 
-function isInspectableOutputChest(object: SunnyTownWorldObject): boolean {
+function isInspectableChest(object: SunnyTownWorldObject): boolean {
   return Boolean(
     object.active &&
     object.kind === 'chest' &&
     object.source === 'fixture' &&
-    object.storageRole === 'output' &&
-    object.shopId &&
-    object.itemKey,
+    (object.storageRole === 'output' || object.storageRole === 'input' || object.storageRole === 'general'),
   )
 }
 
@@ -151,8 +161,4 @@ function worldObjectCenter(object: SunnyTownWorldObject): { x: number; y: number
 
 function sameWorldObject(first: SunnyTownWorldObject, second: SunnyTownWorldObject | null): boolean {
   return Boolean(second && first.source === second.source && first.id === second.id)
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

@@ -942,12 +942,14 @@ h2 {
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
   left: 50%;
-  max-width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  max-width: min(860px, calc(100% - 24px));
+  overflow: auto;
   padding: 14px;
   position: absolute;
   top: 54px;
   transform: translateX(-50%);
-  width: 360px;
+  width: 860px;
   z-index: 6;
 }
 
@@ -1006,7 +1008,6 @@ h2 {
 .sunny-town-shop__header span,
 .sunny-town-chest-panel__header span,
 .sunny-town-schoolwork__header span,
-.sunny-town-chest-panel__item small,
 .sunny-town-shop__item small {
   color: rgba(255, 255, 255, 0.72);
   font-size: 13px;
@@ -1060,16 +1061,38 @@ h2 {
   padding: 8px 0;
 }
 
-.sunny-town-chest-panel__item {
-  align-items: center;
+.sunny-town-chest-panel__grids {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(300px, 1fr) minmax(240px, 0.85fr);
+}
+
+.sunny-town-chest-panel__storage {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.sunny-town-chest-panel__storage-header {
+  align-items: baseline;
+  display: flex;
   gap: 10px;
-  grid-template-columns: 38px minmax(0, 1fr);
-  min-height: 62px;
-  padding: 10px;
+  justify-content: space-between;
+}
+
+.sunny-town-chest-panel__storage-header span {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 12px;
+  text-align: right;
+}
+
+.sunny-town-chest-panel__grid {
+  grid-template-columns: repeat(auto-fit, 58px);
 }
 
 .sunny-town-shop__item + .sunny-town-shop__item {
@@ -1081,18 +1104,7 @@ h2 {
   margin: 0;
 }
 
-.sunny-town-chest-panel__item p {
-  font-weight: 700;
-  margin: 0;
-  text-transform: capitalize;
-}
-
 .sunny-town-shop__item small {
-  display: block;
-  line-height: 1.35;
-}
-
-.sunny-town-chest-panel__item small {
   display: block;
   line-height: 1.35;
 }
@@ -1441,5 +1453,24 @@ h2 {
     max-height: calc(100% - 24px);
     overflow: auto;
     top: 12px;
+  }
+
+  .sunny-town-chest-panel {
+    max-height: calc(100% - 24px);
+    top: 12px;
+  }
+
+  .sunny-town-chest-panel__grids {
+    grid-template-columns: 1fr;
+  }
+
+  .sunny-town-chest-panel__storage-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sunny-town-chest-panel__storage-header span {
+    text-align: left;
   }
 }

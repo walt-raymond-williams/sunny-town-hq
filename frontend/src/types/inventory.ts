@@ -26,10 +26,18 @@ export interface StudentInventorySlots {
   items: InventoryItem[]
 }
 
-export type InventoryStorageKind = 'player_inventory'
+export interface ContainerInventorySlots {
+  containerId: string
+  slotCount: number
+  revision: number
+  slots: InventorySlot[]
+}
+
+export type InventoryStorageKind = 'player_inventory' | 'container'
 
 export interface InventoryStorageRef {
   kind: InventoryStorageKind
+  containerId?: string
   slotIndex: number
 }
 

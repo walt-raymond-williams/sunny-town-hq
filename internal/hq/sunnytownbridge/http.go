@@ -172,6 +172,31 @@ func (handler HTTPHandler) HandleInventoryQuantity(w http.ResponseWriter, r *htt
 	writeJSON(w, http.StatusOK, map[string]any{"item_key": itemKey, "quantity": quantity})
 }
 
+func (handler HTTPHandler) HandleContainerSlots(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !handler.authorized(w, r) {
+		return
+	}
+
+	containerID := strings.TrimSpace(r.URL.Query().Get("container_id"))
+	if containerID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "container_id is required"})
+		return
+	}
+
+	response, err := hqinventory.LoadContainerSlots(r.Context(), handler.store.DB, containerID)
+	if err != nil {
+		log.Printf("load sunny town container slots: %v", err)
+		writeJSON(w, hqinventory.StatusForInventoryStorageError(err), map[string]string{"error": hqinventory.InventoryStorageErrorMessage(err)})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (handler HTTPHandler) HandleContainerTransfer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

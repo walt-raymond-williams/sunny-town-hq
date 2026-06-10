@@ -136,6 +136,7 @@ Current Sunny Town internal groups:
 - `/api/internal/sunny-town/npc-job-production/progress`
 - `/api/internal/sunny-town/student-equipment`
 - `/api/internal/sunny-town/inventory-quantity`
+- `/api/internal/sunny-town/container-slots`
 - `/api/internal/sunny-town/container-transfer`
 - `/api/internal/sunny-town/player-position`
 - `/api/internal/sunny-town/map-objects`
@@ -156,7 +157,9 @@ Current internal API handler ownership:
 - AI grading callback/context endpoints: `internal/hq/ai`
 - Shared internal service authentication helpers: `internal/serviceauth` and package-local endpoint checks where needed
 
-`POST /api/internal/sunny-town/container-transfer` is service-authenticated and is the first mutation path for player/container stack transfers. Sunny Town must validate live access before calling it. The request uses player and container slot descriptors:
+`GET /api/internal/sunny-town/container-slots?container_id=...` is service-authenticated and loads the authoritative slot grid for one durable container. Browser clients do not call this route directly; Sunny Town validates live chest access first, then calls HQ with the stable container ID.
+
+`POST /api/internal/sunny-town/container-transfer` is service-authenticated and is the mutation path for player/container stack transfers. Sunny Town must validate live access before calling it. The request uses player and container slot descriptors:
 
 ```json
 {
@@ -182,3 +185,10 @@ Sunny Town exposes realtime gameplay at:
 ```
 
 Browsers receive a short-lived join token from HQ before connecting. The token includes the authenticated `app_user_id` and the linked Sunny Town `character_id`. Sunny Town uses the character ID for realtime player identity while current durable inventory, wallet, and student-owned actions continue to use the app user ID. Client messages are requests; Sunny Town validates gameplay effects against server-accepted position and equipped/owned tools before committing durable effects to HQ.
+
+Container UI messages:
+
+- `container_open`: client sends `objectSource`, `objectId`, and `clientTimeMs`. Sunny Town validates the active chest and accepted player position, loads the HQ container slots, and replies with `container_opened` plus `container`.
+- `container_transfer`: client sends `objectSource`, `objectId`, `source`, `destination`, and `clientTimeMs`. Sunny Town validates the requested direction against the chest `storageRole`, calls HQ, and replies with `container_transfer_committed` plus updated `inventory` and `container` grids.
+
+Current chest roles are enforced server-side: `input` chests allow deposit, `output` chests are read-only for player container transfers, and `general` chests allow both deposit and withdraw.

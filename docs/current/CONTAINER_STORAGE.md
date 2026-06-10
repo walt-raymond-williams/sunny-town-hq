@@ -82,12 +82,14 @@ Sunny Town validates live access before any HQ mutation:
 5. Require distance to the chest center or bounds to be within `interactionRadius`.
 6. Reject if the chest fixture or placed object no longer exists or is no longer active.
 
-After validation, Sunny Town should either:
+After validation, Sunny Town calls service-authenticated HQ endpoints with the validated student ID, container ID, action, and slot descriptors. Browsers send only chest object identity and slot refs through the Sunny Town WebSocket; they do not call HQ container routes directly and cannot supply an authoritative container ID.
 
-- call a service-authenticated HQ transfer endpoint with the validated student ID, container ID, action, and slot descriptors, or
-- issue a short-lived access grant that HQ validates with the transfer request.
+Implemented Sunny Town WebSocket messages:
 
-The first implementation should prefer the service-authenticated Sunny Town to HQ call unless the frontend architecture needs direct HTTP transfers.
+- `container_open`: validates `read` access and returns authoritative container slots.
+- `container_transfer`: validates `deposit` or `withdraw` from the transfer direction, calls HQ, and returns updated player inventory slots plus updated container slots.
+
+Current chest roles are narrow by design: `input` allows deposit, `output` is read-only for player transfers, and `general` allows both deposit and withdraw.
 
 ## Conflict Handling
 
