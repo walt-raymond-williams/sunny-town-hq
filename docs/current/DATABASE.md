@@ -51,6 +51,8 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `sunny_town_npc_job_production_ledger`: idempotent durable NPC job production events
 - `sunny_town_npc_job_production_blocked_ledger`: idempotent durable NPC job production attempts blocked by storage/recipe state
 
+Stats and skills progression is not implemented yet. The accepted design in `docs/current/STATS_SKILLS_PROGRESSION.md` expects future durable state and ledger tables to key progression by `sunny_town_character.id`, not by player-only or NPC-only identities.
+
 ## Migration Layout
 
 Current structure:

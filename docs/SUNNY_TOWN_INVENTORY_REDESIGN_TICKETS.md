@@ -700,6 +700,8 @@ Acceptance criteria:
 Implementation notes:
 - This should remain separate from base inventory redesign.
 - Future examples include mining, crafting, cooking/baking, and NPC work.
+- Accepted model captured in `docs/current/STATS_SKILLS_PROGRESSION.md`.
+- First recommended vertical slice: award player `mining` XP from server-authoritative resource harvest events.
 
 Verification:
 - Documentation review.
