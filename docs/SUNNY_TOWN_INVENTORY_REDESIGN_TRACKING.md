@@ -41,54 +41,54 @@ Snapshot refreshed: 2026-06-10 after completing issue #34.
 
 ### Closed
 
-- #8 Add item metadata needed for grid inventory  
+- #8 Add item metadata needed for grid inventory
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/8
 
-- #9 Design slotted player inventory schema and compatibility plan  
+- #9 Design slotted player inventory schema and compatibility plan
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/9
 
-- #10 Implement slotted player inventory persistence  
+- #10 Implement slotted player inventory persistence
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/10
 
-- #11 Add inventory stack move, swap, and merge API  
+- #11 Add inventory stack move, swap, and merge API
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/11
 
-- #12 Build reusable inventory slot component  
+- #12 Build reusable inventory slot component
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/12
 
-- #13 Render Sunny Town inventory as a grid  
+- #13 Render Sunny Town inventory as a grid
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/13
 
-- #15 Add inventory drag/drop state and API integration  
+- #15 Add inventory drag/drop state and API integration
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/15
 
-- #16 Replace hotbar assignment buttons with drop targets  
+- #16 Replace hotbar assignment buttons with drop targets
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/16
 
-- #17 Replace equipment buttons with drop targets  
+- #17 Replace equipment buttons with drop targets
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/17
 
-- #18 Remove legacy button-based inventory assignment UI  
+- #18 Remove legacy button-based inventory assignment UI
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/18
 
-- #19 Add character preview shell  
-  Completed in `20bac63`.  
+- #19 Add character preview shell
+  Completed in `20bac63`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/19
 
-- #20 Add stats-ready character panel  
-  Completed in `19e9957`.  
+- #20 Add stats-ready character panel
+  Completed in `19e9957`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/20
 
-- #21 Expand E menu to use the play area  
-  Completed in `985ef34`.  
+- #21 Expand E menu to use the play area
+  Completed in `985ef34`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/21
 
-- #22 Move equipment slots into character preview card  
-  Completed in `c2c5247`.  
+- #22 Move equipment slots into character preview card
+  Completed in `c2c5247`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/22
 
-- #23 Fix stone block crafting failure after slotted inventory migration  
-  Completed in `8da662b`.  
+- #23 Fix stone block crafting failure after slotted inventory migration
+  Completed in `8da662b`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/23
 
 - #24 Redesign crafting panel for inventory menu
@@ -141,9 +141,9 @@ Snapshot refreshed: 2026-06-10 after completing issue #34.
 
 ### Open
 
-- #6 Keep current-state docs synchronized with architecture changes  
-  Status: `status:ready`  
-  Use this existing issue for inventory redesign integration-review/current-doc cleanup instead of creating a duplicate.  
+- #6 Keep current-state docs synchronized with architecture changes
+  Status: `status:ready`
+  Use this existing issue for inventory redesign integration-review/current-doc cleanup instead of creating a duplicate.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/6
 
 ## Recommended Next Management Step

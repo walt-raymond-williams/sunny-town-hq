@@ -81,14 +81,14 @@ Snapshot refreshed: <YYYY-MM-DD after issue #N creation/closure>.
 
 ### Closed
 
-- #<number> <title>  
+- #<number> <title>
   <url>
 
 ### Open
 
-- #<number> <title>  
-  Status: `status:ready`  
-  Blocked by: #<number>, closed  
+- #<number> <title>
+  Status: `status:ready`
+  Blocked by: #<number>, closed
   <url>
 
 ## Recommended Next Management Step
