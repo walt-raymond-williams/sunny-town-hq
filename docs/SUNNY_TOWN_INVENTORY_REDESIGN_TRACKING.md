@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 while working issue #6.
+Snapshot refreshed: 2026-06-10 after completing issue #6.
 
 ### Closed
 
@@ -139,13 +139,14 @@ Snapshot refreshed: 2026-06-10 while working issue #6.
   Completed in `78f0a45`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/34
 
-### Open
-
 - #6 Keep current-state docs synchronized with architecture changes
-  Status: `status:in-progress`
-  Use this existing issue for inventory redesign integration-review/current-doc cleanup instead of creating a duplicate.
+  Completed in `7d0f545`.
   Handoff: `docs/CURRENT_STATE_DOCS_SYNC_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/6
+
+### Open
+
+No open inventory redesign issues remain.
 
 ## Recommended Next Management Step
 
