@@ -759,6 +759,184 @@ func TestMoveStudentInventoryStackRejectsInvalidOperations(t *testing.T) {
 	}
 }
 
+func TestTransferPlayerContainerStackMovesIntoContainer(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	containerID := seedStorageContainer(t, ctx, db, "fixture:sunny-town-main:sunny-town-house-1:test-chest", 10)
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 5); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	response, err := TransferPlayerContainerStack(ctx, db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: containerID,
+			SlotIndex:   2,
+		},
+		Mode: "move",
+	})
+	if err != nil {
+		t.Fatalf("transfer to container: %v", err)
+	}
+	if response.Inventory.Slots[0].Item != nil {
+		t.Fatalf("player slot 0 = %#v, want empty after transfer", response.Inventory.Slots[0])
+	}
+	if response.Container.Slots[2].Item == nil || response.Container.Slots[2].Item.Key != "rock" || response.Container.Slots[2].Item.Quantity != 5 {
+		t.Fatalf("container slot 2 = %#v, want 5 rocks", response.Container.Slots[2])
+	}
+	if response.Container.Revision != 1 {
+		t.Fatalf("container revision = %d, want 1", response.Container.Revision)
+	}
+	if got := quantityForStudentItem(t, ctx, db, 123, "rock"); got != 0 {
+		t.Fatalf("student aggregate rock = %d, want 0", got)
+	}
+}
+
+func TestTransferPlayerContainerStackWithdrawsIntoPlayerInventory(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	containerID := seedStorageContainer(t, ctx, db, "fixture:sunny-town-main:sunny-town-house-1:test-chest", 10)
+	seedContainerSlot(t, ctx, db, containerID, 0, "rock", 3)
+
+	response, err := TransferPlayerContainerStack(ctx, db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: containerID,
+			SlotIndex:   0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 4,
+		},
+		Mode: "move",
+	})
+	if err != nil {
+		t.Fatalf("transfer from container: %v", err)
+	}
+	if response.Container.Slots[0].Item != nil {
+		t.Fatalf("container slot 0 = %#v, want empty after withdrawal", response.Container.Slots[0])
+	}
+	if response.Inventory.Slots[4].Item == nil || response.Inventory.Slots[4].Item.Key != "rock" || response.Inventory.Slots[4].Item.Quantity != 3 {
+		t.Fatalf("player slot 4 = %#v, want 3 rocks", response.Inventory.Slots[4])
+	}
+	if got := quantityForStudentItem(t, ctx, db, 123, "rock"); got != 3 {
+		t.Fatalf("student aggregate rock = %d, want 3", got)
+	}
+}
+
+func TestTransferPlayerContainerStackMergesCompatibleStacks(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	containerID := seedStorageContainer(t, ctx, db, "fixture:sunny-town-main:sunny-town-house-1:test-chest", 10)
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 10); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	seedContainerSlot(t, ctx, db, containerID, 0, "rock", 60)
+
+	response, err := TransferPlayerContainerStack(ctx, db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: containerID,
+			SlotIndex:   0,
+		},
+		Mode: "merge",
+	})
+	if err != nil {
+		t.Fatalf("merge into container: %v", err)
+	}
+	if response.Inventory.Slots[0].Item == nil || response.Inventory.Slots[0].Item.Quantity != 6 {
+		t.Fatalf("player slot 0 = %#v, want 6 rocks after partial merge", response.Inventory.Slots[0])
+	}
+	if response.Container.Slots[0].Item == nil || response.Container.Slots[0].Item.Quantity != 64 {
+		t.Fatalf("container slot 0 = %#v, want full 64 rock stack", response.Container.Slots[0])
+	}
+	if got := quantityForStudentItem(t, ctx, db, 123, "rock"); got != 6 {
+		t.Fatalf("student aggregate rock = %d, want 6", got)
+	}
+}
+
+func TestTransferPlayerContainerStackRejectsInvalidContainer(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	_, err := TransferPlayerContainerStack(context.Background(), db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: "missing",
+			SlotIndex:   0,
+		},
+		Mode: "move",
+	})
+	if !errors.Is(err, ErrContainerNotFound) {
+		t.Fatalf("transfer error = %v, want ErrContainerNotFound", err)
+	}
+}
+
+func TestTransferPlayerContainerStackRejectsFullTargetAndRollsBack(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	containerID := seedStorageContainer(t, ctx, db, "fixture:sunny-town-main:sunny-town-house-1:test-chest", 10)
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 2); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	seedContainerSlot(t, ctx, db, containerID, 0, "rock", 64)
+
+	_, err := TransferPlayerContainerStack(ctx, db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: containerID,
+			SlotIndex:   0,
+		},
+		Mode: "merge",
+	})
+	if !errors.Is(err, ErrInventoryStackFull) {
+		t.Fatalf("transfer error = %v, want ErrInventoryStackFull", err)
+	}
+	slots, err := LoadStudentSlots(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load student slots: %v", err)
+	}
+	if slots.Slots[0].Item == nil || slots.Slots[0].Item.Quantity != 2 {
+		t.Fatalf("player slot 0 = %#v, want rollback to 2 rocks", slots.Slots[0])
+	}
+	container, err := LoadContainerSlots(ctx, db, containerID)
+	if err != nil {
+		t.Fatalf("load container slots: %v", err)
+	}
+	if container.Revision != 0 {
+		t.Fatalf("container revision = %d, want no increment after failed transfer", container.Revision)
+	}
+}
+
 func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
@@ -951,6 +1129,69 @@ func TestCraftStudentRecipeRejectsUnknownRecipe(t *testing.T) {
 	_, err := CraftStudentRecipe(context.Background(), db, 123, CraftRecipeRequest{RecipeKey: "missing"})
 	if err != ErrUnknownRecipe {
 		t.Fatalf("craft recipe error = %v, want ErrUnknownRecipe", err)
+	}
+}
+
+func quantityForStudentItem(t *testing.T, ctx context.Context, db *pgxpool.Pool, userID int64, itemKey string) int {
+	t.Helper()
+	var quantity int
+	if err := db.QueryRow(
+		ctx,
+		`
+			select coalesce(sii.quantity, 0)
+			from inventory_item_type iit
+			left join student_inventory_item sii on sii.item_type_id = iit.id
+				and sii.app_user_id = $1
+			where iit.key = $2
+		`,
+		userID,
+		itemKey,
+	).Scan(&quantity); err != nil {
+		t.Fatalf("load student item quantity %q: %v", itemKey, err)
+	}
+	return quantity
+}
+
+func seedStorageContainer(t *testing.T, ctx context.Context, db *pgxpool.Pool, containerID string, slotCount int) string {
+	t.Helper()
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into storage_container (
+				id,
+				kind,
+				room_id,
+				map_id,
+				fixture_id,
+				slot_count,
+				access_policy
+			)
+			values ($1, 'fixture', 'sunny-town-main', 'sunny-town-house-1', 'test-chest', $2, 'room_shared')
+		`,
+		containerID,
+		slotCount,
+	); err != nil {
+		t.Fatalf("seed storage container: %v", err)
+	}
+	return containerID
+}
+
+func seedContainerSlot(t *testing.T, ctx context.Context, db *pgxpool.Pool, containerID string, slotIndex int, itemKey string, quantity int) {
+	t.Helper()
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into storage_container_slot (container_id, slot_index, item_type_id, quantity)
+			select $1, $2, iit.id, $4
+			from inventory_item_type iit
+			where iit.key = $3
+		`,
+		containerID,
+		slotIndex,
+		itemKey,
+		quantity,
+	); err != nil {
+		t.Fatalf("seed container slot: %v", err)
 	}
 }
 
@@ -1290,6 +1531,32 @@ func testInventoryDB(t *testing.T) (*pgxpool.Pool, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (shop_id, item_type_id),
 			constraint shop_input_storage_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table storage_container (
+			id text primary key,
+			kind text not null,
+			room_id text not null,
+			map_id text not null,
+			fixture_id text null,
+			placed_object_id text null,
+			shop_id text null,
+			storage_role text null,
+			location_id text null,
+			owner_app_user_id bigint null references app_user(id) on delete cascade,
+			slot_count integer not null,
+			access_policy text not null,
+			revision bigint not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now()
+		)`,
+		`create table storage_container_slot (
+			container_id text not null references storage_container(id) on delete cascade,
+			slot_index integer not null,
+			item_type_id bigint null references inventory_item_type(id) on delete restrict,
+			quantity integer null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (container_id, slot_index)
 		)`,
 		`create table student_equipped_item (
 			app_user_id bigint not null references app_user(id) on delete cascade,

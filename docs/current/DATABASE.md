@@ -42,6 +42,8 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_hotbar_slot`: current student hotbar slots
 - `shop_stock_item`: current HQ-owned shop item quantities
 - `shop_stock_ledger`: idempotent shop stock production/adjustment records
+- `storage_container`: durable container/chest identity, ownership/access metadata, slot count, and revision
+- `storage_container_slot`: durable container/chest item slots
 - `student_sunny_town_position`: last accepted Sunny Town map position
 - `sunny_town_map_object`: persisted placed map objects
 - `sunny_town_character`: shared Sunny Town character identity for player-controlled and future NPC actors
@@ -71,6 +73,7 @@ deploy/postgres/migrations/
   0014_seed_cookie_keeper_input_storage.sql
   0015_inventory_item_metadata.sql
   0016_student_inventory_slots.sql
+  0017_storage_containers.sql
 ```
 
 Fresh Docker databases apply the ordered SQL files through the Postgres init entrypoint. Existing databases are upgraded by the HQ startup migration runner using the same files.
@@ -151,11 +154,11 @@ Current rules:
 - Student crafting recipe availability and execution use `student_inventory_slot` as the authoritative quantity source.
 - Inventory mutation helpers update slot rows and aggregate rows in the same transaction.
 
-## Planned Container Storage
+## Container Storage
 
-General chest/container storage is designed in `docs/current/CONTAINER_STORAGE.md`.
+General chest/container storage is implemented according to `docs/current/CONTAINER_STORAGE.md`.
 
-Accepted future schema direction:
+Current schema:
 
 - `storage_container` owns stable container identity, access policy, slot count, revision, and fixture/placed-object/shop metadata.
 - `storage_container_slot` owns durable item stacks for each container slot.

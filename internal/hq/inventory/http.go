@@ -384,6 +384,29 @@ func InventoryMoveErrorMessage(err error) string {
 	}
 }
 
+func StatusForInventoryStorageError(err error) int {
+	if IsInventoryMoveClientError(err) ||
+		errors.Is(err, ErrContainerNotFound) ||
+		errors.Is(err, ErrInvalidContainer) ||
+		errors.Is(err, ErrInventoryFull) {
+		return http.StatusBadRequest
+	}
+	return http.StatusInternalServerError
+}
+
+func InventoryStorageErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrContainerNotFound):
+		return "container not found"
+	case errors.Is(err, ErrInvalidContainer):
+		return "invalid container"
+	case errors.Is(err, ErrInventoryFull):
+		return "not enough room in inventory"
+	default:
+		return InventoryMoveErrorMessage(err)
+	}
+}
+
 func EquipmentErrorMessage(err error) string {
 	switch {
 	case errors.Is(err, ErrInvalidEquipmentSlot):

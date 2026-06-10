@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -513,6 +514,52 @@ func TestSunnyTownNPCJobProductionProgressEndpointRequiresServiceSecret(t *testi
 	}
 }
 
+func TestContainerTransferEndpointUsesServiceAuthenticatedRequest(t *testing.T) {
+	db, cleanup := testBridgeDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := hqinventory.IncrementStudentItem(ctx, db, 123, "rock", 4); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into storage_container (
+				id,
+				kind,
+				room_id,
+				map_id,
+				fixture_id,
+				slot_count,
+				access_policy
+			)
+			values ('fixture:sunny-town-main:sunny-town-house-1:test-chest', 'fixture', 'sunny-town-main', 'sunny-town-house-1', 'test-chest', 10, 'room_shared')
+		`,
+	); err != nil {
+		t.Fatalf("seed storage container: %v", err)
+	}
+
+	body := []byte(`{
+		"appUserId": 123,
+		"source": {"kind": "player_inventory", "slotIndex": 0},
+		"destination": {"kind": "container", "containerId": "fixture:sunny-town-main:sunny-town-house-1:test-chest", "slotIndex": 0},
+		"mode": "move"
+	}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/internal/sunny-town/container-transfer", bytes.NewReader(body))
+	request.Header.Set("X-HQ-Service-Secret", "test-secret")
+	response := httptest.NewRecorder()
+
+	NewHTTPHandler(Store{DB: db}, "test-secret").HandleContainerTransfer(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s, want 200", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"containerId":"fixture:sunny-town-main:sunny-town-house-1:test-chest"`) {
+		t.Fatalf("body = %s, want container response", response.Body.String())
+	}
+}
+
 func TestSaveSunnyTownPositionUpsertsLastLocation(t *testing.T) {
 	db, cleanup := testBridgeDB(t)
 	defer cleanup()
@@ -979,6 +1026,32 @@ func testBridgeDB(t *testing.T) (*pgxpool.Pool, func()) {
 			updated_at timestamptz not null default now(),
 			primary key (shop_id, item_type_id),
 			constraint shop_input_storage_item_quantity_nonnegative check (quantity >= 0)
+		)`,
+		`create table storage_container (
+			id text primary key,
+			kind text not null,
+			room_id text not null,
+			map_id text not null,
+			fixture_id text null,
+			placed_object_id text null,
+			shop_id text null,
+			storage_role text null,
+			location_id text null,
+			owner_app_user_id bigint null references app_user(id) on delete cascade,
+			slot_count integer not null,
+			access_policy text not null,
+			revision bigint not null default 0,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now()
+		)`,
+		`create table storage_container_slot (
+			container_id text not null references storage_container(id) on delete cascade,
+			slot_index integer not null,
+			item_type_id bigint null references inventory_item_type(id) on delete restrict,
+			quantity integer null,
+			created_at timestamptz not null default now(),
+			updated_at timestamptz not null default now(),
+			primary key (container_id, slot_index)
 		)`,
 		`create table student_sunny_town_position (
 			app_user_id bigint primary key references app_user(id) on delete cascade,

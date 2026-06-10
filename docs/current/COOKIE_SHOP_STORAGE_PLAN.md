@@ -22,6 +22,7 @@ Current implemented baseline:
 - HQ records accepted but blocked production attempts in `sunny_town_npc_job_production_blocked_ledger`.
 - HQ stores saleable Cookie Keeper cookies in durable `shop_stock_item` / `shop_stock_ledger` tables.
 - HQ stores Cookie Shop input ingredients in durable `shop_input_storage_item`.
+- HQ also seeds general `storage_container` identities for the Cookie Shop input and output chest fixtures so future chest-grid and transfer APIs can address the fixtures by stable container ID.
 - Player purchases from `cookie-keeper-shop` consume durable stock before granting a cookie.
 - `cookie-keeper-shop` cookie output storage has a logical capacity of `64`.
 - `cookie-keeper-shop` input storage has a logical capacity of `64` total units.

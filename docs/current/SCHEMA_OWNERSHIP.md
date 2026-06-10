@@ -101,8 +101,20 @@ Tables, constraints, and indexes:
 - `shop_input_storage_item`
 - `shop_input_storage_item_shop_id_check`
 - `shop_input_storage_item_quantity_nonnegative`
+- `storage_container`
+- `storage_container_kind_check`
+- `storage_container_storage_role_check`
+- `storage_container_slot_count_check`
+- `storage_container_access_policy_check`
+- `storage_container_fixture_identity_check`
+- `storage_container_placed_identity_check`
+- `storage_container_shop_identity_check`
+- `storage_container_slot`
+- `storage_container_slot_index_check`
+- `storage_container_slot_quantity_check`
+- `storage_container_slot_empty_or_occupied_check`
 
-Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`, `0012_cookie_recipe_inputs.sql`, `0014_seed_cookie_keeper_input_storage.sql`, `0015_inventory_item_metadata.sql`, `0016_student_inventory_slots.sql`
+Migration targets: `0003_inventory_equipment.sql`, `0009_shop_stock.sql`, `0010_seed_cookie_keeper_shop_stock.sql`, `0011_shop_input_storage.sql`, `0012_cookie_recipe_inputs.sql`, `0014_seed_cookie_keeper_input_storage.sql`, `0015_inventory_item_metadata.sql`, `0016_student_inventory_slots.sql`, `0017_storage_containers.sql`
 
 ### Pet
 

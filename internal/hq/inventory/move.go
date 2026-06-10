@@ -9,6 +9,7 @@ import (
 )
 
 const inventoryStorageKindPlayer = "player_inventory"
+const inventoryStorageKindContainer = "container"
 
 var (
 	ErrUnsupportedInventoryMoveMode = errors.New("unsupported inventory move mode")
@@ -22,8 +23,9 @@ var (
 )
 
 type InventorySlotDescriptor struct {
-	Kind      string `json:"kind"`
-	SlotIndex int    `json:"slotIndex"`
+	Kind        string `json:"kind"`
+	SlotIndex   int    `json:"slotIndex"`
+	ContainerID string `json:"containerId,omitempty"`
 }
 
 type InventoryMoveRequest struct {

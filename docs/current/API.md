@@ -136,6 +136,7 @@ Current Sunny Town internal groups:
 - `/api/internal/sunny-town/npc-job-production/progress`
 - `/api/internal/sunny-town/student-equipment`
 - `/api/internal/sunny-town/inventory-quantity`
+- `/api/internal/sunny-town/container-transfer`
 - `/api/internal/sunny-town/player-position`
 - `/api/internal/sunny-town/map-objects`
 - `/api/internal/sunny-town/map-objects/place`
@@ -154,6 +155,23 @@ Current internal API handler ownership:
 - Sunny Town internal endpoints: `internal/hq/sunnytownbridge`
 - AI grading callback/context endpoints: `internal/hq/ai`
 - Shared internal service authentication helpers: `internal/serviceauth` and package-local endpoint checks where needed
+
+`POST /api/internal/sunny-town/container-transfer` is service-authenticated and is the first mutation path for player/container stack transfers. Sunny Town must validate live access before calling it. The request uses player and container slot descriptors:
+
+```json
+{
+  "appUserId": 123,
+  "source": { "kind": "player_inventory", "slotIndex": 0 },
+  "destination": {
+    "kind": "container",
+    "containerId": "fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest",
+    "slotIndex": 0
+  },
+  "mode": "auto"
+}
+```
+
+The response includes updated `inventory` slots and updated `container` slots. Supported modes match inventory moves: `move`, `swap`, `merge`, and `auto`.
 
 ## Sunny Town WebSocket
 

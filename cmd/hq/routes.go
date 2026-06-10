@@ -80,6 +80,7 @@ func (app *app) routes(webRoot string) http.Handler {
 	mux.HandleFunc("/api/internal/sunny-town/npc-job-production/progress", sunnyTownBridge.HandleNPCJobProductionProgress)
 	mux.HandleFunc("/api/internal/sunny-town/student-equipment", sunnyTownBridge.HandleStudentEquipment)
 	mux.HandleFunc("/api/internal/sunny-town/inventory-quantity", sunnyTownBridge.HandleInventoryQuantity)
+	mux.HandleFunc("/api/internal/sunny-town/container-transfer", sunnyTownBridge.HandleContainerTransfer)
 	mux.HandleFunc("/api/internal/sunny-town/player-position", sunnyTownBridge.HandlePlayerPosition)
 	mux.HandleFunc("/api/internal/sunny-town/map-objects", sunnyTownBridge.HandleMapObjects)
 	mux.HandleFunc("/api/internal/sunny-town/npc-characters/ensure", sunnyTownBridge.HandleEnsureNPCCharacters)

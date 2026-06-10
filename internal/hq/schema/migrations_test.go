@@ -95,6 +95,8 @@ func TestRunMigrationsIntegration(t *testing.T) {
 					'shop_stock_item',
 					'shop_stock_ledger',
 					'shop_input_storage_item',
+					'storage_container',
+					'storage_container_slot',
 					'student_sunny_town_position',
 					'sunny_town_map_object',
 					'sunny_town_character',
@@ -106,8 +108,8 @@ func TestRunMigrationsIntegration(t *testing.T) {
 	).Scan(&tableCount); err != nil {
 		t.Fatalf("count tables: %v", err)
 	}
-	if tableCount != 23 {
-		t.Fatalf("table count = %d, want 23", tableCount)
+	if tableCount != 25 {
+		t.Fatalf("table count = %d, want 25", tableCount)
 	}
 
 	var iconKey string

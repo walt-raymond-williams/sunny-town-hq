@@ -13,7 +13,7 @@ This document is the accepted design contract for Sunny Town container and chest
 
 Durable containers should be identified by an HQ-owned `container_id`.
 
-Recommended first schema:
+Implemented first schema:
 
 ```text
 storage_container
@@ -53,8 +53,8 @@ The ID is the durable key. Fixture ID, placed object ID, room, map, shop, role, 
 
 Cookie Shop fixtures are the first concrete container anchors:
 
-- `cookie-shop-output-chest` maps to `fixture:sunny-town:sunny-town-house-1:cookie-shop-output-chest` and represents `shop:cookie-keeper-shop:output`.
-- `cookie-shop-input-chest` maps to `fixture:sunny-town:sunny-town-house-1:cookie-shop-input-chest` and represents `shop:cookie-keeper-shop:input`.
+- `cookie-shop-output-chest` maps to `fixture:sunny-town-main:sunny-town-house-1:cookie-shop-output-chest` and represents `shop:cookie-keeper-shop:output`.
+- `cookie-shop-input-chest` maps to `fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest` and represents `shop:cookie-keeper-shop:input`.
 
 Current `shop_stock_item` and `shop_input_storage_item` tables remain the specialized storage backing for Cookie Shop stock/input until a migration intentionally moves them into general container slots. Do not duplicate quantities in fixture metadata or Sunny Town runtime state.
 
@@ -93,7 +93,7 @@ The first implementation should prefer the service-authenticated Sunny Town to H
 
 HQ must serialize mutations that touch the same player inventory and container storage.
 
-Recommended first behavior:
+Implemented first behavior:
 
 - Run each transfer in one database transaction.
 - Lock the source and destination slot rows for update.
@@ -113,12 +113,12 @@ Recommended shape:
 ```json
 {
   "source": { "kind": "player_inventory", "slotIndex": 0 },
-  "destination": { "kind": "container", "containerId": "fixture:sunny-town:sunny-town-house-1:cookie-shop-input-chest", "slotIndex": 3 },
+  "destination": { "kind": "container", "containerId": "fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest", "slotIndex": 3 },
   "mode": "auto"
 }
 ```
 
-Supported storage kinds should begin with:
+Supported storage kinds currently begin with:
 
 - `player_inventory`
 - `container`
@@ -134,7 +134,7 @@ Recommended future descriptor:
 ```json
 {
   "kind": "container",
-  "containerId": "fixture:sunny-town:sunny-town-house-1:cookie-shop-input-chest"
+  "containerId": "fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest"
 }
 ```
 
