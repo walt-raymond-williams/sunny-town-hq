@@ -30,6 +30,11 @@ Goal: make Sunny Town NPCs visibly follow understandable routines and production
 
 Best first step: discovery against current NPC movement/pathing/drive/job-production docs and code.
 
+Discovery docs:
+
+- `docs/NPC_LIFE_WORK_SIMULATION_DISCOVERY.md`
+- `docs/NPC_LIFE_WORK_SIMULATION_ROADMAP.md`
+
 ### #39 Epic: Demo Polish And Portfolio Readiness
 
 Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/39
