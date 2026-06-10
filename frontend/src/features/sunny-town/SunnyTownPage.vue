@@ -29,6 +29,7 @@ import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
 import { useSunnyTownToolUseAnimation } from '../../composables/useSunnyTownToolUseAnimation'
 import { useSunnyTownWorldState } from '../../composables/useSunnyTownWorldState'
 import { useRouteAccess } from '../../composables/useRouteAccess'
+import { useCharacterProgressionStore } from '../../stores/characterProgression'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { InventoryStorageRef } from '../../types/inventory'
 import type {
@@ -67,6 +68,7 @@ const toolUseDurationMs = 360
 
 const router = useRouter()
 const { ensureStudentAccess } = useRouteAccess()
+const progressionStore = useCharacterProgressionStore()
 const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
 const localPlayerState = useSunnyTownLocalPlayer()
@@ -200,6 +202,8 @@ const messageEffects = useSunnyTownMessageEffects({
   error,
   gameToast,
   inventoryStore,
+  progressionPanelOpen: inventoryOpen,
+  refreshProgression: () => progressionStore.loadProgression(),
   starBalance,
 })
 
