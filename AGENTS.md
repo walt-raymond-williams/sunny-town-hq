@@ -49,6 +49,7 @@ For broad new features or redesigns, do discovery before implementation:
 - Agents assigned to a GitHub issue should work from the issue, read the linked repo docs for context, and update docs only when decisions or current-state architecture change.
 - Prefer small tickets that one agent can complete and verify. Split design/schema decisions from implementation when the implementation depends on unresolved architecture.
 - For multi-ticket features, use `docs/GITHUB_TRACKING_DOC_GUIDE.md` to create tracking docs and per-issue handoff docs.
+- For the repeatable customer-intake to GitHub-issue to worker-agent loop, use `docs/CODEX_GITHUB_HARNESS_PLAN.md`, `docs/CODEX_GITHUB_HARNESS_PROMPTS.md`, and `docs/CODEX_GITHUB_HARNESS_DEMO.md`.
 
 ## GitHub Issue Workflow
 
