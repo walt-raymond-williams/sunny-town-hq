@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after closing #25 and unblocking #31.
+Snapshot refreshed: 2026-06-10 after closing #26 and unblocking #29.
 
 ### Closed
 
@@ -99,14 +99,11 @@ Snapshot refreshed: 2026-06-10 after closing #25 and unblocking #31.
   Completed in `99fe784`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/25
 
-### Open
-
 - #26 Design general container storage schema and access contract
-  Status: `status:ready`
-  Blocked by: #10, closed
-  Related: #29, #30, #25
-  Handoff: `docs/SUNNY_TOWN_CONTAINER_STORAGE_CONTRACT_HANDOFF.md`
+  Completed in `52481cf`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/26
+
+### Open
 
 - #27 Add tabbed E menu shell
   Status: `status:ready`
@@ -122,8 +119,8 @@ Snapshot refreshed: 2026-06-10 after closing #25 and unblocking #31.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
 
 - #29 Add player to container transfer operations
-  Status: `status:blocked`
-  Blocked by: #26 and #11
+  Status: `status:ready`
+  Blocked by: #26 and #11, closed
   Related: #30, #25
   Handoff: `docs/SUNNY_TOWN_PLAYER_CONTAINER_TRANSFER_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
@@ -153,18 +150,18 @@ Snapshot refreshed: 2026-06-10 after closing #25 and unblocking #31.
 
 Assign agents to the first ready batch:
 
-- #26 Design general container storage schema and access contract
 - #27 Add tabbed E menu shell
 - #28 Define stats and skills progression model
+- #29 Add player to container transfer operations
 - #31 Add Cookie Shop input storage
 
 Why:
 
 - These issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
-- #26 unlocks player-container transfer operations and chest grid rendering.
 - #27 and #28 can run independently of the storage/container backend work.
+- #29 was unblocked by #26 and can now implement transfer operations against the accepted container contract.
 - #31 was unblocked by #25 and can now build on the recipe storage descriptor foundation.
-- Keep #29, #30, and #32 blocked until their prerequisites close.
+- Keep #30 and #32 blocked until their prerequisites close.
 
 ## Useful Commands
 
