@@ -101,52 +101,60 @@ Snapshot refreshed: 2026-06-10 after uploading roadmap issues #25-#32.
   Status: `status:ready`
   Blocked by: #11, closed
   Related: #31, #32, #29, #24
+  Handoff: `docs/SUNNY_TOWN_STORAGE_CONTEXT_CRAFTING_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/25
 
 - #26 Design general container storage schema and access contract
   Status: `status:ready`
   Blocked by: #10, closed
   Related: #29, #30, #25
+  Handoff: `docs/SUNNY_TOWN_CONTAINER_STORAGE_CONTRACT_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/26
 
 - #27 Add tabbed E menu shell
   Status: `status:ready`
   Blocked by: #13, closed
   Related: #19, #28
+  Handoff: `docs/SUNNY_TOWN_TABBED_E_MENU_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/27
 
 - #28 Define stats and skills progression model
   Status: `status:ready`
   Related: #20, #32
+  Handoff: `docs/SUNNY_TOWN_STATS_SKILLS_MODEL_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
 
 - #29 Add player to container transfer operations
   Status: `status:blocked`
   Blocked by: #26 and #11
   Related: #30, #25
+  Handoff: `docs/SUNNY_TOWN_PLAYER_CONTAINER_TRANSFER_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
 
 - #30 Render chest inventory grid
   Status: `status:blocked`
   Blocked by: #12 and #29
   Related: #13, #24
+  Handoff: `docs/SUNNY_TOWN_CHEST_INVENTORY_GRID_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
 
 - #31 Add Cookie Shop input storage
   Status: `status:blocked`
   Blocked by: #25
   Related: #29, #32
+  Handoff: `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_STORAGE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/31
 
 - #32 Add ingredient-aware Cookie Shop production
   Status: `status:blocked`
   Blocked by: #25 and #31
   Related: #24, #28
+  Handoff: `docs/SUNNY_TOWN_INGREDIENT_AWARE_COOKIE_PRODUCTION_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/32
 
 ## Recommended Next Management Step
 
-Create handoff docs for the first ready batch, then assign agents:
+Assign agents to the first ready batch:
 
 - #25 Add storage context to crafting recipe APIs
 - #26 Design general container storage schema and access contract
@@ -155,7 +163,7 @@ Create handoff docs for the first ready batch, then assign agents:
 
 Why:
 
-- These four issues are marked `status:ready` and do not depend on any newly opened issue.
+- These four issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
 - #25 unlocks Cookie Shop input storage and ingredient-aware production.
 - #26 unlocks player-container transfer operations and chest grid rendering.
 - #27 and #28 can run independently of the storage/container backend work.
@@ -193,3 +201,11 @@ git pull
 - `docs/SUNNY_TOWN_CHARACTER_EQUIPMENT_RAIL_HANDOFF.md`
 - `docs/SUNNY_TOWN_CRAFTING_SLOTTED_INVENTORY_BUG_HANDOFF.md`
 - `docs/SUNNY_TOWN_CRAFTING_PANEL_REDESIGN_HANDOFF.md`
+- `docs/SUNNY_TOWN_STORAGE_CONTEXT_CRAFTING_HANDOFF.md`
+- `docs/SUNNY_TOWN_CONTAINER_STORAGE_CONTRACT_HANDOFF.md`
+- `docs/SUNNY_TOWN_TABBED_E_MENU_HANDOFF.md`
+- `docs/SUNNY_TOWN_STATS_SKILLS_MODEL_HANDOFF.md`
+- `docs/SUNNY_TOWN_PLAYER_CONTAINER_TRANSFER_HANDOFF.md`
+- `docs/SUNNY_TOWN_CHEST_INVENTORY_GRID_HANDOFF.md`
+- `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_STORAGE_HANDOFF.md`
+- `docs/SUNNY_TOWN_INGREDIENT_AWARE_COOKIE_PRODUCTION_HANDOFF.md`
