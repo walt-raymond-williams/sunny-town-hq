@@ -38,32 +38,6 @@ func (client *client) refreshEquipment() {
 	room.broadcastSnapshot(time.Now())
 }
 
-func (client *client) ownsInventoryItem(ctx context.Context, appUserID int64, itemKey string) (bool, error) {
-	itemKey = strings.TrimSpace(itemKey)
-	if itemKey == "" || appUserID < 1 {
-		return false, nil
-	}
-	if client.server != nil {
-		quantity, err := client.server.hq.LoadStudentInventoryQuantity(ctx, appUserID, itemKey)
-		if err != nil {
-			return false, err
-		}
-		return quantity > 0, nil
-	}
-
-	room := client.currentRoom()
-	if room == nil {
-		return false, nil
-	}
-	room.mu.Lock()
-	defer room.mu.Unlock()
-	player := room.players[client.id]
-	if player == nil {
-		return false, nil
-	}
-	return player.inventory[itemKey] > 0, nil
-}
-
 func (client *client) handleContainerOpen(message clientMessage) {
 	room := client.currentRoom()
 	if room == nil {
@@ -189,20 +163,9 @@ func (client *client) handleToolUse(message clientMessage) {
 		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
 		return
 	}
-	appUserID := player.appUserID
 	room.mu.Unlock()
 
 	if toolKey != "pickaxe" {
-		return
-	}
-	ownsTool, err := client.ownsInventoryItem(context.Background(), appUserID, toolKey)
-	if err != nil {
-		log.Printf("validate tool ownership player=%s tool=%s: %v", client.id, toolKey, err)
-		client.trySend(serverMessage{Type: "error", Code: "tool_validation_failed"})
-		return
-	}
-	if !ownsTool {
-		client.trySend(serverMessage{Type: "error", Code: "tool_not_owned"})
 		return
 	}
 
@@ -215,6 +178,11 @@ func (client *client) handleToolUse(message clientMessage) {
 	if player == nil {
 		room.mu.Unlock()
 		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
+		return
+	}
+	if player.equipment[equipmentSlotTool] != toolKey {
+		room.mu.Unlock()
+		client.trySend(serverMessage{Type: "error", Code: "tool_not_equipped"})
 		return
 	}
 	if !player.lastToolUseAt.IsZero() && now.Sub(player.lastToolUseAt) < resourceToolCooldown {

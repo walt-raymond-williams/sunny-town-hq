@@ -55,7 +55,7 @@ func TestRoomTargetsNearestBreakableWorldObject(t *testing.T) {
 	}
 }
 
-func TestMiningRequiresOwnedPickaxe(t *testing.T) {
+func TestMiningRequiresEquippedPickaxe(t *testing.T) {
 	room := testRoom(miningTestMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
@@ -74,7 +74,7 @@ func TestMiningRequiresOwnedPickaxe(t *testing.T) {
 	}
 }
 
-func TestMiningAllowsOwnedPickaxeWithoutEquipmentSlot(t *testing.T) {
+func TestMiningRejectsOwnedPickaxeWithoutEquipmentSlot(t *testing.T) {
 	room := testRoom(miningTestMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
@@ -84,8 +84,13 @@ func TestMiningAllowsOwnedPickaxeWithoutEquipmentSlot(t *testing.T) {
 
 	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
 
-	if room.resourceNodes["rock-node-001"].hitCount != 1 {
-		t.Fatalf("hitCount = %d, want 1", room.resourceNodes["rock-node-001"].hitCount)
+	if room.resourceNodes["rock-node-001"].hitCount != 0 {
+		t.Fatalf("hitCount = %d, want 0", room.resourceNodes["rock-node-001"].hitCount)
+	}
+	select {
+	case event := <-room.resourceEvents:
+		t.Fatalf("unexpected resource event: %#v", event)
+	default:
 	}
 }
 
