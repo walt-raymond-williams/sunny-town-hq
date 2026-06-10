@@ -30,21 +30,21 @@ Goal: make Sunny Town NPCs visibly follow understandable routines and production
 
 Best first step: discovery against current NPC movement/pathing/drive/job-production docs and code.
 
-### #39 Epic: Player And NPC Progression
+### #39 Epic: Demo Polish And Portfolio Readiness
 
 Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/39
-
-Goal: expand activity-driven progression beyond the first mining XP slice, including skills/stats that can influence recipes, tools, jobs, and actions.
-
-Best first step: choose the next vertical slice after mining XP without broad balance work.
-
-### #40 Epic: Demo Polish And Portfolio Readiness
-
-Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/40
 
 Goal: make the project easy to understand, run, review, and demo from the repository front door.
 
 Best first step: consolidate existing demo-polish issues into a concrete demo path and asset plan.
+
+### #40 Epic: Player And NPC Progression
+
+Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/40
+
+Goal: expand activity-driven progression beyond the first mining XP slice, including skills/stats that can influence recipes, tools, jobs, and actions.
+
+Best first step: choose the next vertical slice after mining XP without broad balance work.
 
 ### #41 Epic: Teacher/Student Learning Loop
 
