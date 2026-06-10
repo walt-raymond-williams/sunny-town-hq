@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after closing #28.
+Snapshot refreshed: 2026-06-10 after creating follow-up issues #33, #34, and #35.
 
 ### Closed
 
@@ -129,16 +129,44 @@ Snapshot refreshed: 2026-06-10 after closing #28.
 
 ### Open
 
-No open inventory redesign issues remain in this tracking snapshot.
+- #33 Add Cookie Shop input replenishment flow  
+  Status: `status:ready`  
+  Handoff: `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_REPLENISHMENT_HANDOFF.md`  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/33
+
+- #34 Implement mining XP progression vertical slice  
+  Status: `status:ready`  
+  Handoff: `docs/SUNNY_TOWN_MINING_XP_VERTICAL_SLICE_HANDOFF.md`  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/34
+
+- #35 Add inventory stack splitting  
+  Status: `status:ready`  
+  Handoff: `docs/SUNNY_TOWN_STACK_SPLITTING_HANDOFF.md`  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/35
+
+- #6 Keep current-state docs synchronized with architecture changes  
+  Status: `status:ready`  
+  Use this existing issue for inventory redesign integration-review/current-doc cleanup instead of creating a duplicate.  
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/6
 
 ## Recommended Next Management Step
 
-No ready inventory redesign issues remain.
+Start issue #33:
+
+`Add Cookie Shop input replenishment flow`
 
 Why:
 
-- The tracked inventory redesign issues have been completed on `codex/inventory-redesign-dev`.
-- Remaining open `status:ready` issues in GitHub are outside this inventory feature branch unless the roadmap is expanded.
+- It directly extends completed Cookie Shop storage and ingredient-aware production work from #31 and #32.
+- It turns recipe-aware production from a seeded-storage demo into a replenishable gameplay loop.
+- It is narrower and less cross-cutting than #34, making it a good next implementation agent task.
+
+Suggested sequence:
+
+1. #33 Add Cookie Shop input replenishment flow.
+2. #35 Add inventory stack splitting.
+3. #34 Implement mining XP progression vertical slice.
+4. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
 
 ## Useful Commands
 
@@ -148,6 +176,9 @@ Why:
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 26 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 27 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 28 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 33 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 34 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 35 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -180,3 +211,6 @@ git pull
 - `docs/SUNNY_TOWN_CHEST_INVENTORY_GRID_HANDOFF.md`
 - `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_STORAGE_HANDOFF.md`
 - `docs/SUNNY_TOWN_INGREDIENT_AWARE_COOKIE_PRODUCTION_HANDOFF.md`
+- `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_REPLENISHMENT_HANDOFF.md`
+- `docs/SUNNY_TOWN_MINING_XP_VERTICAL_SLICE_HANDOFF.md`
+- `docs/SUNNY_TOWN_STACK_SPLITTING_HANDOFF.md`
