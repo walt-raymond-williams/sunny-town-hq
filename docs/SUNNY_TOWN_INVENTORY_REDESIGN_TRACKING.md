@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after creating follow-up issues #33, #34, and #35.
+Snapshot refreshed: 2026-06-10 after completing issue #33.
 
 ### Closed
 
@@ -127,12 +127,11 @@ Snapshot refreshed: 2026-06-10 after creating follow-up issues #33, #34, and #35
   Completed in `e210246`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/32
 
-### Open
-
-- #33 Add Cookie Shop input replenishment flow  
-  Status: `status:ready`  
-  Handoff: `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_REPLENISHMENT_HANDOFF.md`  
+- #33 Add Cookie Shop input replenishment flow
+  Completed in `ac8f7be`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/33
+
+### Open
 
 - #34 Implement mining XP progression vertical slice  
   Status: `status:ready`  
@@ -151,22 +150,21 @@ Snapshot refreshed: 2026-06-10 after creating follow-up issues #33, #34, and #35
 
 ## Recommended Next Management Step
 
-Start issue #33:
+Start issue #35:
 
-`Add Cookie Shop input replenishment flow`
+`Add inventory stack splitting`
 
 Why:
 
-- It directly extends completed Cookie Shop storage and ingredient-aware production work from #31 and #32.
-- It turns recipe-aware production from a seeded-storage demo into a replenishable gameplay loop.
-- It is narrower and less cross-cutting than #34, making it a good next implementation agent task.
+- It is the next narrower inventory interaction slice before the broader mining XP progression work.
+- It builds directly on the completed slotted inventory, drag/drop, and container transfer flows.
+- It improves both player inventory and container deposit ergonomics without changing progression schema.
 
 Suggested sequence:
 
-1. #33 Add Cookie Shop input replenishment flow.
-2. #35 Add inventory stack splitting.
-3. #34 Implement mining XP progression vertical slice.
-4. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
+1. #35 Add inventory stack splitting.
+2. #34 Implement mining XP progression vertical slice.
+3. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
 
 ## Useful Commands
 
