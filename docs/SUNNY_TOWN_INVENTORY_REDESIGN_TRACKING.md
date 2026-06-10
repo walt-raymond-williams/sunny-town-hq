@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after creating PR review follow-up issues #36 and #37.
+Snapshot refreshed: 2026-06-10 after completing PR review follow-up issues #36 and #37.
 
 ### Closed
 
@@ -143,37 +143,32 @@ Snapshot refreshed: 2026-06-10 after creating PR review follow-up issues #36 and
   Completed in `7d0f545`; stakeholder cleanup completed after that docs sync.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/6
 
-### Open
-
 - #36 Require equipped pickaxe for Sunny Town mining
-  Status: `status:ready`
-  Priority: `priority:p0`
-  Handoff: `docs/SUNNY_TOWN_EQUIPPED_PICKAXE_MINING_HANDOFF.md`
-  Blocking PR merge.
+  Completed in `29b7f54`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/36
 
 - #37 Refresh mining XP in open character panel after mining
-  Status: `status:ready`
-  Priority: `priority:p2`
-  Handoff: `docs/SUNNY_TOWN_MINING_XP_LIVE_REFRESH_HANDOFF.md`
-  Non-blocking review polish; recommended after #36.
+  Completed in `9f38787`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/37
+
+### Open
+
+No open inventory redesign issues remain.
 
 ## Recommended Next Management Step
 
-PR review requested changes.
+PR re-review found no blocking issues after #36 and #37 landed.
 
 Recommended next step:
 
-Start #36, `Require equipped pickaxe for Sunny Town mining`.
+Merge `codex/inventory-redesign-dev` into `main`.
 
 Why:
 
-- It is a blocking PR review finding.
-- Mining currently authorizes by pickaxe ownership instead of equipped tool state.
-- It violates the project authority rule that gameplay effects must be validated server-side using accepted position and equipped tools.
-
-Then address #37, `Refresh mining XP in open character panel after mining`, as non-blocking polish before re-review if practical.
+- All inventory redesign issues are closed.
+- The blocking mining authority review finding was fixed.
+- The non-blocking mining XP live-refresh finding was fixed.
+- Re-review verification passed with direct fallback commands because Go Task was not installed.
 
 ## Useful Commands
 
