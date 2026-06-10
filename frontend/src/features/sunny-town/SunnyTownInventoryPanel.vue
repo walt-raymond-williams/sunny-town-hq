@@ -90,18 +90,39 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
         class="sunny-town-crafting__recipe"
         :class="{ 'sunny-town-crafting__recipe--disabled': !recipe.canCraft }"
       >
-        <span class="inventory-item__icon" :class="`inventory-item__icon--${recipe.outputKey}`" aria-hidden="true" />
-        <div>
-          <p class="inventory-item__name">{{ recipe.name }}</p>
+        <div class="sunny-town-crafting__output" aria-hidden="true">
+          <span
+            class="inventory-item__icon sunny-town-crafting__output-icon"
+            :class="`inventory-item__icon--${recipe.outputIconKey || recipe.outputKey}`"
+          />
+          <strong v-if="recipe.quantity !== 1" class="sunny-town-crafting__output-quantity">{{ recipe.quantity }}</strong>
+        </div>
+        <div class="sunny-town-crafting__body">
+          <div class="sunny-town-crafting__title-row">
+            <p class="inventory-item__name">{{ recipe.name }}</p>
+            <span class="sunny-town-crafting__yield">x{{ recipe.quantity }} {{ recipe.outputName }}</span>
+          </div>
           <p class="inventory-item__description">{{ recipe.description }}</p>
           <div class="sunny-town-crafting__ingredients">
-            <span
+            <div
               v-for="ingredient in recipe.ingredients"
               :key="ingredient.itemKey"
+              class="sunny-town-crafting__ingredient"
               :class="{ 'sunny-town-crafting__ingredient--missing': ingredient.owned < ingredient.required }"
             >
-              {{ ingredient.owned }}/{{ ingredient.required }} {{ ingredient.name }}
-            </span>
+              <span
+                class="inventory-item__icon sunny-town-crafting__ingredient-icon"
+                :class="`inventory-item__icon--${ingredient.iconKey || ingredient.itemKey}`"
+                aria-hidden="true"
+              />
+              <span class="sunny-town-crafting__ingredient-name">{{ ingredient.name }}</span>
+              <strong class="sunny-town-crafting__ingredient-count">{{ ingredient.owned }}/{{ ingredient.required }}</strong>
+            </div>
+          </div>
+          <div class="sunny-town-crafting__routing" aria-label="Crafting storage">
+            <span>Inventory</span>
+            <v-icon aria-hidden="true" icon="mdi-arrow-right" size="14" />
+            <span>Inventory</span>
           </div>
         </div>
         <v-btn

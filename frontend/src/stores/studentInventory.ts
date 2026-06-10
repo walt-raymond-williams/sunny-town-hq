@@ -3,7 +3,6 @@ import { craftStudentRecipe, getCraftingRecipes } from '../api/craftingApi'
 import { equipStudentItem, getStudentEquipment, unequipStudentItem } from '../api/equipmentApi'
 import { getStudentHotbar, setStudentHotbarSlot } from '../api/hotbarApi'
 import { getStudentInventorySlots, moveStudentInventoryStack } from '../api/inventoryApi'
-import { withKnownCraftingRecipes } from './craftingRecipes'
 import type { CraftingRecipe, EquippedSlot, EquipmentSlot, HotbarSlot, InventoryItem, InventorySlot, StudentHotbar, StudentInventory, StudentInventorySlots } from '../types/inventory'
 
 interface StudentInventoryState {
@@ -70,8 +69,8 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
   getters: {
     cookieQuantity: (state) => state.items.find((item) => item.key === 'cookie')?.quantity ?? 0,
     unequippedItems: (state) => state.items.filter((item) => !item.equipped),
-    knownCraftingRecipes: (state) => withKnownCraftingRecipes(state.craftingRecipes, state.items),
-    craftableRecipes: (state) => withKnownCraftingRecipes(state.craftingRecipes, state.items).filter((recipe) => recipe.canCraft),
+    knownCraftingRecipes: (state) => state.craftingRecipes,
+    craftableRecipes: (state) => state.craftingRecipes.filter((recipe) => recipe.canCraft),
     equippedVisuals: (state) => Object.fromEntries(
       state.equipmentSlots.map((slot) => [slot.slot, slot.item?.visualKey || '']),
     ) as Record<EquipmentSlot, string>,
@@ -404,7 +403,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       this.craftingError = ''
 
       try {
-        this.craftingRecipes = withKnownCraftingRecipes(await getCraftingRecipes(), this.items)
+        this.craftingRecipes = await getCraftingRecipes()
       } catch (error) {
         this.craftingError = error instanceof Error ? error.message : String(error)
       } finally {
@@ -418,7 +417,7 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
       try {
         const result = await craftStudentRecipe(recipeKey)
         this.setInventorySlots(result.inventory)
-        this.craftingRecipes = withKnownCraftingRecipes(result.recipes, this.items)
+        this.craftingRecipes = result.recipes
       } catch (error) {
         this.craftingError = error instanceof Error ? error.message : String(error)
         throw error
