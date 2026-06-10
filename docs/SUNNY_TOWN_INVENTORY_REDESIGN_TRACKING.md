@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after implementing issue #34.
+Snapshot refreshed: 2026-06-10 after completing issue #34.
 
 ### Closed
 
@@ -136,8 +136,7 @@ Snapshot refreshed: 2026-06-10 after implementing issue #34.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/35
 
 - #34 Implement mining XP progression vertical slice
-  Implemented and pushed in `78f0a45`.
-  GitHub issue closeout is blocked locally by expired/invalid `gh` API auth returning HTTP 401; refresh `gh` auth, then comment verification, close the issue, and remove `status:in-progress`.
+  Completed in `78f0a45`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/34
 
 ### Open
@@ -149,21 +148,11 @@ Snapshot refreshed: 2026-06-10 after implementing issue #34.
 
 ## Recommended Next Management Step
 
-Resolve issue #34 GitHub closeout:
+No ready inventory redesign feature issues remain.
 
-`Implement mining XP progression vertical slice`
+Recommended next step:
 
-Why:
-
-- The implementation is pushed in `78f0a45`, but GitHub API calls returned HTTP 401 before the issue could be commented/closed.
-- The issue may still have `status:in-progress` until `gh auth refresh -h github.com` is completed locally.
-
-Suggested sequence:
-
-1. Refresh local GitHub CLI auth.
-2. Comment #34 with commit `78f0a45` and verification results.
-3. Close #34 and remove `status:in-progress`.
-4. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
+Use #6 for current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
 
 ## Useful Commands
 
