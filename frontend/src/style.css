@@ -1180,6 +1180,23 @@ h2 {
   gap: 6px;
 }
 
+.sunny-town-stack-splitter {
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(82px, 96px) auto;
+  padding-top: 12px;
+}
+
+.sunny-town-stack-splitter__summary {
+  min-width: 0;
+}
+
+.sunny-town-stack-splitter__quantity {
+  min-width: 0;
+}
+
 .sunny-town-hotbar-editor {
   align-items: start;
   border-top: 1px solid rgba(255, 255, 255, 0.14);
@@ -1409,6 +1426,15 @@ h2 {
 
   .sunny-town-inventory-grid {
     grid-template-columns: repeat(auto-fit, 58px);
+  }
+
+  .sunny-town-stack-splitter {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sunny-town-stack-splitter .v-btn,
+  .sunny-town-stack-splitter__quantity {
+    width: 100%;
   }
 
   .sunny-town-character-preview {

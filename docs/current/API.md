@@ -109,14 +109,26 @@ Inventory item payloads returned by student inventory, hotbar, equipment, and cr
 }
 ```
 
+Split requests include an explicit quantity:
+
+```json
+{
+  "source": { "kind": "player_inventory", "slotIndex": 0 },
+  "destination": { "kind": "player_inventory", "slotIndex": 5 },
+  "mode": "split",
+  "quantity": 4
+}
+```
+
 Supported first-slice modes:
 
 - `move`: move an occupied source stack into an empty destination slot.
 - `swap`: swap two occupied slots.
 - `merge`: merge compatible item stacks up to the destination item's `maxStack`.
+- `split`: move `quantity` items from an occupied source stack into an empty destination slot. `quantity` must be positive and less than the source stack quantity.
 - `auto`: choose move, merge, or swap from current slot state.
 
-The response is the updated slotted inventory payload. Stack splitting is still deferred.
+The response is the updated slotted inventory payload. `quantity` is only used by `split`; existing move/swap/merge/auto callers may omit it.
 
 Future container transfer APIs should extend this descriptor pattern with `kind: "container"` and a stable `containerId`, following `docs/current/CONTAINER_STORAGE.md`. Browser requests must not be treated as live access authority; Sunny Town validates proximity/object access before HQ mutates durable container contents.
 

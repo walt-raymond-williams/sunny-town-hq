@@ -41,12 +41,13 @@ export interface InventoryStorageRef {
   slotIndex: number
 }
 
-export type InventoryMoveMode = 'move' | 'swap' | 'merge' | 'auto'
+export type InventoryMoveMode = 'move' | 'swap' | 'merge' | 'split' | 'auto'
 
 export interface InventoryMoveRequest {
   source: InventoryStorageRef
   destination: InventoryStorageRef
   mode: InventoryMoveMode
+  quantity?: number
 }
 
 export interface InventorySlotItem {

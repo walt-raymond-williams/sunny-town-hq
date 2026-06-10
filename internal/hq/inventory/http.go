@@ -358,7 +358,8 @@ func IsInventoryMoveClientError(err error) bool {
 		errors.Is(err, ErrInventoryDestinationEmpty) ||
 		errors.Is(err, ErrInventoryDestinationOccupied) ||
 		errors.Is(err, ErrInventoryIncompatibleMerge) ||
-		errors.Is(err, ErrInventoryStackFull)
+		errors.Is(err, ErrInventoryStackFull) ||
+		errors.Is(err, ErrInvalidInventorySplitQuantity)
 }
 
 func InventoryMoveErrorMessage(err error) string {
@@ -379,6 +380,8 @@ func InventoryMoveErrorMessage(err error) string {
 		return "stacks cannot be merged"
 	case errors.Is(err, ErrInventoryStackFull):
 		return "destination stack is full"
+	case errors.Is(err, ErrInvalidInventorySplitQuantity):
+		return "invalid split quantity"
 	default:
 		return "inventory move could not be completed"
 	}

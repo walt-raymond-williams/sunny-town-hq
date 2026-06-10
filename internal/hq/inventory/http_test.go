@@ -243,6 +243,12 @@ func TestInventoryHTTPErrorMessages(t *testing.T) {
 	if !IsInventoryMoveClientError(ErrInventoryStackFull) {
 		t.Fatal("ErrInventoryStackFull should be a client error")
 	}
+	if got := InventoryMoveErrorMessage(ErrInvalidInventorySplitQuantity); got != "invalid split quantity" {
+		t.Fatalf("InventoryMoveErrorMessage invalid split quantity = %q", got)
+	}
+	if !IsInventoryMoveClientError(ErrInvalidInventorySplitQuantity) {
+		t.Fatal("ErrInvalidInventorySplitQuantity should be a client error")
+	}
 	if got := CraftingErrorMessage(ErrInventoryFull); got != "not enough room in inventory" {
 		t.Fatalf("CraftingErrorMessage inventory full = %q", got)
 	}

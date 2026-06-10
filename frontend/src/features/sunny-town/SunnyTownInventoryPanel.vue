@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { SunnyTownInventoryMenuTab } from '../../composables/useSunnyTownInventoryActions'
 import { useStudentInventoryStore } from '../../stores/studentInventory'
 import type { EquipmentSlot } from '../../types/inventory'
@@ -27,6 +27,7 @@ const emit = defineEmits<{
 
 const inventoryStore = useStudentInventoryStore()
 const selectedInventorySlotIndex = ref<number | null>(null)
+const splitQuantity = ref(1)
 const selectedHotbarItem = computed(() => inventoryStore.hotbarSlots[props.selectedHotbarIndex]?.item || null)
 const selectedInventorySlot = computed(() => {
   if (selectedInventorySlotIndex.value === null) {
@@ -34,9 +35,21 @@ const selectedInventorySlot = computed(() => {
   }
   return inventoryStore.inventorySlots.find((slot) => slot.slotIndex === selectedInventorySlotIndex.value) || null
 })
+const firstEmptyInventorySlot = computed(() => inventoryStore.inventorySlots.find((slot) => !slot.item) || null)
+const selectedStackQuantity = computed(() => selectedInventorySlot.value?.item?.quantity || 0)
+const canSplitSelectedStack = computed(() => (
+  Boolean(selectedInventorySlot.value?.item) &&
+  selectedStackQuantity.value > 1 &&
+  Boolean(firstEmptyInventorySlot.value) &&
+  !inventoryStore.isMovingInventorySlot
+))
 const visibleCraftingRecipes = computed(() => (
   props.showAllCraftingRecipes ? inventoryStore.knownCraftingRecipes : inventoryStore.craftableRecipes
 ))
+
+watch(selectedStackQuantity, (quantity) => {
+  splitQuantity.value = quantity > 1 ? Math.max(1, Math.floor(quantity / 2)) : 1
+}, { immediate: true })
 
 function handleInventorySlotDragStart(slotIndex: number, event: DragEvent) {
   if (!inventoryStore.startInventorySlotDrag(slotIndex)) {
@@ -53,6 +66,19 @@ async function handleInventorySlotDrop(slotIndex: number) {
 
 async function handleHotbarSlotDrop(slot: number) {
   await inventoryStore.dropInventorySlotOnHotbar(slot)
+}
+
+async function handleSplitSelectedStack() {
+  const source = selectedInventorySlot.value
+  const destination = firstEmptyInventorySlot.value
+  if (!source?.item || !destination) {
+    return
+  }
+  const split = Math.trunc(Number(splitQuantity.value))
+  const moved = await inventoryStore.splitInventorySlot(source.slotIndex, destination.slotIndex, split)
+  if (moved) {
+    selectedInventorySlotIndex.value = destination.slotIndex
+  }
 }
 
 function handleEquipmentSlotDrop(slot: EquipmentSlot) {
@@ -209,6 +235,35 @@ function handleEquipmentSlotDrop(slot: EquipmentSlot) {
           @select="selectedInventorySlotIndex = slot.slotIndex"
         />
       </div>
+      <section class="sunny-town-stack-splitter" aria-label="Split selected stack">
+        <div class="sunny-town-stack-splitter__summary">
+          <p class="inventory-item__name">{{ selectedInventorySlot?.item?.name || 'No stack selected' }}</p>
+          <p class="inventory-item__description">
+            {{ selectedInventorySlot?.item ? `${selectedStackQuantity} in slot ${(selectedInventorySlot?.slotIndex ?? 0) + 1}` : 'Select a stack to split.' }}
+          </p>
+        </div>
+        <v-text-field
+          v-model.number="splitQuantity"
+          class="sunny-town-stack-splitter__quantity"
+          density="compact"
+          hide-details
+          label="Qty"
+          min="1"
+          :max="Math.max(selectedStackQuantity - 1, 1)"
+          type="number"
+          variant="outlined"
+        />
+        <v-btn
+          :disabled="!canSplitSelectedStack"
+          :loading="inventoryStore.isMovingInventorySlot"
+          prepend-icon="mdi-call-split"
+          size="x-small"
+          variant="tonal"
+          @click="handleSplitSelectedStack"
+        >
+          Split
+        </v-btn>
+      </section>
       <section class="sunny-town-hotbar-editor" aria-label="Hotbar slots">
         <div class="sunny-town-hotbar-editor__summary">
           <p class="inventory-item__name">Slot {{ selectedHotbarIndex + 1 }}</p>

@@ -398,6 +398,50 @@ export const useStudentInventoryStore = defineStore('studentInventory', {
         this.pendingInventoryMoveDestinationIndex = null
       }
     },
+    async splitInventorySlot(sourceSlotIndex: number, destinationSlotIndex: number, quantity: number): Promise<boolean> {
+      if (this.isMovingInventorySlot) {
+        return false
+      }
+      const sourceSlot = this.inventorySlots.find((slot) => slot.slotIndex === sourceSlotIndex)
+      const destinationSlot = this.inventorySlots.find((slot) => slot.slotIndex === destinationSlotIndex)
+      if (!sourceSlot?.item) {
+        this.invalidInventoryDropSlotIndex = sourceSlotIndex
+        return false
+      }
+      if (!destinationSlot || destinationSlot.item) {
+        this.invalidInventoryDropSlotIndex = destinationSlotIndex
+        return false
+      }
+      const splitQuantity = Math.trunc(quantity)
+      if (splitQuantity <= 0 || splitQuantity >= sourceSlot.item.quantity) {
+        this.error = 'invalid split quantity'
+        return false
+      }
+
+      this.isMovingInventorySlot = true
+      this.pendingInventoryMoveSourceIndex = sourceSlotIndex
+      this.pendingInventoryMoveDestinationIndex = destinationSlotIndex
+      this.invalidInventoryDropSlotIndex = null
+      this.error = ''
+
+      try {
+        const inventory = await moveStudentInventoryStack({
+          source: { kind: 'player_inventory', slotIndex: sourceSlotIndex },
+          destination: { kind: 'player_inventory', slotIndex: destinationSlotIndex },
+          mode: 'split',
+          quantity: splitQuantity,
+        })
+        this.setInventorySlots(inventory)
+        return true
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : String(error)
+        return false
+      } finally {
+        this.isMovingInventorySlot = false
+        this.pendingInventoryMoveSourceIndex = null
+        this.pendingInventoryMoveDestinationIndex = null
+      }
+    },
     async loadCraftingRecipes() {
       this.isLoadingCrafting = true
       this.craftingError = ''

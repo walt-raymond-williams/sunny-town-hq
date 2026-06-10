@@ -695,6 +695,95 @@ func TestMoveStudentInventoryStackMergesCompatibleStacks(t *testing.T) {
 	}
 }
 
+func TestMoveStudentInventoryStackSplitsIntoEmptySlot(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 10); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	response, err := MoveStudentInventoryStack(ctx, db, 123, InventoryMoveRequest{
+		Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+		Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 2},
+		Mode:        "split",
+		Quantity:    4,
+	})
+	if err != nil {
+		t.Fatalf("split inventory stack: %v", err)
+	}
+	if response.Slots[0].Item == nil || response.Slots[0].Item.Key != "rock" || response.Slots[0].Item.Quantity != 6 {
+		t.Fatalf("source slot after split = %#v, want 6 rocks", response.Slots[0])
+	}
+	if response.Slots[2].Item == nil || response.Slots[2].Item.Key != "rock" || response.Slots[2].Item.Quantity != 4 {
+		t.Fatalf("destination slot after split = %#v, want 4 rocks", response.Slots[2])
+	}
+	if got := quantityForStudentItem(t, ctx, db, 123, "rock"); got != 10 {
+		t.Fatalf("student aggregate rock = %d, want preserved total 10", got)
+	}
+}
+
+func TestMoveStudentInventoryStackRejectsInvalidSplitQuantities(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 10); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	invalidQuantities := []int{0, -1, 10, 11}
+	for _, quantity := range invalidQuantities {
+		_, err := MoveStudentInventoryStack(ctx, db, 123, InventoryMoveRequest{
+			Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+			Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 2},
+			Mode:        "split",
+			Quantity:    quantity,
+		})
+		if !errors.Is(err, ErrInvalidInventorySplitQuantity) {
+			t.Fatalf("split quantity %d error = %v, want ErrInvalidInventorySplitQuantity", quantity, err)
+		}
+	}
+	slots, err := LoadStudentSlots(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load slots after rejected split: %v", err)
+	}
+	if slots.Slots[0].Item == nil || slots.Slots[0].Item.Quantity != 10 || slots.Slots[2].Item != nil {
+		t.Fatalf("slots after rejected split = %#v %#v, want rollback", slots.Slots[0], slots.Slots[2])
+	}
+}
+
+func TestMoveStudentInventoryStackRejectsSplitIntoOccupiedDestination(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 10); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+	if err := IncrementStudentItem(ctx, db, 123, "crystal", 2); err != nil {
+		t.Fatalf("seed crystal inventory: %v", err)
+	}
+
+	_, err := MoveStudentInventoryStack(ctx, db, 123, InventoryMoveRequest{
+		Source:      InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 0},
+		Destination: InventorySlotDescriptor{Kind: inventoryStorageKindPlayer, SlotIndex: 1},
+		Mode:        "split",
+		Quantity:    4,
+	})
+	if !errors.Is(err, ErrInventoryDestinationOccupied) {
+		t.Fatalf("split into occupied slot error = %v, want ErrInventoryDestinationOccupied", err)
+	}
+	slots, err := LoadStudentSlots(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load slots after rejected split: %v", err)
+	}
+	if slots.Slots[0].Item == nil || slots.Slots[0].Item.Quantity != 10 || slots.Slots[1].Item == nil || slots.Slots[1].Item.Key != "crystal" || slots.Slots[1].Item.Quantity != 2 {
+		t.Fatalf("slots after rejected split = %#v %#v, want rollback", slots.Slots[0], slots.Slots[1])
+	}
+}
+
 func TestMoveStudentInventoryStackRejectsInvalidOperations(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()

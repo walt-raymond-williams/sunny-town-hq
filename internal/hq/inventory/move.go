@@ -12,14 +12,15 @@ const inventoryStorageKindPlayer = "player_inventory"
 const inventoryStorageKindContainer = "container"
 
 var (
-	ErrUnsupportedInventoryMoveMode = errors.New("unsupported inventory move mode")
-	ErrUnsupportedInventoryStorage  = errors.New("unsupported inventory storage")
-	ErrInvalidInventorySlot         = errors.New("invalid inventory slot")
-	ErrInventorySourceEmpty         = errors.New("inventory source slot is empty")
-	ErrInventoryDestinationEmpty    = errors.New("inventory destination slot is empty")
-	ErrInventoryDestinationOccupied = errors.New("inventory destination slot is occupied")
-	ErrInventoryIncompatibleMerge   = errors.New("inventory stacks cannot be merged")
-	ErrInventoryStackFull           = errors.New("inventory stack is full")
+	ErrUnsupportedInventoryMoveMode  = errors.New("unsupported inventory move mode")
+	ErrUnsupportedInventoryStorage   = errors.New("unsupported inventory storage")
+	ErrInvalidInventorySlot          = errors.New("invalid inventory slot")
+	ErrInventorySourceEmpty          = errors.New("inventory source slot is empty")
+	ErrInventoryDestinationEmpty     = errors.New("inventory destination slot is empty")
+	ErrInventoryDestinationOccupied  = errors.New("inventory destination slot is occupied")
+	ErrInventoryIncompatibleMerge    = errors.New("inventory stacks cannot be merged")
+	ErrInventoryStackFull            = errors.New("inventory stack is full")
+	ErrInvalidInventorySplitQuantity = errors.New("invalid inventory split quantity")
 )
 
 type InventorySlotDescriptor struct {
@@ -32,6 +33,7 @@ type InventoryMoveRequest struct {
 	Source      InventorySlotDescriptor `json:"source"`
 	Destination InventorySlotDescriptor `json:"destination"`
 	Mode        string                  `json:"mode"`
+	Quantity    int                     `json:"quantity,omitempty"`
 }
 
 func MoveStudentInventoryStack(ctx context.Context, db *pgxpool.Pool, userID int64, request InventoryMoveRequest) (StudentInventorySlotsResponse, error) {
@@ -80,6 +82,8 @@ func MoveStudentInventoryStack(ctx context.Context, db *pgxpool.Pool, userID int
 		err = swapInventoryStacks(ctx, tx, userID, request.Source.SlotIndex, source, request.Destination.SlotIndex, destination)
 	case "merge":
 		err = mergeInventoryStacks(ctx, tx, userID, request.Source.SlotIndex, source, request.Destination.SlotIndex, destination)
+	case "split":
+		err = splitInventoryStack(ctx, tx, userID, request.Source.SlotIndex, source, request.Destination.SlotIndex, destination, request.Quantity)
 	default:
 		err = ErrUnsupportedInventoryMoveMode
 	}
@@ -272,6 +276,48 @@ func mergeInventoryStacks(ctx context.Context, querier Querier, userID int64, so
 		userID,
 		sourceIndex,
 		sourceRemaining,
+	)
+	return err
+}
+
+func splitInventoryStack(ctx context.Context, querier Querier, userID int64, sourceIndex int, source inventorySlotState, destinationIndex int, destination inventorySlotState, quantity int) error {
+	if !source.Occupied {
+		return ErrInventorySourceEmpty
+	}
+	if destination.Occupied {
+		return ErrInventoryDestinationOccupied
+	}
+	if quantity <= 0 || quantity >= source.Quantity {
+		return ErrInvalidInventorySplitQuantity
+	}
+	if _, err := querier.Exec(
+		ctx,
+		`
+			update student_inventory_slot
+			set quantity = quantity - $3,
+				updated_at = now()
+			where app_user_id = $1 and slot_index = $2
+		`,
+		userID,
+		sourceIndex,
+		quantity,
+	); err != nil {
+		return err
+	}
+	_, err := querier.Exec(
+		ctx,
+		`
+			insert into student_inventory_slot (app_user_id, slot_index, item_type_id, quantity)
+			values ($1, $2, $3, $4)
+			on conflict (app_user_id, slot_index) do update
+			set item_type_id = excluded.item_type_id,
+				quantity = excluded.quantity,
+				updated_at = now()
+		`,
+		userID,
+		destinationIndex,
+		source.ItemTypeID,
+		quantity,
 	)
 	return err
 }

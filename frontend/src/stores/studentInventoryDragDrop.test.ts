@@ -120,6 +120,47 @@ describe('student inventory drag/drop moves', () => {
     expect(moveStudentInventoryStack).not.toHaveBeenCalled()
   })
 
+  it('splits a source stack into an empty slot through the API', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots(inventoryWithRock(0, 8))
+    vi.mocked(moveStudentInventoryStack).mockResolvedValueOnce({
+      slotCount: 3,
+      slots: [
+        { slotIndex: 0, item: item({ quantity: 5 }) },
+        { slotIndex: 1, item: null },
+        { slotIndex: 2, item: item({ quantity: 3 }) },
+      ],
+      items: [item({ quantity: 8 })],
+    })
+
+    await expect(store.splitInventorySlot(0, 2, 3)).resolves.toBe(true)
+
+    expect(moveStudentInventoryStack).toHaveBeenCalledWith({
+      source: { kind: 'player_inventory', slotIndex: 0 },
+      destination: { kind: 'player_inventory', slotIndex: 2 },
+      mode: 'split',
+      quantity: 3,
+    })
+    expect(store.inventorySlots[0]?.item).toMatchObject({ key: 'rock', quantity: 5 })
+    expect(store.inventorySlots[2]?.item).toMatchObject({ key: 'rock', quantity: 3 })
+    expect(store.pendingInventoryMoveSourceIndex).toBeNull()
+    expect(store.pendingInventoryMoveDestinationIndex).toBeNull()
+    expect(store.isMovingInventorySlot).toBe(false)
+  })
+
+  it('rejects invalid split requests before calling the API', async () => {
+    const store = useStudentInventoryStore()
+    store.setInventorySlots(inventoryWithRock(0, 8))
+
+    await expect(store.splitInventorySlot(0, 2, 0)).resolves.toBe(false)
+    await expect(store.splitInventorySlot(0, 2, 8)).resolves.toBe(false)
+    await expect(store.splitInventorySlot(1, 2, 1)).resolves.toBe(false)
+
+    expect(moveStudentInventoryStack).not.toHaveBeenCalled()
+    expect(store.error).toBe('invalid split quantity')
+    expect(store.invalidInventoryDropSlotIndex).toBe(1)
+  })
+
   it('assigns a dragged inventory item to a hotbar slot through the hotbar API', async () => {
     const store = useStudentInventoryStore()
     store.setInventorySlots(inventoryWithRock(0))
