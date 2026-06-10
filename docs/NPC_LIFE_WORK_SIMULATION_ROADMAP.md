@@ -12,13 +12,20 @@ The first target is a visible, inspectable NPC home/work loop that uses authored
 
 Create a short demo loop:
 
-- an NPC has a home/bed
-- the same NPC has a work anchor
-- the NPC can route between those places, including portals if needed
+- Cookie Keeper has an explicit home
+- Cookie Keeper has a visible bed fixture in that home
+- Cookie Keeper keeps `cookie-keeper-counter` as his work anchor
+- Cookie Keeper can route between home and work through portals
 - debug state explains current goal and route
 - the loop is observable in minutes, not hours
 
 This should be a practical scaffolding slice for richer routines later.
+
+Initial cadence decision:
+
+- Default/local-play day length target: `24` real minutes.
+- Demo/dev day length target: `8` real minutes.
+- First routine model: drive-driven. Time of day may influence drive pressure later, but the first slice should not require a hard schedule.
 
 ## Phase Order
 
@@ -49,11 +56,12 @@ As a developer, I want a focused home/work demo loop design so that NPC life sim
 
 Acceptance criteria:
 
-- Select the first demo NPC.
-- Select home/bed and work locations.
-- Decide whether the first loop is schedule-driven, drive-driven, or hybrid.
-- Decide whether a second home requires a new interior map or can use an existing map.
-- Document the expected demo cadence.
+- Confirm Cookie Keeper as the first demo NPC.
+- Select the unoccupied main-town building that will receive the new home portal.
+- Define the new interior map ID and portal IDs.
+- Define home-area and bed-fixture metadata.
+- Confirm drive-driven routine behavior and document whether time of day influences drive pressure in the first slice.
+- Document the expected demo cadence: `8` minute demo day and `24` minute default day.
 - Identify child issues and blockers.
 
 Implementation notes:
@@ -86,12 +94,15 @@ As a player, I want NPCs to have visible homes with beds so they feel like resid
 
 Acceptance criteria:
 
-- At least one additional home/bed candidate is authored if the map layout supports it.
+- A new home interior map is authored for Cookie Keeper.
+- A portal from an unoccupied Sunny Town building leads to the new home interior.
+- The home contains at least one visible bed fixture.
 - Existing `mayor-sunny-bed` remains valid and reachable.
-- Home/bed locations use `locations` with `home`, `bed`, and `sleep` tags.
-- Owned beds use `ownerNpcKey`.
+- Home areas use `locations` with `home` tags and owner/home assignment metadata where needed.
+- Bed fixtures or associated bed locations use `bed` and `sleep` semantics.
+- Bed fixture metadata is shaped so future player-placed beds can produce equivalent usable beds.
 - Map validation tests cover the authored locations.
-- Route tests prove the selected NPC can reach home and work.
+- Route tests prove Cookie Keeper can reach home and work.
 
 Implementation notes:
 
@@ -100,8 +111,9 @@ Implementation notes:
   - `cookie-keeper-counter` for Cookie Keeper
   - `teacher-desk-work` for Teacher
   - town square/public role for Mayor Sunny if a work marker is added
-- Main map has building-shaped blocked areas that may become future houses, but adding a second house likely requires a new interior map and portal.
-- A bed can start as a `location`; visible fixture art can be a later issue unless needed for the demo.
+- Main map has building-shaped blocked areas that may become future houses. For this epic, add a new interior map and portal for Cookie Keeper's home.
+- Beds should be visible fixtures from the start. They can also have associated map locations if that keeps existing drive/location routing simple.
+- Do not implement player placement yet, but avoid metadata that would make player-placed beds incompatible later.
 
 Verification:
 
@@ -127,8 +139,9 @@ As a player, I want an NPC to go home to rest and then go to work so the town ha
 
 Acceptance criteria:
 
-- One selected NPC alternates between home/rest and work goals on a demo-friendly cadence.
+- Cookie Keeper alternates between home/rest and work goals on a demo-friendly cadence.
 - The NPC routes to the selected home/bed and work locations.
+- Home/rest goal chooses an available bed inside Cookie Keeper's assigned home.
 - The routine avoids rapid goal flipping.
 - Server snapshots keep players in sync as the NPC changes maps.
 - The implementation does not make clients authoritative over NPC movement or routine choice.
@@ -136,7 +149,8 @@ Acceptance criteria:
 Implementation notes:
 
 - Reuse current drive state and anchor resolution where possible.
-- A small schedule pressure layer may be enough if pure drive behavior is hard to tune.
+- Prefer drive-driven behavior first. A small time-of-day pressure layer can later modify drive rates, but should not replace drives with a hard schedule.
+- Start with an `8` minute demo day target and a `24` minute default/local-play day target.
 - Keep runtime routine state in Sunny Town memory for the first slice.
 - Do not persist raw route/path indexes.
 
@@ -219,22 +233,16 @@ Verification:
 
 ## Open Product Questions
 
-- First demo NPC:
-  - Mayor Sunny is already in town and has an owned bed.
-  - Cookie Keeper already has a work anchor and production behavior.
-  - Teacher already has a classroom work anchor.
 - Second home:
-  - Add a new interior map and portal for a second house?
-  - Repurpose an existing unoccupied building shape first?
-  - Wait until the first home/work loop proves useful?
+  - Which unoccupied main-town building should become Cookie Keeper's home entrance?
+  - How much should the new interior reuse the layout language of `sunny-town-house-1`?
 - Routine model:
-  - Pure drive-based behavior?
-  - Explicit schedule pressure?
-  - Hybrid: schedule pushes work/sleep, drives choose fallback?
+  - Pure drive-based behavior first?
+  - Hybrid later: time of day changes drive pressure while drives still choose goals?
 - Bed representation:
-  - Location-only first?
-  - Visible bed fixture in the map?
-  - New furniture art?
+  - What metadata should mark a bed fixture as usable?
+  - Should an authored bed fixture automatically create a matching sleep location, or should both be authored explicitly?
+  - What future item key should represent player-placeable beds?
 
 ## Recommended Next Management Step
 

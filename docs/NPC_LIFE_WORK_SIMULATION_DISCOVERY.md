@@ -62,9 +62,40 @@ For demo and development, we should author homes early:
 
 Initial interpretation:
 
+- Use Cookie Keeper as the first demo NPC because he already has a job, work anchor, shop storage, and production behavior.
 - Keep the existing `sunny-town-house-1` home/bed as one home candidate.
-- Add a second home only if the map and portal layout can support it without a broad map redesign.
+- Add a second home as a new interior map with a new portal from an unoccupied Sunny Town building.
+- Represent beds as visible fixtures/world objects, not only invisible locations. Longer term, beds should become inventory/placeable furniture that can create a usable bed fixture when placed.
+- For the first slice, keep home assignment explicit: an NPC has a home location/area. Inside that home, the NPC can use an available bed rather than permanently owning one specific bed object.
+- Use drive-driven behavior first. Do not require a hard global schedule before the drive loop proves useful.
+- Use a demo-friendly time scale so sleep/work can be observed during manual testing.
 - Do not invent a parallel "cell" or building abstraction. Use existing maps, portals, locations, fixtures, and owner hints.
+
+## Cadence Recommendation
+
+Reference games use compressed time because readable routine loops need to happen while a player is still paying attention:
+
+- Minecraft has a 20-minute full day/night cycle.
+- The Sims series commonly lands around a 24-to-36-minute day depending on title/settings, with time acceleration available.
+- RimWorld uses a 24-hour in-game day with pawn schedules, sleep, work, and recreation blocks rather than a purely cosmetic day/night cycle.
+
+Sunny Town should start with two explicit cadence modes:
+
+- Default/local-play cadence: `24` real minutes per simulated day.
+- Demo/dev cadence: `8` real minutes per simulated day.
+
+Why:
+
+- `24` minutes is close enough to familiar life-sim pacing that work/rest can matter without feeling frantic.
+- `8` minutes lets developers and reviewers observe a full home/work/rest loop in one short session.
+- The first implementation can expose this as a server-side constant or config value; clients must not control simulation time.
+
+Initial phase split for an `8` minute demo day:
+
+- Work pressure rises for roughly `3` to `4` minutes.
+- Energy/rest pressure rises enough to send the NPC home after a visible work period.
+- Resting at a bed should recover quickly, roughly `60` to `90` seconds, so the NPC can return to work.
+- Food/social can remain secondary fallback drives until the home/work loop is stable.
 
 ## User Stories
 
@@ -76,8 +107,9 @@ Acceptance criteria:
 
 - At least one NPC has an authored home/bed location.
 - Home/bed locations use existing map `locations`.
+- Beds are represented as visible fixtures/world objects in the home.
 - Homes can be reached by server-side NPC pathing.
-- Owned beds are preferred over generic rest locations for the owning NPC.
+- NPC home assignment can identify the home area, and bed choice can use an available bed in that home.
 - Map validation and NPC pathing tests cover the authored home location.
 
 ### STORY-NPC-LIFE-002: NPCs Move Between Home And Work
@@ -100,6 +132,7 @@ Acceptance criteria:
 
 - NPC energy or rest drive can choose a home/bed location.
 - Staying near the bed replenishes the related drive.
+- The selected bed is inside the NPC's assigned home for the first implementation.
 - Debug state identifies the active rest/sleep goal.
 - The first implementation may use a visibly accelerated debug/demo cadence.
 
@@ -145,6 +178,7 @@ Acceptance criteria:
 
 - No parallel cell/building abstraction is introduced for the first life/work slice.
 - Home/work assignments reference map IDs and location IDs.
+- Bed fixtures are authored in maps first and should be shaped so future player placement can create equivalent fixtures.
 - Cross-map routines use existing portal route planning.
 
 ### REQ-NPC-LIFE-002: Home/Work Anchors Are Deterministic
@@ -153,7 +187,8 @@ NPC home and work anchors must resolve predictably from authored map locations a
 
 Acceptance criteria:
 
-- Owned home/bed beats generic home/bed when reachable.
+- Explicit home assignment beats generic home/bed when reachable.
+- Available beds inside the assigned home beat generic rest locations elsewhere.
 - Owned work anchor beats generic work locations when reachable.
 - Unreachable owned anchors degrade to a safe fallback instead of trapping the NPC.
 - Tests cover owned and fallback behavior.
@@ -193,11 +228,12 @@ Acceptance criteria:
 
 Build the epic around a first visible home/work loop:
 
-1. Author a second home candidate if practical, and add/verify bed locations.
-2. Assign one NPC, likely Mayor Sunny or Teacher, a clear home bed and work location.
-3. Make the NPC visibly route between home and work on a fast demo cadence.
-4. Improve `/debug/npcs` or a small frontend/debug view so the current routine is obvious.
-5. Keep Cookie Keeper production as the storage-aware work example, but do not require NPC-held inventory.
+1. Use Cookie Keeper as the first demo NPC.
+2. Add a second home as a new interior map and portal, with at least one visible bed fixture.
+3. Assign Cookie Keeper an explicit home and keep `cookie-keeper-counter` as the work anchor.
+4. Make Cookie Keeper visibly route between home and work on a drive-driven demo cadence.
+5. Improve `/debug/npcs` or a small frontend/debug view so the current routine is obvious.
+6. Keep Cookie Keeper production as the storage-aware work example, but do not require NPC-held inventory.
 
 Recommended first implementation path:
 
@@ -207,12 +243,12 @@ Recommended first implementation path:
 
 ## Open Questions
 
-- Which NPC should be the first home/work demo resident: Mayor Sunny, Cookie Keeper, Teacher, or a new resident?
-- Should the first second home be a new interior map or an existing building repurposed with a new portal?
-- Should a bed be represented only as a `location` first, or also as a visible fixture/world object?
-- Should the first routine be schedule-driven, drive-driven, or a small hybrid?
+- Which unoccupied Sunny Town building should become Cookie Keeper's first authored home?
+- What should the new home interior map be named and how closely should it mirror `sunny-town-house-1`?
+- What bed fixture metadata is needed now so future player-placed beds can reuse the same concept?
+- Should the first routine be pure drive-driven, or a small hybrid where time of day changes drive pressure?
 - Should work/sleep state be visible in normal UI, debug-only UI, or just `/debug/npcs` for the first slice?
-- How fast should the demo cadence be?
+- Should demo/dev cadence be hard-coded first or exposed through runtime config?
 
 ## Suggested Next Document
 
