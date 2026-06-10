@@ -144,6 +144,7 @@ Snapshot refreshed: 2026-06-10 after completing issue #34.
 - #6 Keep current-state docs synchronized with architecture changes
   Status: `status:ready`
   Use this existing issue for inventory redesign integration-review/current-doc cleanup instead of creating a duplicate.
+  Handoff: `docs/CURRENT_STATE_DOCS_SYNC_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/6
 
 ## Recommended Next Management Step
@@ -154,10 +155,14 @@ Recommended next step:
 
 Use #6 for current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
 
+Handoff: `docs/CURRENT_STATE_DOCS_SYNC_HANDOFF.md`
+
 ## Useful Commands
 
 ```powershell
 & 'C:\Program Files\GitHub CLI\gh.exe' issue list --limit 30
+& 'C:\Program Files\GitHub CLI\gh.exe' auth refresh -h github.com
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 6 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 25 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 26 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 27 --comments
@@ -200,3 +205,4 @@ git pull
 - `docs/SUNNY_TOWN_COOKIE_SHOP_INPUT_REPLENISHMENT_HANDOFF.md`
 - `docs/SUNNY_TOWN_MINING_XP_VERTICAL_SLICE_HANDOFF.md`
 - `docs/SUNNY_TOWN_STACK_SPLITTING_HANDOFF.md`
+- `docs/CURRENT_STATE_DOCS_SYNC_HANDOFF.md`
