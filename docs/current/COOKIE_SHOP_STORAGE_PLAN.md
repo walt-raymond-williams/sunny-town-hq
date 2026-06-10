@@ -27,6 +27,8 @@ Current implemented baseline:
 - `cookie-keeper-shop` cookie output storage has a logical capacity of `64`.
 - `cookie-keeper-shop` input storage has a logical capacity of `64` total units.
 - Cookie production uses the shared `cookie` recipe: 1 flour + 1 sugar -> 1 cookie.
+- Player deposits into the `cookie-shop-input-chest` replenish Cookie Shop input storage through Sunny Town's validated container flow.
+- Input chest deposits accept Cookie Shop ingredients (`flour` and `sugar`) only, reject over-capacity deposits, and atomically consume the player inventory stack while incrementing `shop_input_storage_item`.
 - NPC production checks input ingredients and output capacity before mutating storage.
 - If ingredients are missing, HQ records a blocked production attempt with reason `missing_inputs` and does not consume partial inputs or mutate output stock.
 - If output storage is full, HQ records a blocked production attempt with reason `output_full` and does not consume inputs.
@@ -54,8 +56,7 @@ Current architecture decision:
 
 Next task for a fresh agent:
 
-- Add a way for gameplay to replenish Cookie Shop input storage, probably starting with a service/internal or narrow debug/admin path before player transfer UI.
-- Keep the storage source explicit: player-to-chest deposit and chest withdraw still need ownership/access rules before becoming player-facing.
+- Keep the storage source explicit: Cookie Shop input quantities live in `shop_input_storage_item`, not in fixture metadata or Sunny Town runtime state.
 - Do not create Cookie Keeper-held inventory.
 - Do not create Sunny Town fixture-local ingredient quantities.
 - If UI changes are made, show blocked/empty input state clearly instead of making the shop look broken.
@@ -203,6 +204,8 @@ Implemented notes:
 
 ## Immediate Next Slice: Cookie Shop Input Replenishment
 
+Status: `Implemented`
+
 Recommended next step:
 
 - Give gameplay a controlled way to add ingredients to `shop_input_storage_item`.
@@ -216,6 +219,14 @@ Acceptance criteria for this next slice:
 - Replenishment cannot exceed the input storage capacity.
 - Player-facing flows, if added, validate ownership/access and do not create fixture-local quantities.
 - Existing recipe-aware production remains idempotent and atomic.
+
+Implemented notes:
+
+- The existing Sunny Town `container_open` flow now renders `cookie-shop-input-chest` from authoritative `shop_input_storage_item` rows instead of generic `storage_container_slot` rows.
+- The existing Sunny Town `container_transfer` deposit path validates live chest access before calling HQ; HQ then consumes the selected player inventory slot and increments Cookie Shop input storage in one transaction.
+- Cookie Shop input deposits currently accept only `flour` and `sugar`.
+- Over-capacity input deposits return `shop input storage is full` and roll back the player inventory mutation.
+- Withdrawing from Cookie Shop input storage remains out of scope.
 
 ## Slice: Authored Cookie Shop Area
 

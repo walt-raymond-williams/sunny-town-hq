@@ -937,6 +937,122 @@ func TestTransferPlayerContainerStackRejectsFullTargetAndRollsBack(t *testing.T)
 	}
 }
 
+func TestTransferPlayerContainerStackDepositsIntoCookieShopInputStorage(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	containerID := seedCookieShopInputContainer(t, ctx, db)
+	if err := IncrementStudentItem(ctx, db, 123, FlourKey, 5); err != nil {
+		t.Fatalf("seed flour inventory: %v", err)
+	}
+
+	response, err := TransferPlayerContainerStack(ctx, db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: containerID,
+			SlotIndex:   4,
+		},
+		Mode: "move",
+	})
+	if err != nil {
+		t.Fatalf("deposit into cookie shop input storage: %v", err)
+	}
+	if response.Inventory.Slots[0].Item != nil {
+		t.Fatalf("player slot 0 = %#v, want empty after deposit", response.Inventory.Slots[0])
+	}
+	if response.Container.Slots[0].Item == nil || response.Container.Slots[0].Item.Key != FlourKey || response.Container.Slots[0].Item.Quantity != 5 {
+		t.Fatalf("input storage slot 0 = %#v, want 5 flour", response.Container.Slots[0])
+	}
+	if got := quantityForStudentItem(t, ctx, db, 123, FlourKey); got != 0 {
+		t.Fatalf("student aggregate flour = %d, want 0", got)
+	}
+	storage, err := LoadShopInputStorage(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load input storage: %v", err)
+	}
+	if len(storage.Items) != 1 || storage.Items[0].ItemKey != FlourKey || storage.Items[0].Quantity != 5 {
+		t.Fatalf("shop input storage = %#v, want 5 flour", storage)
+	}
+}
+
+func TestTransferPlayerContainerStackRejectsCookieShopInputOverflowAndRollsBack(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	containerID := seedCookieShopInputContainer(t, ctx, db)
+	if accepted, _, err := IncrementShopInputStorageItem(ctx, db, CookieKeeperShopID, SugarKey, CookieKeeperInputStorageCapacity-1); err != nil || !accepted {
+		t.Fatalf("seed sugar input accepted=%v err=%v, want accepted", accepted, err)
+	}
+	if err := IncrementStudentItem(ctx, db, 123, FlourKey, 2); err != nil {
+		t.Fatalf("seed flour inventory: %v", err)
+	}
+
+	_, err := TransferPlayerContainerStack(ctx, db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: containerID,
+			SlotIndex:   0,
+		},
+		Mode: "move",
+	})
+	if !errors.Is(err, ErrShopInputStorageFull) {
+		t.Fatalf("deposit error = %v, want ErrShopInputStorageFull", err)
+	}
+	if got := quantityForStudentItem(t, ctx, db, 123, FlourKey); got != 2 {
+		t.Fatalf("student aggregate flour = %d, want rollback to 2", got)
+	}
+	storage, err := LoadShopInputStorage(ctx, db, CookieKeeperShopID)
+	if err != nil {
+		t.Fatalf("load input storage: %v", err)
+	}
+	if len(storage.Items) != 1 || storage.Items[0].ItemKey != SugarKey || storage.Items[0].Quantity != CookieKeeperInputStorageCapacity-1 {
+		t.Fatalf("shop input storage = %#v, want only seeded sugar", storage)
+	}
+}
+
+func TestTransferPlayerContainerStackRejectsNonIngredientCookieShopInputDeposit(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	containerID := seedCookieShopInputContainer(t, ctx, db)
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 3); err != nil {
+		t.Fatalf("seed rock inventory: %v", err)
+	}
+
+	_, err := TransferPlayerContainerStack(ctx, db, ContainerTransferRequest{
+		AppUserID: 123,
+		Source: InventorySlotDescriptor{
+			Kind:      inventoryStorageKindPlayer,
+			SlotIndex: 0,
+		},
+		Destination: InventorySlotDescriptor{
+			Kind:        inventoryStorageKindContainer,
+			ContainerID: containerID,
+			SlotIndex:   0,
+		},
+		Mode: "move",
+	})
+	if !errors.Is(err, ErrUnsupportedInventoryStorage) {
+		t.Fatalf("deposit error = %v, want ErrUnsupportedInventoryStorage", err)
+	}
+	if got := quantityForStudentItem(t, ctx, db, 123, "rock"); got != 3 {
+		t.Fatalf("student aggregate rock = %d, want rollback to 3", got)
+	}
+}
+
 func TestCraftStudentRecipeCreatesStoneBlock(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
@@ -1172,6 +1288,34 @@ func seedStorageContainer(t *testing.T, ctx context.Context, db *pgxpool.Pool, c
 		slotCount,
 	); err != nil {
 		t.Fatalf("seed storage container: %v", err)
+	}
+	return containerID
+}
+
+func seedCookieShopInputContainer(t *testing.T, ctx context.Context, db *pgxpool.Pool) string {
+	t.Helper()
+	containerID := "fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest"
+	if _, err := db.Exec(
+		ctx,
+		`
+			insert into storage_container (
+				id,
+				kind,
+				room_id,
+				map_id,
+				fixture_id,
+				shop_id,
+				storage_role,
+				location_id,
+				slot_count,
+				access_policy
+			)
+			values ($1, 'fixture', 'sunny-town-main', 'sunny-town-house-1', 'cookie-shop-input-chest', $2, 'input', 'cookie-shop', 30, 'shop_input_deposit')
+		`,
+		containerID,
+		CookieKeeperShopID,
+	); err != nil {
+		t.Fatalf("seed cookie shop input container: %v", err)
 	}
 	return containerID
 }
@@ -1442,7 +1586,10 @@ func testInventoryDB(t *testing.T) (*pgxpool.Pool, func()) {
 			updated_at timestamptz not null default now()
 		)`,
 		`insert into inventory_item_type (key, name, description)
-			values ('cookie', 'Cookie', 'A treat for your pet.')`,
+			values
+				('cookie', 'Cookie', 'A treat for your pet.'),
+				('flour', 'Flour', 'A basic baking ingredient.'),
+				('sugar', 'Sugar', 'A sweet baking ingredient.')`,
 		`insert into inventory_item_type (key, name, description, equip_slot, visual_key)
 			values
 				('sunny_hoodie', 'Sunny Hoodie', 'A cozy hoodie for Sunny Town.', 'gear', 'sunny_hoodie_visual'),

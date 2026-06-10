@@ -388,7 +388,8 @@ func StatusForInventoryStorageError(err error) int {
 	if IsInventoryMoveClientError(err) ||
 		errors.Is(err, ErrContainerNotFound) ||
 		errors.Is(err, ErrInvalidContainer) ||
-		errors.Is(err, ErrInventoryFull) {
+		errors.Is(err, ErrInventoryFull) ||
+		errors.Is(err, ErrShopInputStorageFull) {
 		return http.StatusBadRequest
 	}
 	return http.StatusInternalServerError
@@ -402,6 +403,8 @@ func InventoryStorageErrorMessage(err error) string {
 		return "invalid container"
 	case errors.Is(err, ErrInventoryFull):
 		return "not enough room in inventory"
+	case errors.Is(err, ErrShopInputStorageFull):
+		return "shop input storage is full"
 	default:
 		return InventoryMoveErrorMessage(err)
 	}

@@ -58,6 +58,8 @@ Cookie Shop fixtures are the first concrete container anchors:
 
 Current `shop_stock_item` and `shop_input_storage_item` tables remain the specialized storage backing for Cookie Shop stock/input until a migration intentionally moves them into general container slots. Do not duplicate quantities in fixture metadata or Sunny Town runtime state.
 
+`cookie-shop-input-chest` is now projected through the general container WebSocket flow while retaining specialized storage: opening the chest returns slots built from `shop_input_storage_item`, and depositing `flour` or `sugar` consumes the player stack and increments `shop_input_storage_item` atomically in HQ. The generic `storage_container_slot` table is not used for Cookie Shop input quantities.
+
 ## Access Rules
 
 Every container has an `access_policy`.

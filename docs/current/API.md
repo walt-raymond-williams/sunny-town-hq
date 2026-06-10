@@ -176,6 +176,8 @@ Current internal API handler ownership:
 
 The response includes updated `inventory` slots and updated `container` slots. Supported modes match inventory moves: `move`, `swap`, `merge`, and `auto`.
 
+Cookie Shop input chests are a specialized container projection: `fixture:sunny-town-main:sunny-town-house-1:cookie-shop-input-chest` loads from `shop_input_storage_item`, and player deposits atomically consume the source player inventory stack while incrementing Cookie Shop input storage. The first supported ingredients are `flour` and `sugar`; deposits that would exceed the input capacity fail without partial mutation. Cookie Shop input withdraw remains out of scope.
+
 ## Sunny Town WebSocket
 
 Sunny Town exposes realtime gameplay at:
@@ -194,3 +196,5 @@ Container UI messages:
 - `container_transfer`: client sends `objectSource`, `objectId`, `source`, `destination`, and `clientTimeMs`. Sunny Town validates the requested direction against the chest `storageRole`, calls HQ, and replies with `container_transfer_committed` plus updated `inventory` and `container` grids.
 
 Current chest roles are enforced server-side: `input` chests allow deposit, `output` chests are read-only for player container transfers, and `general` chests allow both deposit and withdraw.
+
+For `cookie-shop-input-chest`, a successful deposit replenishes HQ-owned Cookie Shop input storage rather than writing fixture-local quantities. Sunny Town still owns the live access validation; HQ owns the durable player-inventory decrement and shop-input increment.

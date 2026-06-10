@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	ErrContainerNotFound = errors.New("container not found")
-	ErrInvalidContainer  = errors.New("invalid container")
+	ErrContainerNotFound    = errors.New("container not found")
+	ErrInvalidContainer     = errors.New("invalid container")
+	ErrShopInputStorageFull = errors.New("shop input storage is full")
 )
 
 type ContainerSlotsResponse struct {
@@ -34,9 +35,12 @@ type ContainerTransferResponse struct {
 }
 
 type storageContainerState struct {
-	ID        string
-	SlotCount int
-	Revision  int64
+	ID           string
+	ShopID       string
+	StorageRole  string
+	AccessPolicy string
+	SlotCount    int
+	Revision     int64
 }
 
 func LoadContainerSlots(ctx context.Context, querier inventoryMutationQuerier, containerID string) (ContainerSlotsResponse, error) {
@@ -48,6 +52,9 @@ func LoadContainerSlots(ctx context.Context, querier inventoryMutationQuerier, c
 	container, err := loadStorageContainer(ctx, querier, containerID, false)
 	if err != nil {
 		return ContainerSlotsResponse{}, err
+	}
+	if container.isShopInputStorage() {
+		return loadShopInputStorageContainerSlots(ctx, querier, container)
 	}
 
 	rows, err := querier.Query(
@@ -163,6 +170,16 @@ func TransferPlayerContainerStack(ctx context.Context, db *pgxpool.Pool, request
 	if err := validateTransferSlotAgainstContainer(request.Destination, container); err != nil {
 		return ContainerTransferResponse{}, err
 	}
+	if container.isShopInputStorage() {
+		response, err := transferPlayerStackToShopInputStorage(ctx, tx, request, container)
+		if err != nil {
+			return ContainerTransferResponse{}, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return ContainerTransferResponse{}, err
+		}
+		return response, nil
+	}
 
 	source, err := loadTransferSlot(ctx, tx, request.AppUserID, request.Source)
 	if err != nil {
@@ -254,9 +271,139 @@ func validateTransferSlotAgainstContainer(descriptor InventorySlotDescriptor, co
 	return nil
 }
 
+func loadShopInputStorageContainerSlots(ctx context.Context, querier inventoryMutationQuerier, container storageContainerState) (ContainerSlotsResponse, error) {
+	rows, err := querier.Query(
+		ctx,
+		`
+			select row_number() over (order by iit.id)::integer - 1 as slot_index,
+				iit.key,
+				iit.name,
+				iit.description,
+				sisi.quantity,
+				coalesce(iit.equip_slot, '') as equip_slot,
+				coalesce(iit.visual_key, '') as visual_key,
+				coalesce(iit.icon_key, '') as icon_key,
+				coalesce(iit.max_stack, 0) as max_stack,
+				coalesce(iit.category, '') as category
+			from shop_input_storage_item sisi
+			join inventory_item_type iit on iit.id = sisi.item_type_id
+			where sisi.shop_id = $1
+				and sisi.quantity > 0
+			order by iit.id
+		`,
+		container.ShopID,
+	)
+	if err != nil {
+		return ContainerSlotsResponse{}, err
+	}
+	defer rows.Close()
+
+	response := ContainerSlotsResponse{
+		ContainerID: container.ID,
+		SlotCount:   container.SlotCount,
+		Revision:    container.Revision,
+		Slots:       make([]InventorySlotResponse, 0, container.SlotCount),
+	}
+	for slotIndex := 0; slotIndex < container.SlotCount; slotIndex++ {
+		response.Slots = append(response.Slots, InventorySlotResponse{SlotIndex: slotIndex})
+	}
+	for rows.Next() {
+		var slot InventorySlotResponse
+		var item InventorySlotItemResponse
+		if err := rows.Scan(
+			&slot.SlotIndex,
+			&item.Key,
+			&item.Name,
+			&item.Description,
+			&item.Quantity,
+			&item.EquipSlot,
+			&item.VisualKey,
+			&item.IconKey,
+			&item.MaxStack,
+			&item.Category,
+		); err != nil {
+			return ContainerSlotsResponse{}, err
+		}
+		if slot.SlotIndex >= 0 && slot.SlotIndex < len(response.Slots) {
+			response.Slots[slot.SlotIndex].Item = &item
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return ContainerSlotsResponse{}, err
+	}
+	return response, nil
+}
+
+func transferPlayerStackToShopInputStorage(ctx context.Context, querier inventoryMutationQuerier, request ContainerTransferRequest, container storageContainerState) (ContainerTransferResponse, error) {
+	if request.Source.Kind != inventoryStorageKindPlayer || request.Destination.Kind != inventoryStorageKindContainer {
+		return ContainerTransferResponse{}, ErrUnsupportedInventoryStorage
+	}
+	if request.Mode != "move" && request.Mode != "auto" {
+		return ContainerTransferResponse{}, ErrUnsupportedInventoryMoveMode
+	}
+
+	source, err := loadInventorySlot(ctx, querier, request.AppUserID, request.Source.SlotIndex)
+	if err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	if !source.Occupied {
+		return ContainerTransferResponse{}, ErrInventorySourceEmpty
+	}
+
+	itemKey, err := loadItemKeyForTypeID(ctx, querier, source.ItemTypeID)
+	if err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	if !isCookieShopInputIngredient(itemKey) {
+		return ContainerTransferResponse{}, ErrUnsupportedInventoryStorage
+	}
+
+	accepted, _, err := IncrementShopInputStorageItem(ctx, querier, container.ShopID, itemKey, source.Quantity)
+	if err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	if !accepted {
+		return ContainerTransferResponse{}, ErrShopInputStorageFull
+	}
+	if err := savePlayerInventorySlot(ctx, querier, request.AppUserID, request.Source.SlotIndex, inventorySlotState{}); err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	if err := applyPlayerSlotAggregateDelta(ctx, querier, request.AppUserID, request.Source, source, inventorySlotState{}); err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	if err := incrementStorageContainerRevision(ctx, querier, container.ID); err != nil {
+		return ContainerTransferResponse{}, err
+	}
+
+	inventory, err := LoadStudentSlots(ctx, querier, request.AppUserID)
+	if err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	containerSlots, err := LoadContainerSlots(ctx, querier, container.ID)
+	if err != nil {
+		return ContainerTransferResponse{}, err
+	}
+	return ContainerTransferResponse{Inventory: inventory, Container: containerSlots}, nil
+}
+
+func loadItemKeyForTypeID(ctx context.Context, querier rowQuerier, itemTypeID int64) (string, error) {
+	var itemKey string
+	err := querier.QueryRow(ctx, `select key from inventory_item_type where id = $1`, itemTypeID).Scan(&itemKey)
+	return itemKey, err
+}
+
+func isCookieShopInputIngredient(itemKey string) bool {
+	return itemKey == FlourKey || itemKey == SugarKey
+}
+
 func loadStorageContainer(ctx context.Context, querier rowQuerier, containerID string, forUpdate bool) (storageContainerState, error) {
 	query := `
-		select id, slot_count, revision
+		select id,
+			coalesce(shop_id, ''),
+			coalesce(storage_role, ''),
+			access_policy,
+			slot_count,
+			revision
 		from storage_container
 		where id = $1
 	`
@@ -264,11 +411,24 @@ func loadStorageContainer(ctx context.Context, querier rowQuerier, containerID s
 		query += " for update"
 	}
 	var container storageContainerState
-	err := querier.QueryRow(ctx, query, strings.TrimSpace(containerID)).Scan(&container.ID, &container.SlotCount, &container.Revision)
+	err := querier.QueryRow(ctx, query, strings.TrimSpace(containerID)).Scan(
+		&container.ID,
+		&container.ShopID,
+		&container.StorageRole,
+		&container.AccessPolicy,
+		&container.SlotCount,
+		&container.Revision,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return storageContainerState{}, ErrContainerNotFound
 	}
 	return container, err
+}
+
+func (container storageContainerState) isShopInputStorage() bool {
+	return container.ShopID == CookieKeeperShopID &&
+		container.StorageRole == "input" &&
+		container.AccessPolicy == "shop_input_deposit"
 }
 
 func lockStorageContainer(ctx context.Context, querier rowQuerier, containerID string) error {
