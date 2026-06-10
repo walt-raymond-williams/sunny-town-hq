@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after closing #27.
+Snapshot refreshed: 2026-06-10 after closing #28.
 
 ### Closed
 
@@ -107,6 +107,10 @@ Snapshot refreshed: 2026-06-10 after closing #27.
   Completed in `3786d8d`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/27
 
+- #28 Define stats and skills progression model
+  Completed in `cff87be`.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
+
 - #29 Add player to container transfer operations
   Completed in `f8a212b`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
@@ -125,22 +129,16 @@ Snapshot refreshed: 2026-06-10 after closing #27.
 
 ### Open
 
-- #28 Define stats and skills progression model
-  Status: `status:ready`
-  Related: #20, #32
-  Handoff: `docs/SUNNY_TOWN_STATS_SKILLS_MODEL_HANDOFF.md`
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
+No open inventory redesign issues remain in this tracking snapshot.
 
 ## Recommended Next Management Step
 
-Assign the remaining ready inventory redesign ticket:
-
-- #28 Define stats and skills progression model
+No ready inventory redesign issues remain.
 
 Why:
 
-- This issue is marked `status:ready`, has a handoff doc, and does not depend on any newly opened issue.
-- #28 can run independently of the completed E-menu and storage/container backend work.
+- The tracked inventory redesign issues have been completed on `codex/inventory-redesign-dev`.
+- Remaining open `status:ready` issues in GitHub are outside this inventory feature branch unless the roadmap is expanded.
 
 ## Useful Commands
 
