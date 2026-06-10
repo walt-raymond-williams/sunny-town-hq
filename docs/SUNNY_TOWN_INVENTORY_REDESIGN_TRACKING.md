@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after closing #32.
+Snapshot refreshed: 2026-06-10 after closing #30.
 
 ### Closed
 
@@ -107,6 +107,10 @@ Snapshot refreshed: 2026-06-10 after closing #32.
   Completed in `f8a212b`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/29
 
+- #30 Render chest inventory grid
+  Completed in `bb8b30e`.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
+
 - #31 Add Cookie Shop input storage
   Completed in `a338f86`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/31
@@ -130,26 +134,17 @@ Snapshot refreshed: 2026-06-10 after closing #32.
   Handoff: `docs/SUNNY_TOWN_STATS_SKILLS_MODEL_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/28
 
-- #30 Render chest inventory grid
-  Status: `status:ready`
-  Blocked by: #12 and #29, closed
-  Related: #13, #24
-  Handoff: `docs/SUNNY_TOWN_CHEST_INVENTORY_GRID_HANDOFF.md`
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/30
-
 ## Recommended Next Management Step
 
 Assign agents to the first ready batch:
 
 - #27 Add tabbed E menu shell
 - #28 Define stats and skills progression model
-- #30 Render chest inventory grid
 
 Why:
 
 - These issues are marked `status:ready`, have handoff docs, and do not depend on any newly opened issue.
 - #27 and #28 can run independently of the storage/container backend work.
-- #30 was unblocked by #29 and can now render chest slots against the container response shape.
 
 ## Useful Commands
 
