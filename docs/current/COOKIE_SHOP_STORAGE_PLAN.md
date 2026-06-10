@@ -47,7 +47,7 @@ Current architecture decision:
 - Cookie production requires input ingredients in Cookie Shop input storage. Cookie Keeper can produce only while working in the shop and while ingredients/output capacity are available.
 - HQ crafting now has a shared recipe catalog/execution foundation in `internal/hq/inventory/crafting.go`.
 - The current `stone_block` player recipe still uses the existing `/api/student/crafting/...` behavior, but execution is routed through storage operations instead of being hard-coded to student inventory.
-- Shared recipe execution is intentionally storage-agnostic: current student crafting adapts `ConsumeStudentItem` / `IncrementStudentItem`, while future Cookie Shop work should add shop input/output storage operations.
+- Shared recipe execution is intentionally storage-agnostic: current student crafting adapts `ConsumeStudentItem` / `IncrementStudentItem` behind a `player_inventory` storage descriptor, while Cookie Shop production uses `shop_input_storage` as the recipe input descriptor and `shop_stock` as the output descriptor.
 - Inventory redesign discovery in `docs/SUNNY_TOWN_INVENTORY_REDESIGN_DISCOVERY.md` agrees with this direction: chest fixtures are interaction metadata, durable quantities live in HQ, and future grid/container UI should wrap explicit storage endpoints rather than create Sunny Town-local inventory state.
 
 Next task for a fresh agent:
@@ -126,10 +126,10 @@ Implemented notes:
 
 - Replaced the student-specific internal recipe structs with `RecipeDefinition` and `RecipeIngredient`.
 - Renamed the recipe list to `recipeCatalog` to make the shared catalog role explicit.
-- Added a storage-agnostic recipe executor that consumes required ingredients before producing output.
+- Added a storage-agnostic recipe executor that consumes required ingredients before producing output and carries explicit input/output storage descriptors through availability and execution.
 - Added `studentRecipeStorage` as the first adapter over existing student inventory functions.
 - Preserved the current `stone_block` API behavior and response shape.
-- Added unit tests proving shared execution can run against fake storage without a player `app_user_id`, and that missing ingredients stop output production.
+- Added unit tests proving shared execution can run against fake storage without a player `app_user_id`, and that missing ingredients stop output production while retaining the selected storage context.
 
 ## Immediate Next Slice: HQ-Owned Shop Input Storage
 

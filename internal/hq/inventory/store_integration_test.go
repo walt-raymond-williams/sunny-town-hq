@@ -831,6 +831,31 @@ func TestCraftingRecipesUseSlotTotalsWhenAggregateDiverges(t *testing.T) {
 	}
 }
 
+func TestLoadCraftingRecipesForStorageUsesStorageContextQuantities(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	storage := &fakeRecipeStorage{quantities: map[string]int{
+		"rock": 4,
+	}}
+
+	recipes, err := LoadCraftingRecipesForStorage(ctx, db, storage)
+	if err != nil {
+		t.Fatalf("load recipes for storage: %v", err)
+	}
+	if len(recipes.Recipes) != 1 {
+		t.Fatalf("recipes = %#v, want one student-visible recipe", recipes)
+	}
+	recipe := recipes.Recipes[0]
+	if recipe.Key != "stone_block" || !recipe.CanCraft {
+		t.Fatalf("recipe = %#v, want craftable stone_block from storage context", recipe)
+	}
+	if len(recipe.Ingredients) != 1 || recipe.Ingredients[0].Owned != 4 {
+		t.Fatalf("ingredients = %#v, want owned quantity from storage context", recipe.Ingredients)
+	}
+}
+
 func TestCraftStudentRecipeReportsFullInventoryOutput(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
@@ -886,7 +911,7 @@ func TestCraftStudentRecipeRequiresIngredients(t *testing.T) {
 	}
 
 	_, err := CraftStudentRecipe(ctx, db, 123, CraftRecipeRequest{RecipeKey: "stone_block"})
-	if err != ErrInsufficientIngredient {
+	if !errors.Is(err, ErrInsufficientIngredient) {
 		t.Fatalf("craft recipe error = %v, want ErrInsufficientIngredient", err)
 	}
 

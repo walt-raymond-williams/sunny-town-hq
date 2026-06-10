@@ -40,7 +40,7 @@ HQ owns durable state:
 - assignments, attempts, grading, and feedback
 - pet state
 - wallet stars and star ledger
-- inventory, equipment, hotbar, crafting, shops, and durable shop stock
+- inventory, equipment, hotbar, crafting, shops, durable shop input storage, and durable shop stock
 - persisted Sunny Town map objects
 - last accepted Sunny Town player position
 
