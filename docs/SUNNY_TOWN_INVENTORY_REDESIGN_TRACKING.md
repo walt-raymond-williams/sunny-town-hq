@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after completing issue #6.
+Snapshot refreshed: 2026-06-10 after creating PR review follow-up issues #36 and #37.
 
 ### Closed
 
@@ -145,15 +145,35 @@ Snapshot refreshed: 2026-06-10 after completing issue #6.
 
 ### Open
 
-No open inventory redesign issues remain.
+- #36 Require equipped pickaxe for Sunny Town mining
+  Status: `status:ready`
+  Priority: `priority:p0`
+  Handoff: `docs/SUNNY_TOWN_EQUIPPED_PICKAXE_MINING_HANDOFF.md`
+  Blocking PR merge.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/36
+
+- #37 Refresh mining XP in open character panel after mining
+  Status: `status:ready`
+  Priority: `priority:p2`
+  Handoff: `docs/SUNNY_TOWN_MINING_XP_LIVE_REFRESH_HANDOFF.md`
+  Non-blocking review polish; recommended after #36.
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/37
 
 ## Recommended Next Management Step
 
-No ready inventory redesign feature issues remain.
+PR review requested changes.
 
 Recommended next step:
 
-Open the final PR from `codex/inventory-redesign-dev` for human review. The current-state docs in `docs/current/` are the reviewer front door; archived inventory planning docs are historical rationale only.
+Start #36, `Require equipped pickaxe for Sunny Town mining`.
+
+Why:
+
+- It is a blocking PR review finding.
+- Mining currently authorizes by pickaxe ownership instead of equipped tool state.
+- It violates the project authority rule that gameplay effects must be validated server-side using accepted position and equipped tools.
+
+Then address #37, `Refresh mining XP in open character panel after mining`, as non-blocking polish before re-review if practical.
 
 ## Useful Commands
 
@@ -168,6 +188,8 @@ Open the final PR from `codex/inventory-redesign-dev` for human review. The curr
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 33 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 34 --comments
 & 'C:\Program Files\GitHub CLI\gh.exe' issue view 35 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 36 --comments
+& 'C:\Program Files\GitHub CLI\gh.exe' issue view 37 --comments
 git checkout codex/inventory-redesign-dev
 git pull
 ```
@@ -188,5 +210,7 @@ git pull
 - `docs/archive/SUNNY_TOWN_INVENTORY_REDESIGN_TICKETS.md`
 - `docs/archive/SUNNY_TOWN_SLOTTED_INVENTORY_SCHEMA_PLAN.md`
 - `docs/archive/INVENTORY_AND_EQUIPMENT.md`
+- `docs/SUNNY_TOWN_EQUIPPED_PICKAXE_MINING_HANDOFF.md`
+- `docs/SUNNY_TOWN_MINING_XP_LIVE_REFRESH_HANDOFF.md`
 
 Completed inventory handoff docs for issues #8 through #35 and #6 were deleted after their issue work landed. Durable rationale was preserved in `docs/current/` and `docs/archive/`.
