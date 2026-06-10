@@ -150,3 +150,15 @@ Current rules:
 - `student_inventory_item` remains as an aggregate compatibility table while equipment, hotbar, pet, placement, and Sunny Town quantity flows are migrated safely.
 - Student crafting recipe availability and execution use `student_inventory_slot` as the authoritative quantity source.
 - Inventory mutation helpers update slot rows and aggregate rows in the same transaction.
+
+## Planned Container Storage
+
+General chest/container storage is designed in `docs/current/CONTAINER_STORAGE.md`.
+
+Accepted future schema direction:
+
+- `storage_container` owns stable container identity, access policy, slot count, revision, and fixture/placed-object/shop metadata.
+- `storage_container_slot` owns durable item stacks for each container slot.
+- Authored fixture containers should use deterministic IDs such as `fixture:<room_id>:<map_id>:<fixture_id>`.
+- Placed object containers should use IDs derived from the persisted placed object ID.
+- Cookie Shop `shop_stock_item` and `shop_input_storage_item` remain the current specialized backing tables until a deliberate migration folds them into general container slots.

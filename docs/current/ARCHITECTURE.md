@@ -44,6 +44,8 @@ HQ owns durable state:
 - persisted Sunny Town map objects
 - last accepted Sunny Town player position
 
+Sunny Town container/chest storage follows the contract in `docs/current/CONTAINER_STORAGE.md`: HQ owns durable container contents and slot transactions, while Sunny Town validates live proximity and access before any mutation.
+
 Sunny Town owns live realtime state:
 
 - connected players

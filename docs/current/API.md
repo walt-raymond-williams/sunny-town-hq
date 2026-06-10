@@ -118,6 +118,8 @@ Supported first-slice modes:
 
 The response is the updated slotted inventory payload. Stack splitting is still deferred.
 
+Future container transfer APIs should extend this descriptor pattern with `kind: "container"` and a stable `containerId`, following `docs/current/CONTAINER_STORAGE.md`. Browser requests must not be treated as live access authority; Sunny Town validates proximity/object access before HQ mutates durable container contents.
+
 `GET /api/student/crafting/recipes` returns student-visible recipes with ingredient ownership derived from the selected recipe storage context. The current public student route uses a `player_inventory` context backed by `student_inventory_slot` totals. During the slotted-inventory transition, the aggregate `student_inventory_item` table is still maintained for compatibility, but crafting availability uses the same slot authority as crafting execution.
 
 `POST /api/student/crafting/craft` consumes ingredients and produces output through the slotted inventory mutation helpers. Internally, shared recipe execution uses explicit input/output storage descriptors; the student route maps both input and output to `player_inventory`, while shop production maps input to `shop_input_storage` and output to `shop_stock`. Successful responses return the updated slotted inventory payload shape (`slotCount`, `slots`, and aggregate `items`) plus refreshed recipe availability, so the Sunny Town inventory grid can update without reconstructing or reordering slots from aggregate item totals. If there is no compatible stack or empty slot for the output, the endpoint returns `not enough room in inventory`.
