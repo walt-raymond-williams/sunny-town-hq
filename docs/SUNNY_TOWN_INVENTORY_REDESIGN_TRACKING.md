@@ -37,7 +37,7 @@ Keep GitHub issues as the execution source of truth. Keep this file as the compa
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-10 after completing issue #35.
+Snapshot refreshed: 2026-06-10 after implementing issue #34.
 
 ### Closed
 
@@ -135,12 +135,12 @@ Snapshot refreshed: 2026-06-10 after completing issue #35.
   Completed in `999aa3e`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/35
 
-### Open
-
-- #34 Implement mining XP progression vertical slice  
-  Status: `status:ready`  
-  Handoff: `docs/SUNNY_TOWN_MINING_XP_VERTICAL_SLICE_HANDOFF.md`  
+- #34 Implement mining XP progression vertical slice
+  Implemented and pushed in `78f0a45`.
+  GitHub issue closeout is blocked locally by expired/invalid `gh` API auth returning HTTP 401; refresh `gh` auth, then comment verification, close the issue, and remove `status:in-progress`.
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/34
+
+### Open
 
 - #6 Keep current-state docs synchronized with architecture changes  
   Status: `status:ready`  
@@ -149,20 +149,21 @@ Snapshot refreshed: 2026-06-10 after completing issue #35.
 
 ## Recommended Next Management Step
 
-Start issue #34:
+Resolve issue #34 GitHub closeout:
 
 `Implement mining XP progression vertical slice`
 
 Why:
 
-- It is the remaining open inventory-redesign feature issue on this branch.
-- It builds on the completed stats/skills model design from #28.
-- It gives the mining loop a durable progression payoff after the inventory/resource work.
+- The implementation is pushed in `78f0a45`, but GitHub API calls returned HTTP 401 before the issue could be commented/closed.
+- The issue may still have `status:in-progress` until `gh auth refresh -h github.com` is completed locally.
 
 Suggested sequence:
 
-1. #34 Implement mining XP progression vertical slice.
-2. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
+1. Refresh local GitHub CLI auth.
+2. Comment #34 with commit `78f0a45` and verification results.
+3. Close #34 and remove `status:in-progress`.
+4. #6 Current-state docs/integration review before final human review of `codex/inventory-redesign-dev`.
 
 ## Useful Commands
 
