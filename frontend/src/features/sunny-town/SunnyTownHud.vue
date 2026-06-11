@@ -42,12 +42,11 @@ defineEmits<{
       </div>
     </div>
 
-    <v-alert v-if="error" class="mt-4" type="error" variant="tonal">
-      {{ error }}
-    </v-alert>
-
     <div class="sunny-town-stage">
       <slot name="canvas" />
+      <v-alert v-if="error" class="sunny-town-error" type="error" variant="tonal">
+        {{ error }}
+      </v-alert>
       <div v-if="gameToast" class="sunny-town-toast" role="status">
         {{ gameToast }}
       </div>

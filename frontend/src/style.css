@@ -22,6 +22,12 @@ body {
   padding: 24px;
 }
 
+.app-container--sunny-town {
+  min-height: 100dvh;
+  overflow: hidden;
+  padding: 0;
+}
+
 .panel {
   border: 1px solid #d9e1e4;
   border-radius: 8px;
@@ -764,22 +770,44 @@ h2 {
 }
 
 .sunny-town-page {
-  display: grid;
-  gap: 16px;
-  margin: 0 auto;
-  max-width: 1180px;
+  background: #17212b;
+  height: 100dvh;
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
   width: 100%;
 }
 
 .sunny-town-toolbar {
   align-items: center;
+  background: rgba(23, 33, 43, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(23, 33, 43, 0.22);
+  color: #ffffff;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   justify-content: space-between;
+  left: 12px;
+  max-width: calc(100% - 24px);
+  padding: 10px 12px;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 8;
+}
+
+.sunny-town-toolbar .eyebrow {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 11px;
+  margin-bottom: 2px;
 }
 
 .sunny-town-toolbar h1 {
-  font-size: clamp(34px, 6vw, 56px);
+  color: #ffffff;
+  font-size: 22px;
+  line-height: 1.1;
+  margin: 0;
 }
 
 .sunny-town-toolbar__actions {
@@ -792,9 +820,7 @@ h2 {
 
 .sunny-town-stage {
   background: #17212b;
-  border: 1px solid #d9e1e4;
-  border-radius: 8px;
-  min-height: min(72vh, 760px);
+  height: 100%;
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -802,8 +828,8 @@ h2 {
 
 .sunny-town-stage canvas {
   display: block;
-  height: min(72vh, 760px);
-  min-height: 420px;
+  height: 100%;
+  touch-action: none;
   width: 100%;
 }
 
@@ -818,6 +844,16 @@ h2 {
   position: absolute;
   transform: translateX(-50%);
   z-index: 4;
+}
+
+.sunny-town-error {
+  left: 50%;
+  max-width: min(620px, calc(100% - 24px));
+  position: absolute;
+  top: 84px;
+  transform: translateX(-50%);
+  width: 620px;
+  z-index: 7;
 }
 
 .sunny-town-hotbar__slot {
@@ -839,8 +875,10 @@ h2 {
   font-size: 14px;
   gap: 8px;
   left: 12px;
+  max-width: min(420px, calc(100% - 24px));
   padding: 8px 10px;
   position: absolute;
+  z-index: 4;
 }
 
 .sunny-town-toast {
@@ -851,12 +889,14 @@ h2 {
   color: #ffffff;
   font-size: 14px;
   font-weight: 700;
+  max-width: min(360px, calc(100% - 24px));
   pointer-events: none;
   position: absolute;
   right: 12px;
-  top: 12px;
+  top: 84px;
   transform: translateY(0);
   padding: 8px 12px;
+  z-index: 7;
 }
 
 .sunny-town-talk-hint {
@@ -873,8 +913,9 @@ h2 {
   padding: 8px 10px;
   pointer-events: none;
   position: absolute;
-  top: 12px;
+  top: 84px;
   transform: translateX(-50%);
+  z-index: 5;
 }
 
 .sunny-town-dialogue {
@@ -946,10 +987,12 @@ h2 {
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
   left: 50%;
+  max-height: calc(100% - 156px);
   max-width: min(820px, calc(100% - 24px));
+  overflow: auto;
   padding: 14px;
   position: absolute;
-  top: 54px;
+  top: 84px;
   transform: translateX(-50%);
   width: 820px;
   z-index: 6;
@@ -962,12 +1005,12 @@ h2 {
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
   left: 50%;
-  max-height: calc(100% - 24px);
+  max-height: calc(100% - 156px);
   max-width: min(860px, calc(100% - 24px));
   overflow: auto;
   padding: 14px;
   position: absolute;
-  top: 54px;
+  top: 84px;
   transform: translateX(-50%);
   width: 860px;
   z-index: 6;
@@ -980,10 +1023,12 @@ h2 {
   box-shadow: 0 18px 42px rgba(23, 33, 43, 0.34);
   color: #ffffff;
   left: 50%;
+  max-height: calc(100% - 156px);
   max-width: min(680px, calc(100% - 24px));
+  overflow: auto;
   padding: 14px;
   position: absolute;
-  top: 54px;
+  top: 84px;
   transform: translateX(-50%);
   width: 680px;
   z-index: 6;
@@ -1152,8 +1197,8 @@ h2 {
   gap: 16px;
   grid-template-columns: minmax(280px, 0.8fr) minmax(420px, 1.2fr);
   grid-template-rows: auto minmax(0, 1fr);
-  inset: 12px;
-  max-height: calc(100% - 24px);
+  inset: 84px 12px 82px;
+  max-height: none;
   max-width: none;
   overflow: hidden;
   padding: 16px;
@@ -1403,9 +1448,19 @@ h2 {
   padding: 4px 0;
 }
 
+@media (max-width: 840px) {
+  .sunny-town-help {
+    bottom: 78px;
+  }
+}
+
 @media (max-width: 560px) {
   .app-container {
     padding: 12px;
+  }
+
+  .app-container--sunny-town {
+    padding: 0;
   }
 
   .v-card-text {
@@ -1422,11 +1477,11 @@ h2 {
   }
 
   .sunny-town-inventory-tray {
-    inset: 10px;
+    inset: 158px 8px 76px;
     grid-template-columns: 1fr;
     grid-template-rows: none;
     height: auto;
-    max-height: calc(100% - 20px);
+    max-height: none;
     max-width: none;
     overflow-y: auto;
     width: auto;
@@ -1503,15 +1558,40 @@ h2 {
   .sunny-town-toolbar {
     align-items: flex-start;
     display: grid;
+    gap: 8px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+    padding: 8px;
+    right: 8px;
+    top: 8px;
+  }
+
+  .sunny-town-toolbar h1 {
+    font-size: 18px;
   }
 
   .sunny-town-toolbar__actions {
     justify-content: flex-start;
   }
 
-  .sunny-town-stage,
-  .sunny-town-stage canvas {
-    min-height: 520px;
+  .sunny-town-error,
+  .sunny-town-toast,
+  .sunny-town-talk-hint {
+    top: 158px;
+  }
+
+  .sunny-town-help {
+    bottom: 76px;
+    font-size: 12px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+    right: 8px;
+  }
+
+  .sunny-town-hotbar {
+    bottom: 8px;
+    gap: 6px;
+    max-width: calc(100% - 16px);
   }
 
   .sunny-town-shop__columns {
@@ -1519,20 +1599,18 @@ h2 {
   }
 
   .sunny-town-shop {
-    max-height: calc(100% - 24px);
-    overflow: auto;
-    top: 12px;
+    max-height: calc(100% - 234px);
+    top: 158px;
   }
 
   .sunny-town-schoolwork {
-    max-height: calc(100% - 24px);
-    overflow: auto;
-    top: 12px;
+    max-height: calc(100% - 234px);
+    top: 158px;
   }
 
   .sunny-town-chest-panel {
-    max-height: calc(100% - 24px);
-    top: 12px;
+    max-height: calc(100% - 234px);
+    top: 158px;
   }
 
   .sunny-town-chest-panel__grids {
