@@ -42,7 +42,7 @@ export function useSunnyTownWorldState() {
       return false
     }
     players.value = message.players || []
-    npcs.value = message.npcs || npcs.value
+    npcs.value = message.npcs !== undefined ? message.npcs : npcs.value
     collectibles.value = message.collectibles || []
     resourceNodes.value = message.resourceNodes || []
     placedObjects.value = message.placedObjects || placedObjects.value
@@ -55,7 +55,7 @@ export function useSunnyTownWorldState() {
       activeMap.value = normalizeSunnyTownMap(message.map)
     }
     players.value = message.players || []
-    npcs.value = message.npcs || activeMap.value?.npcs || []
+    npcs.value = message.npcs !== undefined ? message.npcs : activeMap.value?.npcs || []
     collectibles.value = message.collectibles || []
     resourceNodes.value = message.resourceNodes || []
     placedObjects.value = message.placedObjects || []

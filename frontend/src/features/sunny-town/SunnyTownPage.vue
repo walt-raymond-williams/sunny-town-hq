@@ -668,11 +668,10 @@ function nearestChestToSelf(): SunnyTownWorldObject | null {
 }
 
 function renderedSunnyTownNpcs(): SunnyTownNpc[] {
-  const map = activeMap.value
-  if (!map) {
+  if (!activeMap.value) {
     return []
   }
-  return npcs.value.length > 0 ? npcs.value : map.npcs
+  return npcs.value
 }
 
 function renderedSunnyTownPlayers(): SunnyTownPlayer[] {

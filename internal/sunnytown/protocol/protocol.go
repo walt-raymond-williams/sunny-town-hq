@@ -69,7 +69,7 @@ type ServerMessage struct {
 	Tick           int64                          `json:"tick,omitempty"`
 	ServerTimeMS   int64                          `json:"serverTimeMs,omitempty"`
 	Players        []PlayerSnapshot               `json:"players,omitempty"`
-	NPCs           []NPCSnapshot                  `json:"npcs,omitempty"`
+	NPCs           []NPCSnapshot                  `json:"npcs"`
 	Collectibles   []CollectibleSnapshot          `json:"collectibles,omitempty"`
 	ResourceNodes  []ResourceNodeSnapshot         `json:"resourceNodes,omitempty"`
 	PlacedObjects  []PlacedObjectSnapshot         `json:"placedObjects,omitempty"`
