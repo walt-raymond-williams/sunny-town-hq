@@ -18,7 +18,11 @@ const {
 <template>
   <v-app>
     <v-main>
-      <v-container class="app-container" fluid>
+      <v-container
+        class="app-container"
+        :class="{ 'app-container--sunny-town': routeName === 'sunny-town' }"
+        fluid
+      >
         <RouterView />
 
         <div v-if="isFallingStarsVisible" class="game-overlay" role="dialog" aria-modal="true">
