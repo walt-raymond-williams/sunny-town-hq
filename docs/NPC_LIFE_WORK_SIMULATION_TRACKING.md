@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-11 after completing Cookie Keeper home issue #49.
+Snapshot refreshed: 2026-06-11 after completing day cadence issue #50.
 
 ### Epic
 
@@ -39,16 +39,15 @@ Snapshot refreshed: 2026-06-11 after completing Cookie Keeper home issue #49.
   Handoff: `docs/NPC_LIFE_WORK_COOKIE_KEEPER_HOME_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/49
 
-### Open
-
 - #50 Add configurable NPC day cadence
-  Status: `status:ready`
+  Status: closed
   Handoff: `docs/NPC_LIFE_WORK_DAY_CADENCE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/50
 
+### Open
+
 - #51 Tune Cookie Keeper home/work demo loop
-  Status: `status:blocked`
-  Blocked by: #50
+  Status: `status:ready`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/51
 
 - #52 Improve NPC routine debug output for demo review
@@ -71,14 +70,14 @@ Snapshot refreshed: 2026-06-11 after completing Cookie Keeper home issue #49.
 
 ## Recommended Next Management Step
 
-Next executable child issue after #49 closes:
+Next executable child issue after #50 closes:
 
-`#50 Add configurable NPC day cadence`
+`#51 Tune Cookie Keeper home/work demo loop`
 
 Why:
 
-- It lets the home/work loop use a reviewable server-owned simulated day instead of waiting for real UTC phase changes.
-- It unblocks final Cookie Keeper routine tuning in #51.
+- It uses the reviewable server-owned simulated day from #50 to make the Cookie Keeper home/work loop observable.
+- It unblocks debug polish in #52.
 
 ## Useful Commands
 

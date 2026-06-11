@@ -15,27 +15,37 @@ const (
 
 	npcScheduleMajorPressure = 55.0
 	npcScheduleMinorPressure = 30.0
+
+	defaultNPCScheduleDayLength = 24 * time.Minute
 )
 
-func npcSchedulePhaseAt(now time.Time) npcSchedulePhase {
-	hour := now.UTC().Hour()
+func npcSchedulePhaseAt(now time.Time, dayLength time.Duration) npcSchedulePhase {
+	if dayLength <= 0 {
+		dayLength = defaultNPCScheduleDayLength
+	}
+	dayNanos := dayLength.Nanoseconds()
+	elapsedNanos := now.UTC().UnixNano() % dayNanos
+	if elapsedNanos < 0 {
+		elapsedNanos += dayNanos
+	}
+	elapsedRatio := float64(elapsedNanos) / float64(dayNanos)
 	switch {
-	case hour >= 6 && hour < 10:
+	case elapsedRatio < 0.25:
 		return npcSchedulePhaseMorning
-	case hour >= 10 && hour < 17:
+	case elapsedRatio < 0.60:
 		return npcSchedulePhaseDay
-	case hour >= 17 && hour < 21:
+	case elapsedRatio < 0.80:
 		return npcSchedulePhaseEvening
 	default:
 		return npcSchedulePhaseNight
 	}
 }
 
-func (npc *liveNPC) scheduleDrivePressure(drive npcDrive, now time.Time) float64 {
+func (npc *liveNPC) scheduleDrivePressure(drive npcDrive, now time.Time, dayLength time.Duration) float64 {
 	if npc == nil {
 		return 0
 	}
-	switch npcSchedulePhaseAt(now) {
+	switch npcSchedulePhaseAt(now, dayLength) {
 	case npcSchedulePhaseMorning:
 		if drive == npcDriveHunger && npc.hasScheduleAnchor(npcDriveHunger) {
 			return npcScheduleMinorPressure
@@ -75,9 +85,9 @@ func (anchor *npcLocationAnchor) isStrongRoutineAnchor() bool {
 	return anchor.Source == npcAnchorSourceOwner || anchor.Source == npcAnchorSourceRole
 }
 
-func (npc *liveNPC) driveSelectionValue(drive npcDrive, now time.Time) float64 {
+func (npc *liveNPC) driveSelectionValue(drive npcDrive, now time.Time, dayLength time.Duration) float64 {
 	value := npc.driveValue(drive)
-	pressure := npc.scheduleDrivePressure(drive, now)
+	pressure := npc.scheduleDrivePressure(drive, now, dayLength)
 	if pressure <= 0 {
 		return value
 	}
@@ -87,16 +97,16 @@ func (npc *liveNPC) driveSelectionValue(drive npcDrive, now time.Time) float64 {
 	return value - pressure
 }
 
-func (npc *liveNPC) drivesByUrgency(now time.Time) []npcDrive {
+func (npc *liveNPC) drivesByUrgency(now time.Time, dayLength time.Duration) []npcDrive {
 	drives := append([]npcDrive(nil), allNPCDrives...)
-	sortNPCDrivesBySelectionValue(npc, drives, now)
+	sortNPCDrivesBySelectionValue(npc, drives, now, dayLength)
 	return drives
 }
 
-func sortNPCDrivesBySelectionValue(npc *liveNPC, drives []npcDrive, now time.Time) {
+func sortNPCDrivesBySelectionValue(npc *liveNPC, drives []npcDrive, now time.Time, dayLength time.Duration) {
 	sort.SliceStable(drives, func(i int, j int) bool {
-		leftValue := npc.driveSelectionValue(drives[i], now)
-		rightValue := npc.driveSelectionValue(drives[j], now)
+		leftValue := npc.driveSelectionValue(drives[i], now, dayLength)
+		rightValue := npc.driveSelectionValue(drives[j], now, dayLength)
 		if leftValue != rightValue {
 			return leftValue < rightValue
 		}

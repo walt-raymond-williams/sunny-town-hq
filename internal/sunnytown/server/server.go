@@ -25,7 +25,7 @@ type Server struct {
 func New(cfg stconfig.Config, maps map[string]gameMap) *Server {
 	srv := &Server{
 		config: cfg,
-		world:  newWorld(defaultRoomID, maps),
+		world:  newWorldWithNPCDayLength(defaultRoomID, maps, cfg.NPCDayLength),
 		hq:     hqclient.New(cfg.HQInternalURL, cfg.ServiceSecret, 3*time.Second),
 	}
 	srv.upgrader = websocket.Upgrader{

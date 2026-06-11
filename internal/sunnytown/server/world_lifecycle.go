@@ -12,6 +12,13 @@ import (
 )
 
 func newWorld(roomID string, maps map[string]gameMap) *world {
+	return newWorldWithNPCDayLength(roomID, maps, defaultNPCScheduleDayLength)
+}
+
+func newWorldWithNPCDayLength(roomID string, maps map[string]gameMap, npcDayLength time.Duration) *world {
+	if npcDayLength <= 0 {
+		npcDayLength = defaultNPCScheduleDayLength
+	}
 	rewardEvents := make(chan rewardEvent, 32)
 	resourceEvents := make(chan resourceEvent, resourceCommitQueueSize)
 	npcJobEvents := make(chan npcJobProductionEvent, npcJobProductionQueueSize)
@@ -27,6 +34,7 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
 		npcJobEvents:   npcJobEvents,
+		npcDayLength:   npcDayLength,
 	}
 	for _, gameMap := range maps {
 		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, resourceEvents, npcJobEvents, created)
@@ -34,6 +42,20 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 	created.defaultRoom = created.rooms[defaultMapID]
 	created.configureNPCRoutineAnchors()
 	return created
+}
+
+func (world *world) scheduleDayLength() time.Duration {
+	if world == nil || world.npcDayLength <= 0 {
+		return defaultNPCScheduleDayLength
+	}
+	return world.npcDayLength
+}
+
+func (room *room) scheduleDayLength() time.Duration {
+	if room == nil {
+		return defaultNPCScheduleDayLength
+	}
+	return room.world.scheduleDayLength()
 }
 
 func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resourceEvents chan resourceEvent, npcJobEvents chan npcJobProductionEvent, world *world) *room {

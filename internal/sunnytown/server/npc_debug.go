@@ -184,7 +184,7 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		Moving:        publicSnapshot.Moving,
 		Drives:        npcDebugDrives(liveNPC.drives),
 		Anchors:       debugAnchors(liveNPC.anchors),
-		Schedule:      liveNPC.debugSchedule(now),
+		Schedule:      liveNPC.debugSchedule(now, room.scheduleDayLength()),
 		Production:    room.npcProductionDebugSnapshotLocked(liveNPC),
 		ActiveDrive:   string(liveNPC.activeDrive),
 		FocusUntil:    formatDebugTime(liveNPC.focusUntil),
@@ -236,12 +236,12 @@ func (room *room) npcProductionDebugSnapshotLocked(liveNPC *liveNPC) npcDebugPro
 	}
 }
 
-func (npc *liveNPC) debugSchedule(now time.Time) npcDebugSchedule {
+func (npc *liveNPC) debugSchedule(now time.Time, dayLength time.Duration) npcDebugSchedule {
 	debugSchedule := npcDebugSchedule{
-		Phase: string(npcSchedulePhaseAt(now)),
+		Phase: string(npcSchedulePhaseAt(now, dayLength)),
 	}
 	for _, drive := range allNPCDrives {
-		pressure := npc.scheduleDrivePressure(drive, now)
+		pressure := npc.scheduleDrivePressure(drive, now, dayLength)
 		if pressure <= 0 {
 			continue
 		}
@@ -249,7 +249,7 @@ func (npc *liveNPC) debugSchedule(now time.Time) npcDebugSchedule {
 			Drive:          string(drive),
 			Pressure:       pressure,
 			Value:          npc.driveValue(drive),
-			SelectionValue: npc.driveSelectionValue(drive, now),
+			SelectionValue: npc.driveSelectionValue(drive, now, dayLength),
 		})
 	}
 	return debugSchedule

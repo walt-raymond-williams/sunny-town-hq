@@ -59,3 +59,7 @@ docker compose -f deploy\docker-compose.yml up -d --build
 ```
 
 Use one consistent host/IP for HQ and Keycloak. A token issued for `localhost` will not match a browser session opened through the laptop LAN IP.
+
+## Sunny Town Runtime Settings
+
+Sunny Town supports `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES` to control the server-owned simulated NPC day cadence. If unset or invalid, it defaults to `24` real minutes per simulated day. Demo/debug runs can set it to `8` to make NPC morning/day/evening/night behavior cycle quickly without giving clients control over simulation time.

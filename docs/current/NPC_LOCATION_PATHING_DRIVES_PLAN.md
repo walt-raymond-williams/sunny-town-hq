@@ -25,7 +25,7 @@ Current implemented baseline:
 - NPC goals have focus windows, periodic reevaluation, emergency interruption, arrival grace, failure counts, and failed-target cooldowns.
 - NPCs can choose a low-priority `idle` fallback route to public/idle/wander/social locations when no urgent drive goal is available.
 - NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
-- NPCs use deterministic UTC schedule phases (`morning`, `day`, `evening`, `night`) to apply selection-time drive pressure for strong routine anchors.
+- NPCs use a server-owned simulated day, configured by `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES`, to derive deterministic schedule phases (`morning`, `day`, `evening`, `night`) and apply selection-time drive pressure for strong routine anchors.
 - Schedule pressure is visible in `/debug/npcs`, and urgent raw needs still override scheduled behavior.
 - Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
 - ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
@@ -365,11 +365,11 @@ Implementation notes:
 
 Implemented notes:
 
-- Added a deterministic runtime schedule phase helper with UTC-based bands:
-  - `morning`: 06:00-09:59
-  - `day`: 10:00-16:59
-  - `evening`: 17:00-20:59
-  - `night`: 21:00-05:59
+- Added a deterministic runtime schedule phase helper based on a server-owned simulated day length. `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES` defaults to `24`; demo runs can use `8`.
+  - `morning`: first 25 percent of the simulated day.
+  - `day`: next 35 percent.
+  - `evening`: next 20 percent.
+  - `night`: final 20 percent.
 - Schedule pressure is applied only during drive selection; raw drive values still deplete/replenish normally.
 - Day applies work pressure for NPCs with a strong work anchor.
 - Night applies energy/home pressure for NPCs with a strong home/rest anchor.

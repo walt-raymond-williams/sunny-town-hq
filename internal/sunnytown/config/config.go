@@ -3,7 +3,9 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Config contains Sunny Town runtime settings loaded from the environment.
@@ -15,6 +17,7 @@ type Config struct {
 	HQInternalURL  string
 	AllowedOrigins map[string]bool
 	MapsDir        string
+	NPCDayLength   time.Duration
 }
 
 func Load() Config {
@@ -26,6 +29,7 @@ func Load() Config {
 		HQInternalURL:  strings.TrimRight(envOrDefault("HQ_INTERNAL_BASE_URL", "http://127.0.0.1:8080"), "/"),
 		AllowedOrigins: allowedOrigins(envOrDefault("SUNNY_TOWN_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:18080,http://127.0.0.1:5173,http://127.0.0.1:18080")),
 		MapsDir:        envOrDefault("SUNNY_TOWN_MAPS_DIR", filepath.Join("sunny-town", "maps")),
+		NPCDayLength:   envMinutesOrDefault("SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES", 24),
 	}
 }
 
@@ -46,4 +50,16 @@ func envOrDefault(name string, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func envMinutesOrDefault(name string, fallback int) time.Duration {
+	value := strings.TrimSpace(os.Getenv(name))
+	if value == "" {
+		return time.Duration(fallback) * time.Minute
+	}
+	minutes, err := strconv.Atoi(value)
+	if err != nil || minutes <= 0 {
+		return time.Duration(fallback) * time.Minute
+	}
+	return time.Duration(minutes) * time.Minute
 }

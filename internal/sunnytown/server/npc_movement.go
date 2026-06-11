@@ -206,11 +206,12 @@ func (room *room) chooseNPCDriveGoalLocked(npc *liveNPC, now time.Time) {
 }
 
 func (room *room) nextNPCDriveGoalLocked(npc *liveNPC, now time.Time, emergencyOnly bool) (npcGoal, stnavigation.Route, bool) {
-	for _, drive := range npc.drivesByUrgency(now) {
+	dayLength := room.scheduleDayLength()
+	for _, drive := range npc.drivesByUrgency(now, dayLength) {
 		if emergencyOnly && npc.driveValue(drive) >= npcEmergencyDriveThreshold {
 			continue
 		}
-		if !emergencyOnly && npc.driveSelectionValue(drive, now) >= npcDriveThreshold {
+		if !emergencyOnly && npc.driveSelectionValue(drive, now, dayLength) >= npcDriveThreshold {
 			continue
 		}
 		goal, route, ok := room.routeToDriveLocationLocked(npc, drive, now)

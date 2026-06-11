@@ -125,6 +125,7 @@ type world struct {
 	resourceEvents chan resourceEvent
 	npcJobEvents   chan npcJobProductionEvent
 	transferMu     sync.Mutex
+	npcDayLength   time.Duration
 }
 
 type npcDrive string
