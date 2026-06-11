@@ -127,6 +127,18 @@ describe('useSunnyTownWorldState', () => {
     expect(state.npcs.value.map((liveNpc) => liveNpc.id)).toEqual(['guide'])
   })
 
+  it('treats an empty live npc map state as authoritative', () => {
+    const state = useSunnyTownWorldState()
+
+    state.applyMapState({
+      type: 'hello',
+      map: map({ npcs: [npc()] }),
+      npcs: [],
+    })
+
+    expect(state.npcs.value).toEqual([])
+  })
+
   it('applies live npc snapshots for the active map', () => {
     const state = useSunnyTownWorldState()
     state.applyMapState({
@@ -142,6 +154,24 @@ describe('useSunnyTownWorldState', () => {
 
     expect(applied).toBe(true)
     expect(state.npcs.value[0]).toMatchObject({ id: 'guide', x: 220, y: 180, moving: true })
+  })
+
+  it('clears live npcs when snapshots include an empty npc list', () => {
+    const state = useSunnyTownWorldState()
+    state.applyMapState({
+      type: 'hello',
+      map: map({ npcs: [npc()] }),
+      npcs: [npc({ x: 192 })],
+    })
+
+    const applied = state.applySnapshot({
+      type: 'snapshot',
+      mapId: 'sunny-town-v1',
+      npcs: [],
+    })
+
+    expect(applied).toBe(true)
+    expect(state.npcs.value).toEqual([])
   })
 
   it('ignores snapshots from a stale map', () => {
