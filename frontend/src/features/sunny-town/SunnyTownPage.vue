@@ -23,6 +23,7 @@ import {
 } from '../../composables/useSunnyTownMovement'
 import { useSunnyTownLocalPlayer } from '../../composables/useSunnyTownLocalPlayer'
 import { useSunnyTownPlacement } from '../../composables/useSunnyTownPlacement'
+import { useSunnyTownRemoteNpcs } from '../../composables/useSunnyTownRemoteNpcs'
 import { useSunnyTownRemotePlayers } from '../../composables/useSunnyTownRemotePlayers'
 import { useSunnyTownRenderer } from '../../composables/useSunnyTownRenderer'
 import { useSunnyTownSocket } from '../../composables/useSunnyTownSocket'
@@ -73,6 +74,7 @@ const inventoryStore = useStudentInventoryStore()
 const movement = useSunnyTownMovement()
 const localPlayerState = useSunnyTownLocalPlayer()
 const placement = useSunnyTownPlacement()
+const remoteNpcState = useSunnyTownRemoteNpcs()
 const remotePlayerState = useSunnyTownRemotePlayers()
 const toolUseAnimation = useSunnyTownToolUseAnimation()
 const worldState = useSunnyTownWorldState()
@@ -242,6 +244,7 @@ onBeforeUnmount(() => {
   renderer.stop()
   stopSunnyTownSocket()
   localPlayerState.clear()
+  remoteNpcState.clear()
   remotePlayerState.clear()
 })
 
@@ -254,6 +257,9 @@ function handleServerMessage(message: SunnyTownServerMessage) {
   if (message.type === 'snapshot') {
     if (!applySnapshot(message)) {
       return
+    }
+    if (message.npcs !== undefined) {
+      remoteNpcState.recordSnapshots(npcs.value, message.serverTimeMs || Date.now())
     }
     remotePlayerState.recordSnapshots(players.value, selfId.value, message.serverTimeMs || Date.now())
     syncLocalSelfFromSnapshot()
@@ -476,6 +482,8 @@ function currentCamera(viewWidth: number, viewHeight: number): { x: number; y: n
 
 function applyMapState(message: SunnyTownServerMessage) {
   worldState.applyMapState(message)
+  remoteNpcState.clear()
+  remoteNpcState.recordSnapshots(npcs.value, message.serverTimeMs || Date.now())
   remotePlayerState.clear()
   localPlayerState.clear()
   lastSentMoveJson = ''
@@ -671,7 +679,7 @@ function renderedSunnyTownNpcs(): SunnyTownNpc[] {
   if (!activeMap.value) {
     return []
   }
-  return npcs.value
+  return remoteNpcState.smoothNpcs(npcs.value)
 }
 
 function renderedSunnyTownPlayers(): SunnyTownPlayer[] {
