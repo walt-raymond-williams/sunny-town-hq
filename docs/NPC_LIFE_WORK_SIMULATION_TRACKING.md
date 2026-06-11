@@ -38,6 +38,7 @@ Snapshot refreshed: 2026-06-11 after closing design issue #48 and creating child
 
 - #49 Author Cookie Keeper home map and bed fixture
   Status: `status:ready`
+  Handoff: `docs/NPC_LIFE_WORK_COOKIE_KEEPER_HOME_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/49
 
 - #50 Add configurable NPC day cadence
@@ -97,6 +98,7 @@ task verify
 - `docs/NPC_LIFE_WORK_SIMULATION_DISCOVERY.md`
 - `docs/NPC_LIFE_WORK_SIMULATION_ROADMAP.md`
 - `docs/NPC_LIFE_WORK_DEMO_LOOP_DESIGN_HANDOFF.md`
+- `docs/NPC_LIFE_WORK_COOKIE_KEEPER_HOME_HANDOFF.md`
 - `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`
 - `docs/current/NPC_CHARACTER_MODEL_PLAN.md`
 - `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
