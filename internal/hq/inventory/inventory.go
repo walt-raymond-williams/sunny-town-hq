@@ -76,6 +76,11 @@ type txBeginner interface {
 	Begin(context.Context) (pgx.Tx, error)
 }
 
+type inventorySlotQuantity struct {
+	slotIndex int
+	quantity  int
+}
+
 func LoadStudent(ctx context.Context, querier Loader, userID int64) (StudentResponse, error) {
 	rows, err := querier.Query(
 		ctx,
@@ -241,6 +246,7 @@ func incrementStudentItemInTx(ctx context.Context, querier inventoryMutationQuer
 	}
 
 	remaining := delta
+	fillableSlots := []inventorySlotQuantity{}
 	rows, err := querier.Query(
 		ctx,
 		`
@@ -265,7 +271,16 @@ func incrementStudentItemInTx(ctx context.Context, querier inventoryMutationQuer
 			rows.Close()
 			return err
 		}
-		space := maxStack - quantity
+		fillableSlots = append(fillableSlots, inventorySlotQuantity{slotIndex: slotIndex, quantity: quantity})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+
+	for _, slot := range fillableSlots {
+		space := maxStack - slot.quantity
 		added := minInt(remaining, space)
 		if added < 1 {
 			continue
@@ -279,10 +294,9 @@ func incrementStudentItemInTx(ctx context.Context, querier inventoryMutationQuer
 				where app_user_id = $1 and slot_index = $2
 			`,
 			userID,
-			slotIndex,
+			slot.slotIndex,
 			added,
 		); err != nil {
-			rows.Close()
 			return err
 		}
 		remaining -= added
@@ -290,13 +304,9 @@ func incrementStudentItemInTx(ctx context.Context, querier inventoryMutationQuer
 			break
 		}
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return err
-	}
-	rows.Close()
 
 	if remaining > 0 {
+		emptySlots := []int{}
 		emptyRows, err := querier.Query(
 			ctx,
 			`
@@ -320,6 +330,15 @@ func incrementStudentItemInTx(ctx context.Context, querier inventoryMutationQuer
 				emptyRows.Close()
 				return err
 			}
+			emptySlots = append(emptySlots, slotIndex)
+		}
+		if err := emptyRows.Err(); err != nil {
+			emptyRows.Close()
+			return err
+		}
+		emptyRows.Close()
+
+		for _, slotIndex := range emptySlots {
 			added := minInt(remaining, maxStack)
 			if _, err := querier.Exec(
 				ctx,
@@ -336,7 +355,6 @@ func incrementStudentItemInTx(ctx context.Context, querier inventoryMutationQuer
 				itemTypeID,
 				added,
 			); err != nil {
-				emptyRows.Close()
 				return err
 			}
 			remaining -= added
@@ -344,11 +362,6 @@ func incrementStudentItemInTx(ctx context.Context, querier inventoryMutationQuer
 				break
 			}
 		}
-		if err := emptyRows.Err(); err != nil {
-			emptyRows.Close()
-			return err
-		}
-		emptyRows.Close()
 	}
 
 	if remaining > 0 {
@@ -429,6 +442,7 @@ func consumeStudentItemInTx(ctx context.Context, querier inventoryMutationQuerie
 	}
 
 	remaining := quantity
+	slots := []inventorySlotQuantity{}
 	rows, err := querier.Query(
 		ctx,
 		`
@@ -450,11 +464,19 @@ func consumeStudentItemInTx(ctx context.Context, querier inventoryMutationQuerie
 			rows.Close()
 			return false, err
 		}
-		removed := minInt(remaining, slotQuantity)
-		newQuantity := slotQuantity - removed
+		slots = append(slots, inventorySlotQuantity{slotIndex: slotIndex, quantity: slotQuantity})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return false, err
+	}
+	rows.Close()
+
+	for _, slot := range slots {
+		removed := minInt(remaining, slot.quantity)
+		newQuantity := slot.quantity - removed
 		if newQuantity == 0 {
-			if _, err := querier.Exec(ctx, "delete from student_inventory_slot where app_user_id = $1 and slot_index = $2", userID, slotIndex); err != nil {
-				rows.Close()
+			if _, err := querier.Exec(ctx, "delete from student_inventory_slot where app_user_id = $1 and slot_index = $2", userID, slot.slotIndex); err != nil {
 				return false, err
 			}
 		} else {
@@ -467,10 +489,9 @@ func consumeStudentItemInTx(ctx context.Context, querier inventoryMutationQuerie
 					where app_user_id = $1 and slot_index = $2
 				`,
 				userID,
-				slotIndex,
+				slot.slotIndex,
 				newQuantity,
 			); err != nil {
-				rows.Close()
 				return false, err
 			}
 		}
@@ -479,11 +500,6 @@ func consumeStudentItemInTx(ctx context.Context, querier inventoryMutationQuerie
 			break
 		}
 	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return false, err
-	}
-	rows.Close()
 
 	result, err := querier.Exec(
 		ctx,

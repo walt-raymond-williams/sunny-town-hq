@@ -547,6 +547,33 @@ func TestIncrementStudentItemSplitsStacksAndMaintainsAggregate(t *testing.T) {
 	}
 }
 
+func TestIncrementStudentItemCanRunInsideOuterTransaction(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	if err := IncrementStudentItem(ctx, tx, 123, "rock", 70); err != nil {
+		t.Fatalf("increment rocks in outer transaction: %v", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+
+	slots, err := LoadStudentSlots(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load slots: %v", err)
+	}
+	if slots.Slots[0].Item == nil || slots.Slots[0].Item.Quantity != 64 || slots.Slots[1].Item == nil || slots.Slots[1].Item.Quantity != 6 {
+		t.Fatalf("slots = %#v, want split rock stacks", slots.Slots[:2])
+	}
+}
+
 func TestConsumeStudentItemConsumesAcrossStacksAndMaintainsAggregate(t *testing.T) {
 	db, cleanup := testInventoryDB(t)
 	defer cleanup()
@@ -589,6 +616,40 @@ func TestConsumeStudentItemConsumesAcrossStacksAndMaintainsAggregate(t *testing.
 	}
 	if aggregate != 2 {
 		t.Fatalf("aggregate = %d, want 2", aggregate)
+	}
+}
+
+func TestConsumeStudentItemCanRunInsideOuterTransaction(t *testing.T) {
+	db, cleanup := testInventoryDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if err := IncrementStudentItem(ctx, db, 123, "rock", 70); err != nil {
+		t.Fatalf("increment rocks: %v", err)
+	}
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx)
+
+	consumed, err := ConsumeStudentItem(ctx, tx, 123, "rock", 68)
+	if err != nil {
+		t.Fatalf("consume rocks in outer transaction: %v", err)
+	}
+	if !consumed {
+		t.Fatal("consumed = false, want true")
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit tx: %v", err)
+	}
+
+	slots, err := LoadStudentSlots(ctx, db, 123)
+	if err != nil {
+		t.Fatalf("load slots: %v", err)
+	}
+	if slots.Slots[0].Item == nil || slots.Slots[0].Item.Quantity != 2 || slots.Slots[1].Item != nil {
+		t.Fatalf("slots = %#v, want 2 rocks remaining in first slot", slots.Slots[:2])
 	}
 }
 
