@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-11 after completing design issue #48 and creating child issues #49-#52.
+Snapshot refreshed: 2026-06-11 after closing design issue #48 and creating child issues #49-#52.
 
 ### Epic
 
@@ -27,16 +27,17 @@ Snapshot refreshed: 2026-06-11 after completing design issue #48 and creating ch
   Status: `status:needs-design`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/38
 
-### Open
+### Closed
 
 - #48 Design NPC home and work demo loop
-  Status: `status:in-progress` locally; close after committing this design update
+  Status: closed
   Handoff: `docs/NPC_LIFE_WORK_DEMO_LOOP_DESIGN_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/48
 
+### Open
+
 - #49 Author Cookie Keeper home map and bed fixture
   Status: `status:ready`
-  Blocked by: #48 design completion
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/49
 
 - #50 Add configurable NPC day cadence
