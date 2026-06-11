@@ -26,7 +26,8 @@ Current implemented baseline:
 - NPCs can choose a low-priority `idle` fallback route to public/idle/wander/social locations when no urgent drive goal is available.
 - NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
 - NPCs use a server-owned simulated day, configured by `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES`, to derive deterministic schedule phases (`morning`, `day`, `evening`, `night`) and apply selection-time drive pressure for strong routine anchors.
-- Schedule pressure is visible in `/debug/npcs`, and urgent raw needs still override scheduled behavior.
+- Schedule pressure can hold an NPC at an owned/role routine anchor without requiring a movement route; phase changes can then redirect the NPC after the normal focus/reevaluation window, while urgent raw needs still override scheduled behavior.
+- Schedule pressure is visible in `/debug/npcs`.
 - Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
 - ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
@@ -323,7 +324,8 @@ Implemented notes:
 - Anchors are resolved after all rooms/maps are initialized, so cross-map authored locations can be used.
 - Home, work, food, and social anchors are derived from authored map locations.
 - Resolution prefers `ownerNpcKey`, then role matches for work, then generic tagged locations with deterministic tie-breakers.
-- Anchor matches add a strong scoring bonus but do not replace generic candidate routing.
+- Anchor matches add a strong scoring bonus, enough for owned cross-map routine anchors to beat nearer generic matches, but do not replace generic candidate routing.
+- If an NPC is already standing in a strong owned/role routine anchor during a matching scheduled phase, the controller can assign a stationary goal there instead of falling through to idle fallback.
 - If an anchor target is missing or unreachable, route selection can still fall back to another scored matching location.
 - Goals selected from an anchor carry `anchorKind`, and `/debug/npcs` now includes each NPC's resolved anchors plus the active goal's anchor kind.
 - Tests cover checked-in map anchors, owner preference, role work anchors, anchor-preferred goal marking, blocked-anchor fallback, and debug anchor output.
@@ -376,9 +378,11 @@ Implemented notes:
 - Evening applies social pressure for NPCs with a strong social anchor.
 - Morning applies lighter hunger pressure for NPCs with a strong food anchor.
 - "Strong" schedule anchors are owner- or role-derived anchors, not generic fallback anchors, so generic public/idle locations do not make unrelated tests or NPCs time-sensitive.
+- Scheduled goals remain active while their phase pressure is active, even after the raw drive is replenished. Once that pressure ends, normal reevaluation can pick the next scheduled or urgent goal.
+- Cookie Keeper uses the demo cadence to route between `cookie-keeper-counter` during day and `cookie-keeper-bed` at night through the existing town portals.
 - Emergency raw drive values still override schedule pressure. For example, urgent hunger can beat a daytime work schedule.
 - `GET /debug/npcs` now includes the current schedule phase and active schedule pressure entries with raw and selection-adjusted drive values.
-- Tests cover phase boundaries, daytime work pressure, nighttime home/rest pressure, urgent hunger override, and debug schedule output.
+- Tests cover phase boundaries, daytime work pressure, nighttime home/rest pressure, urgent hunger override, Cookie Keeper's home/work portal route, stationary scheduled anchors, and debug schedule output.
 
 Acceptance criteria:
 

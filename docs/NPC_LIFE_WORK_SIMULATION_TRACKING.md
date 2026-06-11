@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-11 after completing day cadence issue #50.
+Snapshot refreshed: 2026-06-11 after completing Cookie Keeper routine issue #51.
 
 ### Epic
 
@@ -44,16 +44,15 @@ Snapshot refreshed: 2026-06-11 after completing day cadence issue #50.
   Handoff: `docs/NPC_LIFE_WORK_DAY_CADENCE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/50
 
-### Open
-
 - #51 Tune Cookie Keeper home/work demo loop
-  Status: `status:ready`
+  Status: closed
   Handoff: `docs/NPC_LIFE_WORK_COOKIE_KEEPER_ROUTINE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/51
 
+### Open
+
 - #52 Improve NPC routine debug output for demo review
-  Status: `status:blocked`
-  Blocked by: #51
+  Status: `status:ready`
   Related: #4
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/52
 
@@ -71,21 +70,21 @@ Snapshot refreshed: 2026-06-11 after completing day cadence issue #50.
 
 ## Recommended Next Management Step
 
-Next executable child issue after #50 closes:
+Next executable child issue after #51 closes:
 
-`#51 Tune Cookie Keeper home/work demo loop`
+`#52 Improve NPC routine debug output for demo review`
 
 Why:
 
-- It uses the reviewable server-owned simulated day from #50 to make the Cookie Keeper home/work loop observable.
-- It unblocks debug polish in #52.
+- Cookie Keeper's routine now alternates between work and home under the demo cadence.
+- Debug polish can now expose the routine state needed for demo review.
 
 ## Useful Commands
 
 ```powershell
 gh issue view 38 --comments
-gh issue view 50 --comments
 gh issue view 51 --comments
+gh issue view 52 --comments
 git checkout codex/npc-life-work-dev
 git pull
 task verify
