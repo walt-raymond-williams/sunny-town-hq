@@ -43,6 +43,7 @@ Snapshot refreshed: 2026-06-11 after completing Cookie Keeper home issue #49.
 
 - #50 Add configurable NPC day cadence
   Status: `status:ready`
+  Handoff: `docs/NPC_LIFE_WORK_DAY_CADENCE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/50
 
 - #51 Tune Cookie Keeper home/work demo loop
@@ -96,6 +97,7 @@ task verify
 - `docs/NPC_LIFE_WORK_SIMULATION_ROADMAP.md`
 - `docs/NPC_LIFE_WORK_DEMO_LOOP_DESIGN_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_COOKIE_KEEPER_HOME_HANDOFF.md`
+- `docs/NPC_LIFE_WORK_DAY_CADENCE_HANDOFF.md`
 - `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`
 - `docs/current/NPC_CHARACTER_MODEL_PLAN.md`
 - `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
