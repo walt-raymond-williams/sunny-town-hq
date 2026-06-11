@@ -250,7 +250,7 @@ This section closes GitHub issue #48 and fixes the concrete first-slice decision
 - First demo NPC: `cookie-keeper`.
 - Existing work anchor remains `sunny-town-house-1` location `cookie-keeper-counter`.
 - Cookie Keeper gets a new explicit home/rest anchor in a new home interior map.
-- The first durable assignment remains authored through map metadata, not a new HQ schema table. The home/rest location uses `ownerNpcKey: "cookie-keeper"` so existing runtime anchor resolution can treat it as a strong home anchor.
+- The first durable assignment remains authored through map metadata, not a new HQ schema table. The bed/rest location uses `ownerNpcKey: "cookie-keeper"` so existing runtime anchor resolution can treat the usable bed as the strong home anchor.
 
 ### Main-Town Home Entrance
 
@@ -296,8 +296,7 @@ Recommended first locations:
   "x": 224,
   "y": 224,
   "radius": 128,
-  "tags": ["home", "personal"],
-  "ownerNpcKey": "cookie-keeper"
+  "tags": ["home", "personal"]
 }
 ```
 

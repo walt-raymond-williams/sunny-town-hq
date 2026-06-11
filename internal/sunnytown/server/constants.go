@@ -53,6 +53,7 @@ const (
 	worldObjectKindRockNode   = "rock_node"
 	worldObjectKindStoneBlock = "stone_block"
 	worldObjectKindChest      = "chest"
+	worldObjectKindBed        = "bed"
 )
 
 func (room *room) step(dt float64, now time.Time) {

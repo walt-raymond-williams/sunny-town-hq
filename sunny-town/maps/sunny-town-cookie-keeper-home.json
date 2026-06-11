@@ -1,0 +1,71 @@
+{
+  "id": "sunny-town-cookie-keeper-home",
+  "name": "Cookie Keeper Home",
+  "tileSize": 32,
+  "width": 20,
+  "height": 15,
+  "spawns": [
+    { "x": 320, "y": 416 }
+  ],
+  "starSpawns": [],
+  "portals": [
+    {
+      "id": "cookie-keeper-home-exit-door",
+      "x": 304,
+      "y": 448,
+      "width": 64,
+      "height": 32,
+      "targetMapId": "sunny-town-v1",
+      "targetX": 272,
+      "targetY": 320,
+      "targetFacing": "down"
+    }
+  ],
+  "npcs": [],
+  "locations": [
+    {
+      "id": "cookie-keeper-home",
+      "name": "Cookie Keeper Home",
+      "x": 224,
+      "y": 224,
+      "radius": 128,
+      "tags": ["home", "personal"]
+    },
+    {
+      "id": "cookie-keeper-bed",
+      "name": "Cookie Keeper Bed",
+      "x": 160,
+      "y": 224,
+      "radius": 64,
+      "tags": ["rest", "home", "bed", "sleep", "personal"],
+      "ownerNpcKey": "cookie-keeper",
+      "capacity": 1
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "cookie-keeper-bed-fixture",
+      "name": "Cookie Keeper Bed",
+      "kind": "bed",
+      "x": 128,
+      "y": 96,
+      "width": 96,
+      "height": 64,
+      "interactionRadius": 56,
+      "collision": true,
+      "reservesPlacement": true,
+      "locationId": "cookie-keeper-bed",
+      "itemKey": "simple_bed",
+      "tags": ["furniture", "bed", "sleep", "rest", "placeable"]
+    }
+  ],
+  "blockedRects": [
+    { "x": 0, "y": 0, "width": 640, "height": 32 },
+    { "x": 0, "y": 448, "width": 304, "height": 32 },
+    { "x": 368, "y": 448, "width": 272, "height": 32 },
+    { "x": 0, "y": 0, "width": 32, "height": 480 },
+    { "x": 608, "y": 0, "width": 32, "height": 480 },
+    { "x": 96, "y": 96, "width": 128, "height": 64 },
+    { "x": 416, "y": 96, "width": 96, "height": 96 }
+  ]
+}

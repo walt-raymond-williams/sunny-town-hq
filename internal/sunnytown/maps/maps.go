@@ -216,7 +216,7 @@ func validateFixtures(loaded GameMap) error {
 		if strings.TrimSpace(fixture.Name) == "" || strings.TrimSpace(fixture.Kind) == "" {
 			return fmt.Errorf("map %q fixture %q is missing required metadata", loaded.ID, fixture.ID)
 		}
-		if fixture.Kind != "chest" {
+		if fixture.Kind != "chest" && fixture.Kind != "bed" {
 			return fmt.Errorf("map %q fixture %q has unsupported kind %q", loaded.ID, fixture.ID, fixture.Kind)
 		}
 		if fixture.X < 0 || fixture.Y < 0 || fixture.X+fixture.Width > maxX || fixture.Y+fixture.Height > maxY {
@@ -236,6 +236,12 @@ func validateFixtures(loaded GameMap) error {
 		}
 		if fixture.StorageRole == "output" && (fixture.ShopID == "" || fixture.ItemKey == "" || fixture.LocationID == "") {
 			return fmt.Errorf("map %q fixture %q output storage is missing shop, item, or location metadata", loaded.ID, fixture.ID)
+		}
+		if fixture.Kind == "bed" && (fixture.LocationID == "" || fixture.ItemKey == "") {
+			return fmt.Errorf("map %q fixture %q bed is missing location or item metadata", loaded.ID, fixture.ID)
+		}
+		if fixture.Kind == "bed" && fixture.StorageRole != "" {
+			return fmt.Errorf("map %q fixture %q bed cannot declare storage role %q", loaded.ID, fixture.ID, fixture.StorageRole)
 		}
 		for _, tag := range fixture.Tags {
 			if strings.TrimSpace(tag) == "" {

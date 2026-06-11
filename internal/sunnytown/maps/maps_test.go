@@ -53,6 +53,9 @@ func TestLoadMapsAcceptsCheckedInMaps(t *testing.T) {
 	if len(forest.ResourceNodes) < 2 {
 		t.Fatalf("forest resource nodes = %#v, want at least two nodes", forest.ResourceNodes)
 	}
+	if _, ok := maps["sunny-town-cookie-keeper-home"]; !ok {
+		t.Fatal("expected sunny-town-cookie-keeper-home map to load")
+	}
 }
 
 func TestLoadMapsRejectsDuplicateResourceNodeIDs(t *testing.T) {
@@ -140,6 +143,15 @@ func TestCheckedInMapsIncludeAuthoredNPCLocations(t *testing.T) {
 	if cookieShop == nil || cookieShop.OwnerNPCKey != "" || !hasLocationTags(*cookieShop, "shop", "workplace", "cookie_shop", "storage_owner") {
 		t.Fatalf("cookie shop = %#v, want unowned shop/workplace/storage owner location", cookieShop)
 	}
+	keeperHomeLocations := maps["sunny-town-cookie-keeper-home"].Locations
+	keeperHome := findLocation(keeperHomeLocations, "cookie-keeper-home")
+	if keeperHome == nil || keeperHome.OwnerNPCKey != "" || !hasLocationTags(*keeperHome, "home", "personal") {
+		t.Fatalf("cookie keeper home = %#v, want unowned descriptive home/personal area", keeperHome)
+	}
+	keeperBed := findLocation(keeperHomeLocations, "cookie-keeper-bed")
+	if keeperBed == nil || keeperBed.OwnerNPCKey != "cookie-keeper" || keeperBed.Capacity != 1 || !hasLocationTags(*keeperBed, "rest", "home", "bed", "sleep", "personal") {
+		t.Fatalf("cookie keeper bed = %#v, want owned rest/home/bed/sleep location with capacity 1", keeperBed)
+	}
 
 	classroomLocations := maps["sunny-town-classroom"].Locations
 	teacherDesk := findLocation(classroomLocations, "teacher-desk-work")
@@ -149,6 +161,31 @@ func TestCheckedInMapsIncludeAuthoredNPCLocations(t *testing.T) {
 	studyCircle := findLocation(classroomLocations, "classroom-study-circle")
 	if studyCircle == nil || !hasLocationTags(*studyCircle, "public", "social", "idle") {
 		t.Fatalf("study circle = %#v, want public/social/idle location", studyCircle)
+	}
+}
+
+func TestCheckedInMapsIncludeCookieKeeperHomePortal(t *testing.T) {
+	maps, err := LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	town := maps["sunny-town-v1"]
+	homeDoor := findPortal(town.Portals, "cookie-keeper-home-door")
+	if homeDoor == nil {
+		t.Fatal("expected cookie-keeper-home-door portal")
+	}
+	if homeDoor.X != 240 || homeDoor.Y != 264 || homeDoor.Width != 64 || homeDoor.Height != 24 || homeDoor.TargetMapID != "sunny-town-cookie-keeper-home" || homeDoor.TargetX != 320 || homeDoor.TargetY != 416 || homeDoor.TargetFacing != "up" {
+		t.Fatalf("home door = %#v, want accepted Cookie Keeper home portal geometry", homeDoor)
+	}
+
+	home := maps["sunny-town-cookie-keeper-home"]
+	exitDoor := findPortal(home.Portals, "cookie-keeper-home-exit-door")
+	if exitDoor == nil {
+		t.Fatal("expected cookie-keeper-home-exit-door portal")
+	}
+	if exitDoor.X != 304 || exitDoor.Y != 448 || exitDoor.Width != 64 || exitDoor.Height != 32 || exitDoor.TargetMapID != "sunny-town-v1" || exitDoor.TargetX != 272 || exitDoor.TargetY != 320 || exitDoor.TargetFacing != "down" {
+		t.Fatalf("home exit = %#v, want accepted Cookie Keeper home exit geometry", exitDoor)
 	}
 }
 
@@ -182,6 +219,25 @@ func TestCheckedInMapsIncludeCookieShopStorageChests(t *testing.T) {
 	}
 }
 
+func TestCheckedInMapsIncludeCookieKeeperBedFixture(t *testing.T) {
+	maps, err := LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	home := maps["sunny-town-cookie-keeper-home"]
+	bed := findFixture(home.Fixtures, "cookie-keeper-bed-fixture")
+	if bed == nil {
+		t.Fatal("expected cookie-keeper-bed-fixture")
+	}
+	if bed.Kind != "bed" || bed.LocationID != "cookie-keeper-bed" || bed.ItemKey != "simple_bed" || bed.StorageRole != "" || bed.ShopID != "" {
+		t.Fatalf("bed fixture metadata = %#v, want visible bed tied to cookie-keeper-bed without storage metadata", bed)
+	}
+	if !bed.Collision || !bed.ReservesPlacement || !hasFixtureTags(*bed, "furniture", "bed", "sleep", "rest", "placeable") {
+		t.Fatalf("bed placement metadata = %#v, want blocking placeable bed fixture", bed)
+	}
+}
+
 func TestLoadMapsRejectsDuplicateLocationIDs(t *testing.T) {
 	dir := t.TempDir()
 	mapJSON := `{"id":"one","name":"One","tileSize":32,"width":4,"height":4,"spawns":[{"x":64,"y":64}],"blockedRects":[],"starSpawns":[],"locations":[{"id":"square","name":"Square","x":64,"y":64,"radius":48,"tags":["public"]},{"id":"square","name":"Square Again","x":96,"y":64,"radius":48,"tags":["public"]}]}`
@@ -207,6 +263,15 @@ func findFixture(fixtures []FixtureDefinition, id string) *FixtureDefinition {
 	for index := range fixtures {
 		if fixtures[index].ID == id {
 			return &fixtures[index]
+		}
+	}
+	return nil
+}
+
+func findPortal(portals []Portal, id string) *Portal {
+	for index := range portals {
+		if portals[index].ID == id {
+			return &portals[index]
 		}
 	}
 	return nil
@@ -288,6 +353,18 @@ func TestLoadMapsRejectsInvalidFixtures(t *testing.T) {
 		{
 			name:    "unsupported kind",
 			fixture: `{"id":"crate","name":"Crate","kind":"crate","x":32,"y":32,"width":32,"height":32}`,
+		},
+		{
+			name:    "bed missing location",
+			fixture: `{"id":"bed","name":"Bed","kind":"bed","x":32,"y":32,"width":64,"height":32,"itemKey":"simple_bed"}`,
+		},
+		{
+			name:    "bed missing item",
+			fixture: `{"id":"bed","name":"Bed","kind":"bed","x":32,"y":32,"width":64,"height":32,"locationId":"shop"}`,
+		},
+		{
+			name:    "bed with storage role",
+			fixture: `{"id":"bed","name":"Bed","kind":"bed","x":32,"y":32,"width":64,"height":32,"locationId":"shop","itemKey":"simple_bed","storageRole":"input"}`,
 		},
 		{
 			name:    "unknown location",

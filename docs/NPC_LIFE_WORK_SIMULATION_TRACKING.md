@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-11 after closing design issue #48 and creating child issues #49-#52.
+Snapshot refreshed: 2026-06-11 after completing Cookie Keeper home issue #49.
 
 ### Epic
 
@@ -34,21 +34,20 @@ Snapshot refreshed: 2026-06-11 after closing design issue #48 and creating child
   Handoff: `docs/NPC_LIFE_WORK_DEMO_LOOP_DESIGN_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/48
 
-### Open
-
 - #49 Author Cookie Keeper home map and bed fixture
-  Status: `status:ready`
+  Status: closed
   Handoff: `docs/NPC_LIFE_WORK_COOKIE_KEEPER_HOME_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/49
 
+### Open
+
 - #50 Add configurable NPC day cadence
-  Status: `status:blocked`
-  Blocked by: #49
+  Status: `status:ready`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/50
 
 - #51 Tune Cookie Keeper home/work demo loop
   Status: `status:blocked`
-  Blocked by: #49 and #50
+  Blocked by: #50
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/51
 
 - #52 Improve NPC routine debug output for demo review
@@ -71,22 +70,20 @@ Snapshot refreshed: 2026-06-11 after closing design issue #48 and creating child
 
 ## Recommended Next Management Step
 
-Next executable child issue after #48 closes:
+Next executable child issue after #49 closes:
 
-`#49 Author Cookie Keeper home map and bed fixture`
+`#50 Add configurable NPC day cadence`
 
 Why:
 
-- It applies the accepted map, portal, location, and fixture design.
-- It creates the owned Cookie Keeper home/rest anchor needed by later cadence and routine tuning.
-- It keeps map authoring separate from cadence/routine behavior.
+- It lets the home/work loop use a reviewable server-owned simulated day instead of waiting for real UTC phase changes.
+- It unblocks final Cookie Keeper routine tuning in #51.
 
 ## Useful Commands
 
 ```powershell
 gh issue view 38 --comments
-gh issue view 48 --comments
-gh issue view 49 --comments
+gh issue view 50 --comments
 git checkout codex/npc-life-work-dev
 git pull
 task verify

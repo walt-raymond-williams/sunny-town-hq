@@ -34,8 +34,39 @@ export function drawWorldObjects(
     }
     if (object.kind === 'chest') {
       drawChestObject(context, object, cameraX, cameraY)
+      continue
+    }
+    if (object.kind === 'bed') {
+      drawBedObject(context, object, cameraX, cameraY)
     }
   }
+}
+
+export function drawBedObject(
+  context: CanvasRenderingContext2D,
+  object: SunnyTownWorldObject,
+  cameraX: number,
+  cameraY: number,
+) {
+  const width = object.width || 96
+  const height = object.height || 64
+  const x = object.x - cameraX
+  const y = object.y - cameraY
+  context.save()
+  context.fillStyle = '#6c8fb8'
+  context.fillRect(x + 5, y + 7, width - 10, height - 12)
+  context.strokeStyle = '#35506c'
+  context.lineWidth = 2
+  context.strokeRect(x + 5, y + 7, width - 10, height - 12)
+  context.fillStyle = '#f4efe7'
+  context.fillRect(x + 10, y + 12, Math.min(30, width - 20), height - 24)
+  context.strokeStyle = '#d8cfc4'
+  context.strokeRect(x + 10, y + 12, Math.min(30, width - 20), height - 24)
+  context.fillStyle = '#83a6cf'
+  context.fillRect(x + 43, y + 12, width - 58, height - 24)
+  context.fillStyle = '#4d6f96'
+  context.fillRect(x + 5, y + height - 10, width - 10, 5)
+  context.restore()
 }
 
 export function drawChestObject(
