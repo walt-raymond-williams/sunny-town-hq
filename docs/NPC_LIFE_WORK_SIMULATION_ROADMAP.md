@@ -6,6 +6,8 @@ This roadmap decomposes GitHub epic #38 into child issues that can be assigned t
 
 Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/38
 
+Tracking: `docs/NPC_LIFE_WORK_SIMULATION_TRACKING.md`
+
 The first target is a visible, inspectable NPC home/work loop that uses authored homes, beds, work anchors, existing portal navigation, and server-authoritative routine state.
 
 ## Recommended First Slice
@@ -38,6 +40,8 @@ Initial cadence decision:
 ## GitHub-Ready Child Issues
 
 ### Issue: Design NPC Home And Work Demo Loop
+
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/48
 
 Type: research
 Priority: P1
