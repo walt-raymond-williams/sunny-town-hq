@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-11 after creating #48.
+Snapshot refreshed: 2026-06-11 after completing design issue #48 and creating child issues #49-#52.
 
 ### Epic
 
@@ -30,9 +30,30 @@ Snapshot refreshed: 2026-06-11 after creating #48.
 ### Open
 
 - #48 Design NPC home and work demo loop
-  Status: `status:ready`
+  Status: `status:in-progress` locally; close after committing this design update
   Handoff: `docs/NPC_LIFE_WORK_DEMO_LOOP_DESIGN_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/48
+
+- #49 Author Cookie Keeper home map and bed fixture
+  Status: `status:ready`
+  Blocked by: #48 design completion
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/49
+
+- #50 Add configurable NPC day cadence
+  Status: `status:blocked`
+  Blocked by: #49
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/50
+
+- #51 Tune Cookie Keeper home/work demo loop
+  Status: `status:blocked`
+  Blocked by: #49 and #50
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/51
+
+- #52 Improve NPC routine debug output for demo review
+  Status: `status:blocked`
+  Blocked by: #51
+  Related: #4
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/52
 
 ### Related Existing Issues
 
@@ -48,21 +69,22 @@ Snapshot refreshed: 2026-06-11 after creating #48.
 
 ## Recommended Next Management Step
 
-Start #48:
+Next executable child issue after #48 closes:
 
-`Design NPC home and work demo loop`
+`#49 Author Cookie Keeper home map and bed fixture`
 
 Why:
 
-- It chooses the exact home entrance, map IDs, portal IDs, bed metadata, and cadence/config shape before implementation agents edit maps or routine code.
-- It keeps the first implementation slice small and visible.
-- It prevents the first coding agent from silently inventing product decisions.
+- It applies the accepted map, portal, location, and fixture design.
+- It creates the owned Cookie Keeper home/rest anchor needed by later cadence and routine tuning.
+- It keeps map authoring separate from cadence/routine behavior.
 
 ## Useful Commands
 
 ```powershell
 gh issue view 38 --comments
 gh issue view 48 --comments
+gh issue view 49 --comments
 git checkout codex/npc-life-work-dev
 git pull
 task verify
