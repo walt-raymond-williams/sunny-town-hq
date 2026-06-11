@@ -48,6 +48,7 @@ Snapshot refreshed: 2026-06-11 after completing day cadence issue #50.
 
 - #51 Tune Cookie Keeper home/work demo loop
   Status: `status:ready`
+  Handoff: `docs/NPC_LIFE_WORK_COOKIE_KEEPER_ROUTINE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/51
 
 - #52 Improve NPC routine debug output for demo review
@@ -84,6 +85,7 @@ Why:
 ```powershell
 gh issue view 38 --comments
 gh issue view 50 --comments
+gh issue view 51 --comments
 git checkout codex/npc-life-work-dev
 git pull
 task verify
@@ -97,6 +99,7 @@ task verify
 - `docs/NPC_LIFE_WORK_DEMO_LOOP_DESIGN_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_COOKIE_KEEPER_HOME_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_DAY_CADENCE_HANDOFF.md`
+- `docs/NPC_LIFE_WORK_COOKIE_KEEPER_ROUTINE_HANDOFF.md`
 - `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`
 - `docs/current/NPC_CHARACTER_MODEL_PLAN.md`
 - `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
