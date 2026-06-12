@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-11 after completing Cookie Keeper routine issue #51.
+Snapshot refreshed: 2026-06-12 after preparing routine debug issue #52.
 
 ### Epic
 
@@ -53,6 +53,7 @@ Snapshot refreshed: 2026-06-11 after completing Cookie Keeper routine issue #51.
 
 - #52 Improve NPC routine debug output for demo review
   Status: `status:ready`
+  Handoff: `docs/NPC_LIFE_WORK_ROUTINE_DEBUG_HANDOFF.md`
   Related: #4
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/52
 
@@ -70,7 +71,7 @@ Snapshot refreshed: 2026-06-11 after completing Cookie Keeper routine issue #51.
 
 ## Recommended Next Management Step
 
-Next executable child issue after #51 closes:
+Next executable child issue:
 
 `#52 Improve NPC routine debug output for demo review`
 
@@ -99,6 +100,7 @@ task verify
 - `docs/NPC_LIFE_WORK_COOKIE_KEEPER_HOME_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_DAY_CADENCE_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_COOKIE_KEEPER_ROUTINE_HANDOFF.md`
+- `docs/NPC_LIFE_WORK_ROUTINE_DEBUG_HANDOFF.md`
 - `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`
 - `docs/current/NPC_CHARACTER_MODEL_PLAN.md`
 - `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
