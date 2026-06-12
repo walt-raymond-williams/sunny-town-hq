@@ -19,6 +19,7 @@ Current implemented baseline:
 - Same-map route segments use A* over a coarse map grid with static blocked rectangles.
 - NPC route planning can include active collision `worldObjects` from the NPC's current room as dynamic blocked rectangles.
 - Live NPC runtime state is initialized per room and broadcast through server-authoritative NPC snapshots.
+- Normal NPC snapshots may include optional `routineStatus` values (`traveling`, `resting`, `working`, `blocked`) so the frontend can render subtle routine cues without polling `/debug/npcs`.
 - NPCs have in-memory `hunger`, `energy`, `social`, and `work` drives.
 - Drives deplete over time and replenish at matching tagged locations.
 - NPCs choose the lowest below-threshold satisfiable drive, skip unrouteable drives, and route to matching locations.
@@ -27,7 +28,7 @@ Current implemented baseline:
 - NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
 - NPCs use a server-owned simulated day, configured by `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES`, to derive deterministic schedule phases (`morning`, `day`, `evening`, `night`) and apply selection-time drive pressure for strong routine anchors.
 - Schedule pressure can hold an NPC at an owned/role routine anchor without requiring a movement route; phase changes can then redirect the NPC after the normal focus/reevaluation window, while urgent raw needs still override scheduled behavior.
-- Schedule pressure, routine status, route failure summaries, and NPC production blockers are visible in `/debug/npcs`.
+- Schedule pressure, detailed routine status, route failure summaries, and NPC production blockers are visible in `/debug/npcs`.
 - Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
 - ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
@@ -64,6 +65,7 @@ Important current code touchpoints:
 - Cookie Shop chest inspection UI: `frontend/src/composables/useSunnyTownChestInteractions.ts`, `frontend/src/features/sunny-town/SunnyTownChestPanel.vue`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
+- Frontend NPC routine cues: `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
 
 Verification for movement-drive work:
 
@@ -165,7 +167,7 @@ Implemented notes:
 - Each NPC debug entry includes a `routine` summary with status, active target key, scheduled-goal flag, route-blocked flag, and most recent failed target key.
 - Failed target entries split the target key into drive, map, and location fields so blocked route state is readable without parsing a compound key.
 - Production debug state includes local eligibility status/blocker plus the last HQ commit status, blocked reason, or commit error recorded by the production worker.
-- Normal websocket `hello`, `snapshot`, and `map_changed` payloads remain unchanged.
+- Normal websocket `hello`, `snapshot`, and `map_changed` NPC payloads include a narrow optional `routineStatus` cue for public routine readability; detailed drives, goals, schedules, failures, and production state remain limited to `/debug/npcs`.
 
 Acceptance criteria:
 

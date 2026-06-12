@@ -192,7 +192,7 @@ func (world *world) npcDebugSnapshot(now time.Time) npcDebugResponse {
 
 func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDebugNPC {
 	character, hasCharacter := room.world.npcCharacter(liveNPC.npcKey)
-	publicSnapshot := liveNPC.snapshot(character, hasCharacter)
+	publicSnapshot := liveNPC.snapshot(character, hasCharacter, now)
 	debugNPC := npcDebugNPC{
 		ID:            publicSnapshot.ID,
 		CharacterID:   publicSnapshot.CharacterID,

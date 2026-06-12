@@ -115,11 +115,12 @@ func (room *room) run(ctx context.Context) {
 }
 
 func (room *room) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {
+	now := time.Now()
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	if len(room.players) == 0 {
-		room.catchUpNPCsAfterNoPlayersLocked(time.Now())
+		room.catchUpNPCsAfterNoPlayersLocked(now)
 	}
 
 	spawn := room.spawnPointLocked()
@@ -144,7 +145,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		x:           x,
 		y:           y,
 		facing:      facing,
-		lastMoveAt:  time.Now(),
+		lastMoveAt:  now,
 		client:      client,
 	}
 	if player.displayName == "" {
@@ -165,7 +166,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		MapID:         room.gameMap.ID,
 		Map:           &mapSnapshot,
 		Players:       room.snapshotsLocked(),
-		NPCs:          room.npcSnapshotsLocked(),
+		NPCs:          room.npcSnapshotsLocked(now),
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 		PlacedObjects: room.placedObjectSnapshotsLocked(),
@@ -259,7 +260,7 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 		MapID:         target.gameMap.ID,
 		Map:           &mapSnapshot,
 		Players:       target.snapshotsLocked(),
-		NPCs:          target.npcSnapshotsLocked(),
+		NPCs:          target.npcSnapshotsLocked(now),
 		Collectibles:  target.collectibleSnapshotsLocked(),
 		ResourceNodes: target.resourceNodeSnapshotsLocked(),
 		PlacedObjects: target.placedObjectSnapshotsLocked(),

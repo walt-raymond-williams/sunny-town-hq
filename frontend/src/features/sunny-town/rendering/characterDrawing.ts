@@ -181,6 +181,49 @@ export function drawNpc(
   context.font = '700 12px Inter, sans-serif'
   context.textAlign = 'center'
   context.fillText(npc.name, x, y - 28)
+
+  drawNpcRoutineCue(context, npc.routineStatus, x, y - 45)
+}
+
+export function drawNpcRoutineCue(
+  context: CanvasRenderingContext2D,
+  status: SunnyTownNpc['routineStatus'],
+  x: number,
+  y: number,
+) {
+  const cue = npcRoutineCue(status)
+  if (!cue) {
+    return
+  }
+  context.save()
+  context.fillStyle = cue.background
+  context.strokeStyle = 'rgba(23, 33, 43, 0.36)'
+  context.lineWidth = 1
+  context.beginPath()
+  context.arc(x, y, 8, 0, Math.PI * 2)
+  context.fill()
+  context.stroke()
+  context.fillStyle = cue.foreground
+  context.font = '700 10px Inter, sans-serif'
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.fillText(cue.symbol, x, y)
+  context.restore()
+}
+
+export function npcRoutineCue(status: SunnyTownNpc['routineStatus']) {
+  switch (status) {
+    case 'traveling':
+      return { symbol: '>', background: '#f1d28f', foreground: '#17212b' }
+    case 'resting':
+      return { symbol: 'Z', background: '#82b6d9', foreground: '#17212b' }
+    case 'working':
+      return { symbol: 'W', background: '#8fd19e', foreground: '#17212b' }
+    case 'blocked':
+      return { symbol: '!', background: '#d86657', foreground: '#ffffff' }
+    default:
+      return null
+  }
 }
 
 export function drawCollectible(

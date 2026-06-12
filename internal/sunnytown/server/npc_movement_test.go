@@ -67,7 +67,7 @@ func TestSnapshotIncludesMovedDrivenNPCPosition(t *testing.T) {
 	room.step(0.5, time.Now())
 
 	room.mu.Lock()
-	snapshots := room.npcSnapshotsLocked()
+	snapshots := room.npcSnapshotsLocked(time.Now())
 	room.mu.Unlock()
 
 	if len(snapshots) != 1 {
@@ -75,6 +75,9 @@ func TestSnapshotIncludesMovedDrivenNPCPosition(t *testing.T) {
 	}
 	if snapshots[0].ID != driveControlledNPCKey || snapshots[0].X <= 64 || snapshots[0].Moving != true {
 		t.Fatalf("npc snapshot = %#v, want moved mayor snapshot", snapshots[0])
+	}
+	if snapshots[0].RoutineStatus != "traveling" {
+		t.Fatalf("routine status = %q, want traveling", snapshots[0].RoutineStatus)
 	}
 }
 
@@ -862,6 +865,12 @@ func TestCookieKeeperDemoCadenceRoutesHomeThenBackToWork(t *testing.T) {
 	if keeper.goal == nil || keeper.goal.location.ID != "cookie-keeper-bed" || keeper.route != nil {
 		t.Fatalf("keeper goal=%#v route=%#v, want arrived at bed", keeper.goal, keeper.route)
 	}
+	home.mu.Lock()
+	homeSnapshots := home.npcSnapshotsLocked(night.Add(36 * time.Second))
+	home.mu.Unlock()
+	if len(homeSnapshots) != 1 || homeSnapshots[0].RoutineStatus != "resting" {
+		t.Fatalf("home snapshots = %#v, want resting routine cue", homeSnapshots)
+	}
 	bed, ok := world.navigation.Location("sunny-town-cookie-keeper-home", "cookie-keeper-bed")
 	if !ok || !pointWithinLocation(stnavigation.Point{X: keeper.x, Y: keeper.y}, bed) {
 		t.Fatalf("keeper position = (%v,%v), want inside Cookie Keeper bed", keeper.x, keeper.y)
@@ -894,6 +903,12 @@ func TestCookieKeeperDemoCadenceRoutesHomeThenBackToWork(t *testing.T) {
 	if !ok || !pointWithinLocation(stnavigation.Point{X: keeper.x, Y: keeper.y}, counter) {
 		t.Fatalf("keeper position = (%v,%v), want inside Cookie Keeper counter", keeper.x, keeper.y)
 	}
+	house.mu.Lock()
+	workSnapshots := house.npcSnapshotsLocked(day.Add(36 * time.Second))
+	house.mu.Unlock()
+	if len(workSnapshots) != 1 || workSnapshots[0].RoutineStatus != "working" {
+		t.Fatalf("work snapshots = %#v, want working routine cue", workSnapshots)
+	}
 }
 
 func TestNPCTransfersAcrossPortalRoute(t *testing.T) {
@@ -923,10 +938,10 @@ func TestNPCTransfersAcrossPortalRoute(t *testing.T) {
 	}
 
 	source.mu.Lock()
-	sourceSnapshots := source.npcSnapshotsLocked()
+	sourceSnapshots := source.npcSnapshotsLocked(now)
 	source.mu.Unlock()
 	target.mu.Lock()
-	targetSnapshots := target.npcSnapshotsLocked()
+	targetSnapshots := target.npcSnapshotsLocked(now)
 	target.mu.Unlock()
 	if len(sourceSnapshots) != 0 {
 		t.Fatalf("source snapshots = %#v, want no transferred npc", sourceSnapshots)

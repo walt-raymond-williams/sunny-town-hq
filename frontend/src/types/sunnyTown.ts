@@ -58,6 +58,7 @@ export interface SunnyTownNpc {
   moving?: boolean
   spriteKey: string
   dialogue: string[]
+  routineStatus?: 'traveling' | 'resting' | 'working' | 'blocked'
   shop?: SunnyTownShop
   activity?: SunnyTownActivity
 }
