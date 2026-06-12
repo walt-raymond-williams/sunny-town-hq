@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-12 after preparing routine debug issue #52.
+Snapshot refreshed: 2026-06-12 after implementing routine debug issue #52.
 
 ### Epic
 
@@ -49,13 +49,15 @@ Snapshot refreshed: 2026-06-12 after preparing routine debug issue #52.
   Handoff: `docs/NPC_LIFE_WORK_COOKIE_KEEPER_ROUTINE_HANDOFF.md`
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/51
 
-### Open
-
 - #52 Improve NPC routine debug output for demo review
-  Status: `status:ready`
+  Status: closed
   Handoff: `docs/NPC_LIFE_WORK_ROUTINE_DEBUG_HANDOFF.md`
   Related: #4
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/52
+
+### Open
+
+No open child issues are currently tracked for the first NPC life/work demo loop.
 
 ### Related Existing Issues
 
@@ -73,12 +75,12 @@ Snapshot refreshed: 2026-06-12 after preparing routine debug issue #52.
 
 Next executable child issue:
 
-`#52 Improve NPC routine debug output for demo review`
+None currently tracked for this demo loop.
 
 Why:
 
 - Cookie Keeper's routine now alternates between work and home under the demo cadence.
-- Debug polish can now expose the routine state needed for demo review.
+- `/debug/npcs` exposes routine, schedule, route failure, and production diagnosis state needed for demo review.
 
 ## Useful Commands
 

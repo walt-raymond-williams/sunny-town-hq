@@ -27,7 +27,7 @@ Current implemented baseline:
 - NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
 - NPCs use a server-owned simulated day, configured by `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES`, to derive deterministic schedule phases (`morning`, `day`, `evening`, `night`) and apply selection-time drive pressure for strong routine anchors.
 - Schedule pressure can hold an NPC at an owned/role routine anchor without requiring a movement route; phase changes can then redirect the NPC after the normal focus/reevaluation window, while urgent raw needs still override scheduled behavior.
-- Schedule pressure is visible in `/debug/npcs`.
+- Schedule pressure, routine status, route failure summaries, and NPC production blockers are visible in `/debug/npcs`.
 - Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
 - ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
@@ -162,6 +162,9 @@ Implemented notes:
 - The endpoint requires `X-HQ-Service-Secret` when `SUNNY_TOWN_SERVICE_SECRET` is configured.
 - Debug output is deterministic: maps, NPCs, and failed targets are sorted.
 - Each NPC debug entry includes public identity/position, drives, active drive, goal location/tags, route step/path indexes, focus and reevaluation timestamps, arrival/failure state, and failed target retry times.
+- Each NPC debug entry includes a `routine` summary with status, active target key, scheduled-goal flag, route-blocked flag, and most recent failed target key.
+- Failed target entries split the target key into drive, map, and location fields so blocked route state is readable without parsing a compound key.
+- Production debug state includes local eligibility status/blocker plus the last HQ commit status, blocked reason, or commit error recorded by the production worker.
 - Normal websocket `hello`, `snapshot`, and `map_changed` payloads remain unchanged.
 
 Acceptance criteria:
@@ -381,7 +384,7 @@ Implemented notes:
 - Scheduled goals remain active while their phase pressure is active, even after the raw drive is replenished. Once that pressure ends, normal reevaluation can pick the next scheduled or urgent goal.
 - Cookie Keeper uses the demo cadence to route between `cookie-keeper-counter` during day and `cookie-keeper-bed` at night through the existing town portals.
 - Emergency raw drive values still override schedule pressure. For example, urgent hunger can beat a daytime work schedule.
-- `GET /debug/npcs` now includes the current schedule phase and active schedule pressure entries with raw and selection-adjusted drive values.
+- `GET /debug/npcs` now includes the current schedule phase, active schedule pressure entries with raw and selection-adjusted drive values, and a `routine.scheduled` flag when the current target is schedule-driven.
 - Tests cover phase boundaries, daytime work pressure, nighttime home/rest pressure, urgent hunger override, Cookie Keeper's home/work portal route, stationary scheduled anchors, and debug schedule output.
 
 Acceptance criteria:
@@ -497,7 +500,7 @@ Implemented notes:
   - NPC must have durable character identity from map data or HQ `npc-characters/ensure`.
   - Enough eligible elapsed time must accumulate before one idempotent event is queued.
 - Added bounded no-player catch-up production using the existing pause/catch-up path, without exact offline path simulation.
-- Added `/debug/npcs` production fields: eligibility, job key, output key, progress seconds, last event, and last production time.
+- Added `/debug/npcs` production fields: eligibility, job key, output key, progress seconds, last event, last production time, local status/blocker, and last HQ commit status/reason/error.
 - Added HQ-owned shop stock tables in migration `0009_shop_stock.sql`.
 - Cookie Keeper `shopkeeper_stock` events now atomically record the NPC production ledger and increment Cookie Keeper cookie stock through `internal/hq/inventory`.
 - Player purchases from `cookie-keeper-shop` now require durable shop stock and consume it in the purchase transaction before granting the cookie.

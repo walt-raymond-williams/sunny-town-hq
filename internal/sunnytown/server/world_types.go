@@ -249,10 +249,14 @@ type resourceEvent struct {
 }
 
 type npcJobProductionState struct {
-	Progress  float64
-	Sequence  int64
-	LastAt    time.Time
-	LastEvent string
+	Progress          float64
+	Sequence          int64
+	LastAt            time.Time
+	LastEvent         string
+	LastCommitAt      time.Time
+	LastCommitStatus  string
+	LastBlockedReason string
+	LastCommitError   string
 }
 
 type npcJobProductionEvent struct {

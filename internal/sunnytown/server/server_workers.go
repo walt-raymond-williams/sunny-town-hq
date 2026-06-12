@@ -104,9 +104,11 @@ func (srv *Server) RunNPCJobProductionWorker(ctx context.Context) {
 		case event := <-srv.world.npcJobEvents:
 			response, err := srv.commitNPCJobProductionWithRetry(ctx, event)
 			if err != nil {
+				srv.world.recordNPCJobProductionCommit(event, npcJobProductionResponse{}, err, time.Now())
 				log.Printf("npc job production commit failed event=%s npc=%s character=%d: %v", event.eventID, event.npcKey, event.characterID, err)
 				continue
 			}
+			srv.world.recordNPCJobProductionCommit(event, response, nil, time.Now())
 			if response.Blocked {
 				log.Printf("npc job production blocked event=%s npc=%s character=%d duplicate=%v reason=%s", event.eventID, event.npcKey, event.characterID, response.Duplicate, response.BlockedReason)
 				continue
@@ -149,6 +151,39 @@ func (srv *Server) commitNPCJobProduction(ctx context.Context, event npcJobProdu
 		OutputKey:   event.outputKey,
 		Amount:      event.amount,
 	})
+}
+
+func (world *world) recordNPCJobProductionCommit(event npcJobProductionEvent, response npcJobProductionResponse, commitErr error, now time.Time) {
+	if world == nil {
+		return
+	}
+	for _, room := range world.rooms {
+		if room == nil {
+			continue
+		}
+		room.mu.Lock()
+		npc := room.liveNPCs[event.npcKey]
+		if npc != nil {
+			npc.jobProduction.LastCommitAt = now
+			npc.jobProduction.LastBlockedReason = ""
+			npc.jobProduction.LastCommitError = ""
+			switch {
+			case commitErr != nil:
+				npc.jobProduction.LastCommitStatus = "error"
+				npc.jobProduction.LastCommitError = commitErr.Error()
+			case response.Blocked:
+				npc.jobProduction.LastCommitStatus = "blocked"
+				npc.jobProduction.LastBlockedReason = response.BlockedReason
+			case response.Duplicate:
+				npc.jobProduction.LastCommitStatus = "duplicate"
+			default:
+				npc.jobProduction.LastCommitStatus = "accepted"
+			}
+			room.mu.Unlock()
+			return
+		}
+		room.mu.Unlock()
+	}
 }
 
 func (srv *Server) commitResourceWithRetry(ctx context.Context, event resourceEvent) (resourceCommitResponse, error) {
