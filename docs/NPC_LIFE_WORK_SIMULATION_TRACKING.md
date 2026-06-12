@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-12 while implementing visual cue issue #55.
+Snapshot refreshed: 2026-06-12 after implementing visual cue issue #55.
 
 ### Epic
 
@@ -55,10 +55,8 @@ Snapshot refreshed: 2026-06-12 while implementing visual cue issue #55.
   Related: #4
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/52
 
-### In Progress
-
 - #55 Add optional NPC routine visual cues
-  Status: `status:in-progress`
+  Status: closed
   Handoff: `docs/NPC_LIFE_WORK_VISUAL_CUES_HANDOFF.md`
   Related: #38
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/55
@@ -77,14 +75,7 @@ Snapshot refreshed: 2026-06-12 while implementing visual cue issue #55.
 
 ## Recommended Next Management Step
 
-Current executable child issue:
-
-`#55 Add optional NPC routine visual cues`
-
-Why:
-
-- Cookie Keeper's backend routine and debug output are in place.
-- The current slice is making that routine readable in the UI without raw debug JSON.
+No open child issue remains for the first NPC life/work demo loop. Next work should either review the integrated slice on `codex/npc-life-work-dev` or create the next child issue from epic #38.
 
 ## Useful Commands
 
