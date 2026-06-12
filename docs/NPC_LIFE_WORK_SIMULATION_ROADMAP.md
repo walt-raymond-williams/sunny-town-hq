@@ -262,6 +262,8 @@ Verification:
 
 ### Issue: Add Optional NPC Routine Visual Cues
 
+GitHub: https://github.com/walt-raymond-williams/sunny-town-hq/issues/55
+
 Type: feature
 Priority: P2
 

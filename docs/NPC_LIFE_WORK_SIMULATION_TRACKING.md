@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-12 after implementing routine debug issue #52.
+Snapshot refreshed: 2026-06-12 after creating visual cue issue #55.
 
 ### Epic
 
@@ -57,7 +57,11 @@ Snapshot refreshed: 2026-06-12 after implementing routine debug issue #52.
 
 ### Open
 
-No open child issues are currently tracked for the first NPC life/work demo loop.
+- #55 Add optional NPC routine visual cues
+  Status: `status:ready`
+  Handoff: `docs/NPC_LIFE_WORK_VISUAL_CUES_HANDOFF.md`
+  Related: #38
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/55
 
 ### Related Existing Issues
 
@@ -75,12 +79,12 @@ No open child issues are currently tracked for the first NPC life/work demo loop
 
 Next executable child issue:
 
-None currently tracked for this demo loop.
+`#55 Add optional NPC routine visual cues`
 
 Why:
 
-- Cookie Keeper's routine now alternates between work and home under the demo cadence.
-- `/debug/npcs` exposes routine, schedule, route failure, and production diagnosis state needed for demo review.
+- Cookie Keeper's backend routine and debug output are in place.
+- The next roadmap slice is making that routine readable in the UI without raw debug JSON.
 
 ## Useful Commands
 
@@ -88,6 +92,7 @@ Why:
 gh issue view 38 --comments
 gh issue view 51 --comments
 gh issue view 52 --comments
+gh issue view 55 --comments
 git checkout codex/npc-life-work-dev
 git pull
 task verify
@@ -103,6 +108,7 @@ task verify
 - `docs/NPC_LIFE_WORK_DAY_CADENCE_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_COOKIE_KEEPER_ROUTINE_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_ROUTINE_DEBUG_HANDOFF.md`
+- `docs/NPC_LIFE_WORK_VISUAL_CUES_HANDOFF.md`
 - `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`
 - `docs/current/NPC_CHARACTER_MODEL_PLAN.md`
 - `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
