@@ -38,8 +38,8 @@ docs/current/SCHEMA_OWNERSHIP.md
 - `student_inventory_slot`: durable per-student inventory slot layout
 - `student_inventory_ledger`: idempotent resource and inventory event records
 - `shop_input_storage_item`: durable shop-owned ingredient/input storage quantities
-- `student_equipped_item`: current gear/accessory/tool equipment
-- `student_hotbar_slot`: current student hotbar slots
+- `student_equipped_item`: current wearable gear/accessory equipment; legacy `tool` rows may exist but Sunny Town gameplay uses hotbar-active tools
+- `student_hotbar_slot`: current student hotbar slots; the selected Sunny Town hotbar item is the active usable item/tool
 - `shop_stock_item`: current HQ-owned shop item quantities
 - `shop_stock_ledger`: idempotent shop stock production/adjustment records
 - `storage_container`: durable container/chest identity, ownership/access metadata, slot count, and revision

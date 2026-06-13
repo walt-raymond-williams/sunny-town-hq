@@ -169,6 +169,11 @@ func (client *client) handleToolUse(message clientMessage) {
 		return
 	}
 
+	if !client.playerOwnsTool(room, toolKey) {
+		client.trySend(serverMessage{Type: "error", Code: "tool_not_available"})
+		return
+	}
+
 	var event *resourceEvent
 	var removeRequest *removeMapObjectRequest
 	var removeTargetID string
@@ -180,9 +185,9 @@ func (client *client) handleToolUse(message clientMessage) {
 		client.trySend(serverMessage{Type: "error", Code: "player_not_found"})
 		return
 	}
-	if player.equipment[equipmentSlotTool] != toolKey {
+	if player.inventory[toolKey] < 1 {
 		room.mu.Unlock()
-		client.trySend(serverMessage{Type: "error", Code: "tool_not_equipped"})
+		client.trySend(serverMessage{Type: "error", Code: "tool_not_available"})
 		return
 	}
 	if !player.lastToolUseAt.IsZero() && now.Sub(player.lastToolUseAt) < resourceToolCooldown {
@@ -254,6 +259,40 @@ func (client *client) handleToolUse(message clientMessage) {
 			Reason: "temporary_error",
 		})
 	}
+}
+
+func (client *client) playerOwnsTool(room *room, toolKey string) bool {
+	room.mu.Lock()
+	player := room.players[client.id]
+	if player == nil {
+		room.mu.Unlock()
+		return false
+	}
+	appUserID := player.appUserID
+	if client.server == nil {
+		owned := player.inventory[toolKey] > 0
+		room.mu.Unlock()
+		return owned
+	}
+	room.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	quantity, err := client.server.hq.LoadStudentInventoryQuantity(ctx, appUserID, toolKey)
+	cancel()
+	if err != nil {
+		log.Printf("validate tool ownership player=%s tool=%s: %v", client.id, toolKey, err)
+		return false
+	}
+
+	room.mu.Lock()
+	if player := room.players[client.id]; player != nil {
+		if player.inventory == nil {
+			player.inventory = inventorySnapshot{}
+		}
+		player.inventory[toolKey] = quantity
+	}
+	room.mu.Unlock()
+	return quantity > 0
 }
 
 func (client *client) removePlacedWorldObject(room *room, request removeMapObjectRequest, targetID string, now time.Time) {

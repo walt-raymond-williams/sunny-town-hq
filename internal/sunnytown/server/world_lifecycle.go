@@ -88,11 +88,15 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resource
 }
 
 func (world *world) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {
+	world.joinWithInventory(client, claims, equipment, position, inventoryFromEquipment(equipment))
+}
+
+func (world *world) joinWithInventory(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse, inventory inventorySnapshot) {
 	target := world.rooms[claims.MapID]
 	if target == nil {
 		target = world.defaultRoom
 	}
-	target.join(client, claims, equipment, position)
+	target.joinWithInventory(client, claims, equipment, position, inventory)
 }
 
 func (room *room) run(ctx context.Context) {
@@ -115,6 +119,10 @@ func (room *room) run(ctx context.Context) {
 }
 
 func (room *room) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {
+	room.joinWithInventory(client, claims, equipment, position, inventoryFromEquipment(equipment))
+}
+
+func (room *room) joinWithInventory(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse, inventory inventorySnapshot) {
 	now := time.Now()
 	room.mu.Lock()
 	defer room.mu.Unlock()
@@ -141,7 +149,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		displayName: claims.DisplayName,
 		avatarID:    claims.AvatarID,
 		equipment:   equipment,
-		inventory:   inventoryFromEquipment(equipment),
+		inventory:   cloneInventory(inventory),
 		x:           x,
 		y:           y,
 		facing:      facing,

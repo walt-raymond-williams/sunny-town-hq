@@ -147,10 +147,10 @@ describe('useSunnyTownInventoryActions', () => {
       onHotbarUpdated: vi.fn(),
     })
 
-    await actions.unequipInventorySlot('tool')
+    await actions.unequipInventorySlot('gear')
 
     expect(inventoryStore.equipItem).not.toHaveBeenCalled()
-    expect(inventoryStore.unequipItem).toHaveBeenCalledWith('tool')
+    expect(inventoryStore.unequipItem).toHaveBeenCalledWith('gear')
     expect(onEquipmentChanged).toHaveBeenCalledOnce()
   })
 
@@ -158,7 +158,7 @@ describe('useSunnyTownInventoryActions', () => {
     const inventoryStore = store()
     const onEquipmentChanged = vi.fn()
     inventoryStore.dropInventorySlotOnEquipment.mockImplementation(async (slot, equip) => {
-      await equip(slot, 'pickaxe')
+      await equip(slot, 'sunny_hoodie')
       return true
     })
     const actions = useSunnyTownInventoryActions(inventoryStore, {
@@ -167,10 +167,10 @@ describe('useSunnyTownInventoryActions', () => {
       onHotbarUpdated: vi.fn(),
     })
 
-    await actions.equipInventorySlotDrop('tool')
+    await actions.equipInventorySlotDrop('gear')
 
     expect(inventoryStore.dropInventorySlotOnEquipment).toHaveBeenCalledOnce()
-    expect(inventoryStore.equipItem).toHaveBeenCalledWith('tool', 'pickaxe')
+    expect(inventoryStore.equipItem).toHaveBeenCalledWith('gear', 'sunny_hoodie')
     expect(onEquipmentChanged).toHaveBeenCalledOnce()
   })
 })

@@ -148,6 +148,17 @@ func cloneEquipment(equipment equipmentSnapshot) equipmentSnapshot {
 	return cloned
 }
 
+func cloneInventory(inventory inventorySnapshot) inventorySnapshot {
+	if len(inventory) == 0 {
+		return inventorySnapshot{}
+	}
+	cloned := make(inventorySnapshot, len(inventory))
+	for itemKey, quantity := range inventory {
+		cloned[itemKey] = quantity
+	}
+	return cloned
+}
+
 func inventoryFromEquipment(equipment equipmentSnapshot) inventorySnapshot {
 	inventory := inventorySnapshot{}
 	if equipment[equipmentSlotTool] == "pickaxe" {

@@ -222,7 +222,7 @@ Sunny Town exposes realtime gameplay at:
 /sunny-town/ws
 ```
 
-Browsers receive a short-lived join token from HQ before connecting. The token includes the authenticated `app_user_id` and the linked Sunny Town `character_id`. Sunny Town uses the character ID for realtime player identity while current durable inventory, wallet, and student-owned actions continue to use the app user ID. Client messages are requests; Sunny Town validates gameplay effects against server-accepted position and equipped/owned tools before committing durable effects to HQ.
+Browsers receive a short-lived join token from HQ before connecting. The token includes the authenticated `app_user_id` and the linked Sunny Town `character_id`. Sunny Town uses the character ID for realtime player identity while current durable inventory, wallet, and student-owned actions continue to use the app user ID. Client messages are requests; Sunny Town validates gameplay effects against server-accepted position and owned hotbar-active tools before committing durable effects to HQ. The selected Sunny Town hotbar item is the active usable item; mining accepts a requested `pickaxe` only when HQ/server inventory confirms the player owns a pickaxe.
 
 Stats/skills APIs follow `docs/current/STATS_SKILLS_PROGRESSION.md`: Sunny Town validates realtime action context first, then calls service-authenticated HQ endpoints to award idempotent character XP or evaluate durable requirements in the same transaction as HQ-owned mutations. Public student read APIs expose only the authenticated student's current character progression. Successful mining harvest resource events award `10` mining XP once per event.
 

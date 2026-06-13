@@ -175,7 +175,7 @@ Expected response for both is `ok`.
 - Use maps/portals for area transitions; do not introduce a parallel cell abstraction unless the architecture changes intentionally.
 - Portal targets should not land the player inside the destination portal trigger. Keep the server-side portal re-entry guard in place so players must leave a portal before triggering another transfer.
 - Movement is client-predicted for feel, but gameplay effects must use server-accepted positions.
-- Mining requires an equipped pickaxe and should be validated in Sunny Town before HQ receives any resource event.
+- Mining requires an owned pickaxe selected in the Sunny Town hotbar and should be validated in Sunny Town before HQ receives any resource event.
 - Resource ownership persists in HQ inventory tables. Sunny Town resource node depletion is in-memory unless explicitly changed.
 
 ## Frontend Notes

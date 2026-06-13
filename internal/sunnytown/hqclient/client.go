@@ -211,7 +211,7 @@ func (client *Client) LoadStudentEquipment(ctx context.Context, appUserID int64)
 
 	snapshot := stprotocol.EquipmentSnapshot{}
 	for _, slot := range equipment.Slots {
-		if slot.Slot != "gear" && slot.Slot != "accessory" && slot.Slot != "tool" {
+		if slot.Slot != "gear" && slot.Slot != "accessory" {
 			continue
 		}
 		if slot.Item == nil || strings.TrimSpace(slot.Item.VisualKey) == "" {

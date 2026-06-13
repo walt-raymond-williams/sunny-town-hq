@@ -55,7 +55,7 @@ func TestRoomTargetsNearestBreakableWorldObject(t *testing.T) {
 	}
 }
 
-func TestMiningRequiresEquippedPickaxe(t *testing.T) {
+func TestMiningRequiresOwnedPickaxe(t *testing.T) {
 	room := testRoom(miningTestMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
@@ -65,16 +65,22 @@ func TestMiningRequiresEquippedPickaxe(t *testing.T) {
 	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
 
 	if !room.resourceNodes["rock-node-001"].active {
-		t.Fatal("node should stay active without equipped pickaxe")
+		t.Fatal("node should stay active without owned pickaxe")
 	}
 	select {
 	case event := <-room.resourceEvents:
 		t.Fatalf("unexpected resource event: %#v", event)
 	default:
 	}
+	if message := <-client.send; message.Type != "hello" {
+		t.Fatalf("first message type = %q, want hello", message.Type)
+	}
+	if message := <-client.send; message.Type != "error" || message.Code != "tool_not_available" {
+		t.Fatalf("tool error = %#v, want tool_not_available", message)
+	}
 }
 
-func TestMiningRejectsOwnedPickaxeWithoutEquipmentSlot(t *testing.T) {
+func TestMiningUsesOwnedPickaxeWithoutEquipmentSlot(t *testing.T) {
 	room := testRoom(miningTestMap())
 	client := testClient(room, "42")
 	room.join(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{})
@@ -84,8 +90,8 @@ func TestMiningRejectsOwnedPickaxeWithoutEquipmentSlot(t *testing.T) {
 
 	client.handleToolUse(clientMessage{Type: "tool_use", ToolKey: "pickaxe"})
 
-	if room.resourceNodes["rock-node-001"].hitCount != 0 {
-		t.Fatalf("hitCount = %d, want 0", room.resourceNodes["rock-node-001"].hitCount)
+	if room.resourceNodes["rock-node-001"].hitCount != 1 {
+		t.Fatalf("hitCount = %d, want 1", room.resourceNodes["rock-node-001"].hitCount)
 	}
 	select {
 	case event := <-room.resourceEvents:
@@ -97,7 +103,7 @@ func TestMiningRejectsOwnedPickaxeWithoutEquipmentSlot(t *testing.T) {
 func TestMiningRequiresPlayerInRange(t *testing.T) {
 	room := testRoom(miningTestMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
+	room.joinWithInventory(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{}, inventorySnapshot{"pickaxe": 1})
 	room.players["42"].x = 260
 	room.players["42"].y = 260
 
@@ -117,7 +123,7 @@ func TestMiningRequiresThreeSwings(t *testing.T) {
 	room := testRoom(miningTestMap())
 	room.rewardRunID = "test-run"
 	client := testClient(room, "42")
-	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
+	room.joinWithInventory(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{}, inventorySnapshot{"pickaxe": 1})
 	room.players["42"].x = 140
 	room.players["42"].y = 160
 
@@ -159,7 +165,7 @@ func TestMiningRequiresThreeSwings(t *testing.T) {
 func TestMiningRequiresActiveNodeAndRespawns(t *testing.T) {
 	room := testRoom(miningTestMap())
 	client := testClient(room, "42")
-	room.join(client, testClaims(42), equipmentSnapshot{equipmentSlotTool: "pickaxe"}, studentPositionResponse{})
+	room.joinWithInventory(client, testClaims(42), equipmentSnapshot{}, studentPositionResponse{}, inventorySnapshot{"pickaxe": 1})
 	room.players["42"].x = 140
 	room.players["42"].y = 160
 
