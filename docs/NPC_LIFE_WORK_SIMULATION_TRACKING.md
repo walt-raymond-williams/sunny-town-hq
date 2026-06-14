@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-14 after completing PR-readiness review issue #56.
+Snapshot refreshed: 2026-06-14 after creating PR-opening issue #57.
 
 ### Epic
 
@@ -76,7 +76,11 @@ Snapshot refreshed: 2026-06-14 after completing PR-readiness review issue #56.
 
 ### Open
 
-No open child issues remain for the first NPC life/work demo loop.
+- #57 Open NPC life/work integration PR
+  Status: `status:ready`
+  Handoff: `docs/NPC_LIFE_WORK_OPEN_PR_HANDOFF.md`
+  Depends on: #56
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/57
 
 ### Related Existing Issues
 
@@ -92,7 +96,7 @@ No open child issues remain for the first NPC life/work demo loop.
 
 ## Recommended Next Management Step
 
-Open a PR from `codex/npc-life-work-dev` into `main` for human review of the first NPC life/work demo loop.
+Complete #57 by opening a PR from `codex/npc-life-work-dev` into `main` for human review of the first NPC life/work demo loop.
 
 ## Useful Commands
 
@@ -102,6 +106,7 @@ gh issue view 51 --comments
 gh issue view 52 --comments
 gh issue view 55 --comments
 gh issue view 56 --comments
+gh issue view 57 --comments
 git checkout codex/npc-life-work-dev
 git pull
 task verify
@@ -119,6 +124,7 @@ task verify
 - `docs/NPC_LIFE_WORK_ROUTINE_DEBUG_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_VISUAL_CUES_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_PR_READINESS_HANDOFF.md`
+- `docs/NPC_LIFE_WORK_OPEN_PR_HANDOFF.md`
 - `docs/SUNNY_TOWN_HOTBAR_ACTIVE_TOOL_HANDOFF.md`
 - `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`
 - `docs/current/NPC_CHARACTER_MODEL_PLAN.md`
