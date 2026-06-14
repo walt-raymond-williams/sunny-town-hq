@@ -19,7 +19,13 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-14 after creating PR-opening issue #57.
+Snapshot refreshed: 2026-06-14 after opening PR #58.
+
+Current integration PR:
+
+- #58 Add first NPC life/work demo loop
+  Status: open for human review
+  https://github.com/walt-raymond-williams/sunny-town-hq/pull/58
 
 ### Epic
 
@@ -74,13 +80,16 @@ Snapshot refreshed: 2026-06-14 after creating PR-opening issue #57.
   Related: #38, #48, #49, #50, #51, #52, #54, #55
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/56
 
+- #57 Open NPC life/work integration PR
+  Status: closed
+  Handoff: `docs/NPC_LIFE_WORK_OPEN_PR_HANDOFF.md`
+  Result: opened PR #58 from `codex/npc-life-work-dev` into `main`.
+  Related: #38, #48, #49, #50, #51, #52, #54, #55, #56
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/57
+
 ### Open
 
-- #57 Open NPC life/work integration PR
-  Status: `status:ready`
-  Handoff: `docs/NPC_LIFE_WORK_OPEN_PR_HANDOFF.md`
-  Depends on: #56
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/57
+No open first-demo-loop child issues remain. PR #58 is ready for human review.
 
 ### Related Existing Issues
 
@@ -96,7 +105,7 @@ Snapshot refreshed: 2026-06-14 after creating PR-opening issue #57.
 
 ## Recommended Next Management Step
 
-Complete #57 by opening a PR from `codex/npc-life-work-dev` into `main` for human review of the first NPC life/work demo loop.
+Review PR #58 from `codex/npc-life-work-dev` into `main` for the first NPC life/work demo loop.
 
 ## Useful Commands
 
