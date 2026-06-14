@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-14 after creating PR-readiness review issue #56.
+Snapshot refreshed: 2026-06-14 after completing PR-readiness review issue #56.
 
 ### Epic
 
@@ -67,13 +67,16 @@ Snapshot refreshed: 2026-06-14 after creating PR-readiness review issue #56.
   Related blocker fixed before PR readiness review
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/54
 
-### Open
-
 - #56 Review NPC life/work integration branch for PR readiness
-  Status: `status:ready`
+  Status: closed
   Handoff: `docs/NPC_LIFE_WORK_PR_READINESS_HANDOFF.md`
+  Recommendation: ready to open PR from `codex/npc-life-work-dev` into `main`; no blocking follow-up issues found.
   Related: #38, #48, #49, #50, #51, #52, #54, #55
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/56
+
+### Open
+
+No open child issues remain for the first NPC life/work demo loop.
 
 ### Related Existing Issues
 
@@ -89,7 +92,7 @@ Snapshot refreshed: 2026-06-14 after creating PR-readiness review issue #56.
 
 ## Recommended Next Management Step
 
-Next work is #56, the integration/PR-readiness review for `codex/npc-life-work-dev`.
+Open a PR from `codex/npc-life-work-dev` into `main` for human review of the first NPC life/work demo loop.
 
 ## Useful Commands
 

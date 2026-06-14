@@ -25,7 +25,7 @@ Keep guidance practical and compact. Add to this file when a workflow repeatedly
 - HQ owns durable student/account/economy/inventory state and database schema.
 - Sunny Town owns live realtime world state: connected players, current map membership, accepted player positions, collectibles, resource node state, transitions, and gameplay validation.
 - Sunny Town should not write the HQ database directly. Use service-authenticated internal HQ HTTP endpoints with `X-HQ-Service-Secret`.
-- Browser/client messages are requests, not authority. Validate gameplay effects server-side using accepted server position and equipped tools.
+- Browser/client messages are requests, not authority. Validate gameplay effects server-side using accepted server position and owned hotbar-active tools.
 
 ## Development Workflow
 
