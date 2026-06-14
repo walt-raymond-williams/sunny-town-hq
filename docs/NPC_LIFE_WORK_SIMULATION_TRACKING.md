@@ -19,7 +19,7 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-12 after implementing visual cue issue #55.
+Snapshot refreshed: 2026-06-14 after creating PR-readiness review issue #56.
 
 ### Epic
 
@@ -61,6 +61,20 @@ Snapshot refreshed: 2026-06-12 after implementing visual cue issue #55.
   Related: #38
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/55
 
+- #54 Use selected hotbar item as active Sunny Town tool
+  Status: closed
+  Handoff: `docs/SUNNY_TOWN_HOTBAR_ACTIVE_TOOL_HANDOFF.md`
+  Related blocker fixed before PR readiness review
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/54
+
+### Open
+
+- #56 Review NPC life/work integration branch for PR readiness
+  Status: `status:ready`
+  Handoff: `docs/NPC_LIFE_WORK_PR_READINESS_HANDOFF.md`
+  Related: #38, #48, #49, #50, #51, #52, #54, #55
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/56
+
 ### Related Existing Issues
 
 - #4 Define production posture for NPC debug endpoint
@@ -75,7 +89,7 @@ Snapshot refreshed: 2026-06-12 after implementing visual cue issue #55.
 
 ## Recommended Next Management Step
 
-No open child issue remains for the first NPC life/work demo loop. Next work should either review the integrated slice on `codex/npc-life-work-dev` or create the next child issue from epic #38.
+Next work is #56, the integration/PR-readiness review for `codex/npc-life-work-dev`.
 
 ## Useful Commands
 
@@ -84,6 +98,7 @@ gh issue view 38 --comments
 gh issue view 51 --comments
 gh issue view 52 --comments
 gh issue view 55 --comments
+gh issue view 56 --comments
 git checkout codex/npc-life-work-dev
 git pull
 task verify
@@ -100,6 +115,8 @@ task verify
 - `docs/NPC_LIFE_WORK_COOKIE_KEEPER_ROUTINE_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_ROUTINE_DEBUG_HANDOFF.md`
 - `docs/NPC_LIFE_WORK_VISUAL_CUES_HANDOFF.md`
+- `docs/NPC_LIFE_WORK_PR_READINESS_HANDOFF.md`
+- `docs/SUNNY_TOWN_HOTBAR_ACTIVE_TOOL_HANDOFF.md`
 - `docs/current/NPC_LOCATION_PATHING_DRIVES_PLAN.md`
 - `docs/current/NPC_CHARACTER_MODEL_PLAN.md`
 - `docs/current/COOKIE_SHOP_STORAGE_PLAN.md`
