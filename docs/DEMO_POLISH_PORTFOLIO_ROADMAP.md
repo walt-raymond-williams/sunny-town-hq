@@ -32,6 +32,8 @@ HQ learning app context
 
 Existing issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/7
 
+Handoff: `docs/DEMO_POLISH_README_ASSETS_HANDOFF.md`
+
 Recommended revised scope:
 
 As a reviewer, I want the README to show the product, the strongest demo path, and the architecture choices worth noticing so I can evaluate the project quickly.
