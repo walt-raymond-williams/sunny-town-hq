@@ -19,12 +19,12 @@ Workflow:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-06-14 after opening PR #58.
+Snapshot refreshed: 2026-06-16 after PR #58 merged.
 
 Current integration PR:
 
 - #58 Add first NPC life/work demo loop
-  Status: open for human review
+  Status: merged into `main` on 2026-06-16
   https://github.com/walt-raymond-williams/sunny-town-hq/pull/58
 
 ### Epic
@@ -89,7 +89,7 @@ Current integration PR:
 
 ### Open
 
-No open first-demo-loop child issues remain. PR #58 is ready for human review.
+No open first-demo-loop child issues remain. PR #58 is merged.
 
 ### Related Existing Issues
 
@@ -105,7 +105,11 @@ No open first-demo-loop child issues remain. PR #58 is ready for human review.
 
 ## Recommended Next Management Step
 
-Review PR #58 from `codex/npc-life-work-dev` into `main` for the first NPC life/work demo loop.
+Decide the next epic or child slice. Good candidates:
+
+- #39 Demo polish and portfolio readiness, to turn the merged NPC loop into a clean demo path.
+- #40 Player and NPC progression, to build on mining XP and NPC routine/progression hooks.
+- A second #38 NPC life/work slice, such as adding another resident/home or expanding routine needs beyond work/rest.
 
 ## Useful Commands
 
@@ -116,7 +120,7 @@ gh issue view 52 --comments
 gh issue view 55 --comments
 gh issue view 56 --comments
 gh issue view 57 --comments
-git checkout codex/npc-life-work-dev
+git checkout main
 git pull
 task verify
 ```
