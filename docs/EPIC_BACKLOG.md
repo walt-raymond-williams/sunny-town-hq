@@ -41,7 +41,7 @@ Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/39
 
 Goal: make the project easy to understand, run, review, and demo from the repository front door.
 
-Best first step: consolidate existing demo-polish issues into a concrete demo path and asset plan.
+Best first step: issue #59, `Plan demo polish and portfolio readiness roadmap`, consolidates existing demo-polish issues into a concrete demo path and asset plan.
 
 ### #40 Epic: Player And NPC Progression
 
