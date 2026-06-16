@@ -6,6 +6,7 @@ import (
 	"time"
 
 	stmaps "hq/internal/sunnytown/maps"
+	stnavigation "hq/internal/sunnytown/navigation"
 )
 
 func TestRuntimeAnchorsResolveFromCheckedInMaps(t *testing.T) {
@@ -28,6 +29,33 @@ func TestRuntimeAnchorsResolveFromCheckedInMaps(t *testing.T) {
 	keeper := world.rooms["sunny-town-house-1"].liveNPCs["cookie-keeper"]
 	if keeper.anchors.Work == nil || keeper.anchors.Work.MapID != "sunny-town-house-1" || keeper.anchors.Work.LocationID != "cookie-keeper-counter" || keeper.anchors.Work.Source != npcAnchorSourceOwner {
 		t.Fatalf("keeper work anchor = %#v, want owned merchant counter", keeper.anchors.Work)
+	}
+	if keeper.anchors.Home == nil || keeper.anchors.Home.MapID != "sunny-town-cookie-keeper-home" || keeper.anchors.Home.LocationID != "cookie-keeper-bed" || keeper.anchors.Home.Source != npcAnchorSourceOwner {
+		t.Fatalf("keeper home anchor = %#v, want owned Cookie Keeper bed", keeper.anchors.Home)
+	}
+}
+
+func TestCookieKeeperCanRouteBetweenHomeAndWork(t *testing.T) {
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	world := newWorld(defaultRoomID, maps)
+
+	homeToWork, err := world.navigation.PlanRouteToLocation("sunny-town-cookie-keeper-home", stnavigation.Point{X: 160, Y: 224}, "sunny-town-house-1", "cookie-keeper-counter")
+	if err != nil {
+		t.Fatalf("plan home to work route: %v", err)
+	}
+	if len(homeToWork.Steps) < 3 {
+		t.Fatalf("home to work route steps = %#v, want cross-map route through town", homeToWork.Steps)
+	}
+
+	workToHome, err := world.navigation.PlanRouteToLocation("sunny-town-house-1", stnavigation.Point{X: 224, Y: 256}, "sunny-town-cookie-keeper-home", "cookie-keeper-bed")
+	if err != nil {
+		t.Fatalf("plan work to home route: %v", err)
+	}
+	if len(workToHome.Steps) < 3 {
+		t.Fatalf("work to home route steps = %#v, want cross-map route through town", workToHome.Steps)
 	}
 }
 

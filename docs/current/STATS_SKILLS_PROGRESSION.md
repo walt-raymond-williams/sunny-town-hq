@@ -101,7 +101,7 @@ Recommended requirement descriptor:
   "all": [
     { "kind": "skill", "key": "crafting", "minLevel": 2 },
     { "kind": "stat", "key": "focus", "minLevel": 1 },
-    { "kind": "item", "key": "pickaxe", "equipped": true }
+    { "kind": "item", "key": "pickaxe", "activeHotbar": true }
   ]
 }
 ```

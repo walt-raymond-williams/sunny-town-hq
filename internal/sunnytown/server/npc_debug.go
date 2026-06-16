@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,7 @@ type npcDebugNPC struct {
 	Drives        npcDebugDrives         `json:"drives"`
 	Anchors       npcDebugAnchors        `json:"anchors"`
 	Schedule      npcDebugSchedule       `json:"schedule"`
+	Routine       npcDebugRoutine        `json:"routine"`
 	Production    npcDebugProduction     `json:"production"`
 	ActiveDrive   string                 `json:"activeDrive,omitempty"`
 	Goal          *npcDebugGoal          `json:"goal,omitempty"`
@@ -63,12 +65,27 @@ type npcDebugSchedule struct {
 }
 
 type npcDebugProduction struct {
-	Eligible        bool    `json:"eligible"`
-	JobKey          string  `json:"jobKey,omitempty"`
-	OutputKey       string  `json:"outputKey,omitempty"`
-	ProgressSeconds float64 `json:"progressSeconds,omitempty"`
-	LastAt          string  `json:"lastAt,omitempty"`
-	LastEvent       string  `json:"lastEvent,omitempty"`
+	Eligible          bool    `json:"eligible"`
+	Status            string  `json:"status"`
+	Blocker           string  `json:"blocker,omitempty"`
+	JobKey            string  `json:"jobKey,omitempty"`
+	OutputKey         string  `json:"outputKey,omitempty"`
+	ProgressSeconds   float64 `json:"progressSeconds,omitempty"`
+	LastAt            string  `json:"lastAt,omitempty"`
+	LastEvent         string  `json:"lastEvent,omitempty"`
+	LastCommitAt      string  `json:"lastCommitAt,omitempty"`
+	LastCommitStatus  string  `json:"lastCommitStatus,omitempty"`
+	LastBlockedReason string  `json:"lastBlockedReason,omitempty"`
+	LastCommitError   string  `json:"lastCommitError,omitempty"`
+}
+
+type npcDebugRoutine struct {
+	Status               string `json:"status"`
+	TargetKey            string `json:"targetKey,omitempty"`
+	Scheduled            bool   `json:"scheduled"`
+	RouteBlocked         bool   `json:"routeBlocked"`
+	CurrentFailureKey    string `json:"currentFailureKey,omitempty"`
+	MostRecentFailureKey string `json:"mostRecentFailureKey,omitempty"`
 }
 
 type npcDebugDrivePressure struct {
@@ -106,9 +123,12 @@ type npcDebugRoute struct {
 }
 
 type npcDebugFailedTarget struct {
-	Key      string `json:"key"`
-	FailedAt string `json:"failedAt"`
-	RetryAt  string `json:"retryAt"`
+	Key        string `json:"key"`
+	Drive      string `json:"drive,omitempty"`
+	MapID      string `json:"mapId,omitempty"`
+	LocationID string `json:"locationId,omitempty"`
+	FailedAt   string `json:"failedAt"`
+	RetryAt    string `json:"retryAt"`
 }
 
 func (srv *Server) HandleNPCDebug(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +192,7 @@ func (world *world) npcDebugSnapshot(now time.Time) npcDebugResponse {
 
 func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDebugNPC {
 	character, hasCharacter := room.world.npcCharacter(liveNPC.npcKey)
-	publicSnapshot := liveNPC.snapshot(character, hasCharacter)
+	publicSnapshot := liveNPC.snapshot(character, hasCharacter, now)
 	debugNPC := npcDebugNPC{
 		ID:            publicSnapshot.ID,
 		CharacterID:   publicSnapshot.CharacterID,
@@ -184,7 +204,8 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 		Moving:        publicSnapshot.Moving,
 		Drives:        npcDebugDrives(liveNPC.drives),
 		Anchors:       debugAnchors(liveNPC.anchors),
-		Schedule:      liveNPC.debugSchedule(now),
+		Schedule:      liveNPC.debugSchedule(now, room.scheduleDayLength()),
+		Routine:       liveNPC.debugRoutine(now, room.scheduleDayLength()),
 		Production:    room.npcProductionDebugSnapshotLocked(liveNPC),
 		ActiveDrive:   string(liveNPC.activeDrive),
 		FocusUntil:    formatDebugTime(liveNPC.focusUntil),
@@ -224,24 +245,99 @@ func (room *room) npcDebugSnapshotLocked(liveNPC *liveNPC, now time.Time) npcDeb
 func (room *room) npcProductionDebugSnapshotLocked(liveNPC *liveNPC) npcDebugProduction {
 	job, ok := liveNPC.jobDefinition()
 	if !ok {
-		return npcDebugProduction{}
+		return npcDebugProduction{Status: "no_job", Blocker: "no_job"}
+	}
+	status := "building_progress"
+	blocker := ""
+	eligible := room.npcAtWorkAnchorLocked(liveNPC)
+	if liveNPC.anchors.Work == nil {
+		status = "blocked"
+		blocker = "no_work_anchor"
+	} else if !eligible {
+		status = "blocked"
+		blocker = "not_at_work_anchor"
+	} else if room.npcProductionCharacterIDLocked(liveNPC) < 1 {
+		status = "blocked"
+		blocker = "missing_character_identity"
+	} else if liveNPC.jobProduction.Progress >= npcJobProductionInterval.Seconds() {
+		status = "ready_to_queue"
+	} else {
+		status = "eligible"
 	}
 	return npcDebugProduction{
-		Eligible:        room.npcAtWorkAnchorLocked(liveNPC),
-		JobKey:          job.JobKey,
-		OutputKey:       job.OutputKey,
-		ProgressSeconds: liveNPC.jobProduction.Progress,
-		LastAt:          formatDebugTime(liveNPC.jobProduction.LastAt),
-		LastEvent:       liveNPC.jobProduction.LastEvent,
+		Eligible:          eligible,
+		Status:            status,
+		Blocker:           blocker,
+		JobKey:            job.JobKey,
+		OutputKey:         job.OutputKey,
+		ProgressSeconds:   liveNPC.jobProduction.Progress,
+		LastAt:            formatDebugTime(liveNPC.jobProduction.LastAt),
+		LastEvent:         liveNPC.jobProduction.LastEvent,
+		LastCommitAt:      formatDebugTime(liveNPC.jobProduction.LastCommitAt),
+		LastCommitStatus:  liveNPC.jobProduction.LastCommitStatus,
+		LastBlockedReason: liveNPC.jobProduction.LastBlockedReason,
+		LastCommitError:   liveNPC.jobProduction.LastCommitError,
 	}
 }
 
-func (npc *liveNPC) debugSchedule(now time.Time) npcDebugSchedule {
+func (room *room) npcProductionCharacterIDLocked(liveNPC *liveNPC) int64 {
+	if liveNPC == nil {
+		return 0
+	}
+	if liveNPC.characterID > 0 {
+		return liveNPC.characterID
+	}
+	if room.world == nil {
+		return 0
+	}
+	character, ok := room.world.npcCharacter(liveNPC.npcKey)
+	if !ok {
+		return 0
+	}
+	return character.characterID
+}
+
+func (npc *liveNPC) debugRoutine(now time.Time, dayLength time.Duration) npcDebugRoutine {
+	routine := npcDebugRoutine{
+		Status:               "idle",
+		MostRecentFailureKey: npc.mostRecentFailedTargetKey(),
+	}
+	if npc.goal != nil {
+		routine.TargetKey = npc.goal.failureKey()
+		routine.CurrentFailureKey = routine.TargetKey
+		routine.RouteBlocked = npc.targetFailedRecentlyDebug(*npc.goal, now)
+		routine.Scheduled = npc.scheduleDrivePressure(npc.goal.drive, now, dayLength) > 0
+		switch {
+		case npc.route != nil:
+			routine.Status = "traveling"
+		case !npc.goalArrivedAt.IsZero():
+			routine.Status = "arrived"
+		default:
+			routine.Status = "targeting"
+		}
+		return routine
+	}
+	if routine.MostRecentFailureKey != "" {
+		routine.Status = "blocked"
+		routine.RouteBlocked = true
+	}
+	return routine
+}
+
+func (npc *liveNPC) targetFailedRecentlyDebug(goal npcGoal, now time.Time) bool {
+	if len(npc.failedTargets) == 0 {
+		return false
+	}
+	failedAt, ok := npc.failedTargets[goal.failureKey()]
+	return ok && now.Sub(failedAt) < npcFailedTargetCooldown
+}
+
+func (npc *liveNPC) debugSchedule(now time.Time, dayLength time.Duration) npcDebugSchedule {
 	debugSchedule := npcDebugSchedule{
-		Phase: string(npcSchedulePhaseAt(now)),
+		Phase: string(npcSchedulePhaseAt(now, dayLength)),
 	}
 	for _, drive := range allNPCDrives {
-		pressure := npc.scheduleDrivePressure(drive, now)
+		pressure := npc.scheduleDrivePressure(drive, now, dayLength)
 		if pressure <= 0 {
 			continue
 		}
@@ -249,7 +345,7 @@ func (npc *liveNPC) debugSchedule(now time.Time) npcDebugSchedule {
 			Drive:          string(drive),
 			Pressure:       pressure,
 			Value:          npc.driveValue(drive),
-			SelectionValue: npc.driveSelectionValue(drive, now),
+			SelectionValue: npc.driveSelectionValue(drive, now, dayLength),
 		})
 	}
 	return debugSchedule
@@ -290,13 +386,40 @@ func (npc *liveNPC) failedTargetsDebugSnapshot() []npcDebugFailedTarget {
 	targets := make([]npcDebugFailedTarget, 0, len(keys))
 	for _, key := range keys {
 		failedAt := npc.failedTargets[key]
+		drive, mapID, locationID := splitFailedTargetKey(key)
 		targets = append(targets, npcDebugFailedTarget{
-			Key:      key,
-			FailedAt: formatDebugTime(failedAt),
-			RetryAt:  formatDebugTime(failedAt.Add(npcFailedTargetCooldown)),
+			Key:        key,
+			Drive:      drive,
+			MapID:      mapID,
+			LocationID: locationID,
+			FailedAt:   formatDebugTime(failedAt),
+			RetryAt:    formatDebugTime(failedAt.Add(npcFailedTargetCooldown)),
 		})
 	}
 	return targets
+}
+
+func (npc *liveNPC) mostRecentFailedTargetKey() string {
+	if len(npc.failedTargets) == 0 {
+		return ""
+	}
+	var newestKey string
+	var newestAt time.Time
+	for key, failedAt := range npc.failedTargets {
+		if newestKey == "" || failedAt.After(newestAt) || (failedAt.Equal(newestAt) && key < newestKey) {
+			newestKey = key
+			newestAt = failedAt
+		}
+	}
+	return newestKey
+}
+
+func splitFailedTargetKey(key string) (string, string, string) {
+	parts := strings.SplitN(key, ":", 3)
+	if len(parts) != 3 {
+		return "", "", ""
+	}
+	return parts[0], parts[1], parts[2]
 }
 
 func formatDebugTime(value time.Time) string {

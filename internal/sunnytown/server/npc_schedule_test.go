@@ -8,21 +8,22 @@ import (
 )
 
 func TestNPCSchedulePhaseAt(t *testing.T) {
+	dayLength := 8 * time.Minute
 	tests := []struct {
-		name string
-		hour int
-		want npcSchedulePhase
+		name   string
+		offset time.Duration
+		want   npcSchedulePhase
 	}{
-		{name: "night before morning", hour: 5, want: npcSchedulePhaseNight},
-		{name: "morning start", hour: 6, want: npcSchedulePhaseMorning},
-		{name: "day start", hour: 10, want: npcSchedulePhaseDay},
-		{name: "evening start", hour: 17, want: npcSchedulePhaseEvening},
-		{name: "night start", hour: 21, want: npcSchedulePhaseNight},
+		{name: "morning start", offset: 0, want: npcSchedulePhaseMorning},
+		{name: "day start", offset: 2 * time.Minute, want: npcSchedulePhaseDay},
+		{name: "evening start", offset: 4*time.Minute + 48*time.Second, want: npcSchedulePhaseEvening},
+		{name: "night start", offset: 6*time.Minute + 24*time.Second, want: npcSchedulePhaseNight},
+		{name: "wraps to next morning", offset: 8 * time.Minute, want: npcSchedulePhaseMorning},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			now := time.Date(2026, 6, 8, test.hour, 0, 0, 0, time.UTC)
-			if got := npcSchedulePhaseAt(now); got != test.want {
+			now := npcScheduleTestBaseTime().Add(test.offset)
+			if got := npcSchedulePhaseAt(now, dayLength); got != test.want {
 				t.Fatalf("phase = %q, want %q", got, test.want)
 			}
 		})
@@ -31,12 +32,13 @@ func TestNPCSchedulePhaseAt(t *testing.T) {
 
 func TestDayScheduleBiasesNPCWithWorkAnchorTowardWork(t *testing.T) {
 	room := testRoom(scheduleNPCTestMap())
+	room.world.npcDayLength = 8 * time.Minute
 	npc := room.liveNPCs[driveControlledNPCKey]
 	npc.drives.Hunger = 95
 	npc.drives.Energy = 95
 	npc.drives.Social = 95
 	npc.drives.Work = 95
-	now := time.Date(2026, 6, 8, 12, 0, 0, 0, time.UTC)
+	now := npcScheduleTestBaseTime().Add(3 * time.Minute)
 
 	room.step(0.1, now)
 
@@ -50,12 +52,13 @@ func TestDayScheduleBiasesNPCWithWorkAnchorTowardWork(t *testing.T) {
 
 func TestNightScheduleBiasesNPCWithHomeAnchorTowardRest(t *testing.T) {
 	room := testRoom(scheduleNPCTestMap())
+	room.world.npcDayLength = 8 * time.Minute
 	npc := room.liveNPCs[driveControlledNPCKey]
 	npc.drives.Hunger = 95
 	npc.drives.Energy = 95
 	npc.drives.Social = 95
 	npc.drives.Work = 95
-	now := time.Date(2026, 6, 8, 22, 0, 0, 0, time.UTC)
+	now := npcScheduleTestBaseTime().Add(7 * time.Minute)
 
 	room.step(0.1, now)
 
@@ -69,12 +72,13 @@ func TestNightScheduleBiasesNPCWithHomeAnchorTowardRest(t *testing.T) {
 
 func TestUrgentHungerOverridesSchedulePressure(t *testing.T) {
 	room := testRoom(scheduleNPCTestMap())
+	room.world.npcDayLength = 8 * time.Minute
 	npc := room.liveNPCs[driveControlledNPCKey]
 	npc.drives.Hunger = 10
 	npc.drives.Energy = 95
 	npc.drives.Social = 95
 	npc.drives.Work = 95
-	now := time.Date(2026, 6, 8, 12, 0, 0, 0, time.UTC)
+	now := npcScheduleTestBaseTime().Add(3 * time.Minute)
 
 	room.step(0.1, now)
 
@@ -88,12 +92,13 @@ func TestUrgentHungerOverridesSchedulePressure(t *testing.T) {
 
 func TestNPCDebugSnapshotIncludesScheduleState(t *testing.T) {
 	room := testRoom(scheduleNPCTestMap())
+	room.world.npcDayLength = 8 * time.Minute
 	npc := room.liveNPCs[driveControlledNPCKey]
 	npc.drives.Hunger = 95
 	npc.drives.Energy = 95
 	npc.drives.Social = 95
 	npc.drives.Work = 95
-	now := time.Date(2026, 6, 8, 12, 0, 0, 0, time.UTC)
+	now := npcScheduleTestBaseTime().Add(3 * time.Minute)
 
 	snapshot := room.world.npcDebugSnapshot(now)
 	debugNPC := requireDebugNPC(t, snapshot, defaultMapID, driveControlledNPCKey)
@@ -107,6 +112,18 @@ func TestNPCDebugSnapshotIncludesScheduleState(t *testing.T) {
 	if pressure.Drive != string(npcDriveWork) || pressure.Pressure != npcScheduleMajorPressure || pressure.SelectionValue >= npcDriveThreshold {
 		t.Fatalf("pressure = %#v, want work pressure below selection threshold", pressure)
 	}
+}
+
+func TestWorldDefaultsNPCDayLengthToTwentyFourMinutes(t *testing.T) {
+	world := newWorldWithNPCDayLength(defaultRoomID, map[string]gameMap{defaultMapID: testMap()}, 0)
+
+	if world.scheduleDayLength() != 24*time.Minute {
+		t.Fatalf("day length = %s, want 24m", world.scheduleDayLength())
+	}
+}
+
+func npcScheduleTestBaseTime() time.Time {
+	return time.Unix(0, 0).UTC()
 }
 
 func scheduleNPCTestMap() gameMap {

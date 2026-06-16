@@ -33,7 +33,6 @@ interface StudentInventoryState {
 const defaultEquipmentSlots: EquippedSlot[] = [
   { slot: 'gear', item: null },
   { slot: 'accessory', item: null },
-  { slot: 'tool', item: null },
 ]
 
 const defaultHotbarSlots: HotbarSlot[] = Array.from({ length: 5 }, (_, index) => ({

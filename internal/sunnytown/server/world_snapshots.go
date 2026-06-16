@@ -13,7 +13,7 @@ func (room *room) broadcastSnapshot(now time.Time) {
 		Tick:          room.tick,
 		ServerTimeMS:  now.UnixMilli(),
 		Players:       room.snapshotsLocked(),
-		NPCs:          room.npcSnapshotsLocked(),
+		NPCs:          room.npcSnapshotsLocked(now),
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 		PlacedObjects: room.placedObjectSnapshotsLocked(),
@@ -34,15 +34,16 @@ func (room *room) broadcastSnapshot(now time.Time) {
 	}
 }
 
-func (room *room) npcSnapshotsLocked() []npcSnapshot {
+func (room *room) npcSnapshotsLocked(now time.Time) []npcSnapshot {
 	snapshots := make([]npcSnapshot, 0, len(room.liveNPCs))
 	for _, liveNPC := range room.liveNPCs {
-		snapshots = append(snapshots, liveNPC.snapshot(room.world.npcCharacter(liveNPC.npcKey)))
+		character, hasCharacter := room.world.npcCharacter(liveNPC.npcKey)
+		snapshots = append(snapshots, liveNPC.snapshot(character, hasCharacter, now))
 	}
 	return snapshots
 }
 
-func (liveNPC *liveNPC) snapshot(character npcCharacter, hasCharacter bool) npcSnapshot {
+func (liveNPC *liveNPC) snapshot(character npcCharacter, hasCharacter bool, now time.Time) npcSnapshot {
 	name := liveNPC.displayName
 	spriteKey := liveNPC.spriteKey
 	characterID := liveNPC.characterID
@@ -56,17 +57,51 @@ func (liveNPC *liveNPC) snapshot(character npcCharacter, hasCharacter bool) npcS
 		}
 	}
 	return npcSnapshot{
-		ID:          liveNPC.npcKey,
-		CharacterID: characterID,
-		Name:        name,
-		X:           math.Round(liveNPC.x*10) / 10,
-		Y:           math.Round(liveNPC.y*10) / 10,
-		Facing:      liveNPC.facing,
-		Moving:      liveNPC.moving,
-		SpriteKey:   spriteKey,
-		Dialogue:    append([]string(nil), liveNPC.dialogue...),
-		Shop:        cloneShop(liveNPC.shop),
-		Activity:    cloneActivity(liveNPC.activity),
+		ID:            liveNPC.npcKey,
+		CharacterID:   characterID,
+		Name:          name,
+		X:             math.Round(liveNPC.x*10) / 10,
+		Y:             math.Round(liveNPC.y*10) / 10,
+		Facing:        liveNPC.facing,
+		Moving:        liveNPC.moving,
+		SpriteKey:     spriteKey,
+		Dialogue:      append([]string(nil), liveNPC.dialogue...),
+		RoutineStatus: liveNPC.publicRoutineStatus(now),
+		Shop:          cloneShop(liveNPC.shop),
+		Activity:      cloneActivity(liveNPC.activity),
+	}
+}
+
+func (liveNPC *liveNPC) publicRoutineStatus(now time.Time) string {
+	if liveNPC == nil {
+		return ""
+	}
+	if liveNPC.goal != nil {
+		if liveNPC.targetFailedRecentlyDebug(*liveNPC.goal, now) {
+			return "blocked"
+		}
+		if liveNPC.route != nil {
+			return "traveling"
+		}
+		if !liveNPC.goalArrivedAt.IsZero() {
+			return publicRoutineStatusForGoal(*liveNPC.goal)
+		}
+		return ""
+	}
+	if liveNPC.mostRecentFailedTargetKey() != "" {
+		return "blocked"
+	}
+	return ""
+}
+
+func publicRoutineStatusForGoal(goal npcGoal) string {
+	switch {
+	case goal.anchorKind == npcAnchorHome || goal.drive == npcDriveEnergy:
+		return "resting"
+	case goal.anchorKind == npcAnchorWork || goal.drive == npcDriveWork:
+		return "working"
+	default:
+		return ""
 	}
 }
 
@@ -109,6 +144,17 @@ func cloneEquipment(equipment equipmentSnapshot) equipmentSnapshot {
 	cloned := make(equipmentSnapshot, len(equipment))
 	for slot, visualKey := range equipment {
 		cloned[slot] = visualKey
+	}
+	return cloned
+}
+
+func cloneInventory(inventory inventorySnapshot) inventorySnapshot {
+	if len(inventory) == 0 {
+		return inventorySnapshot{}
+	}
+	cloned := make(inventorySnapshot, len(inventory))
+	for itemKey, quantity := range inventory {
+		cloned[itemKey] = quantity
 	}
 	return cloned
 }

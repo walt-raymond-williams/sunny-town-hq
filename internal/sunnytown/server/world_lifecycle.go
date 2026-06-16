@@ -12,6 +12,13 @@ import (
 )
 
 func newWorld(roomID string, maps map[string]gameMap) *world {
+	return newWorldWithNPCDayLength(roomID, maps, defaultNPCScheduleDayLength)
+}
+
+func newWorldWithNPCDayLength(roomID string, maps map[string]gameMap, npcDayLength time.Duration) *world {
+	if npcDayLength <= 0 {
+		npcDayLength = defaultNPCScheduleDayLength
+	}
 	rewardEvents := make(chan rewardEvent, 32)
 	resourceEvents := make(chan resourceEvent, resourceCommitQueueSize)
 	npcJobEvents := make(chan npcJobProductionEvent, npcJobProductionQueueSize)
@@ -27,6 +34,7 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 		rewardEvents:   rewardEvents,
 		resourceEvents: resourceEvents,
 		npcJobEvents:   npcJobEvents,
+		npcDayLength:   npcDayLength,
 	}
 	for _, gameMap := range maps {
 		created.rooms[gameMap.ID] = newRoom(roomID, gameMap, rewardEvents, resourceEvents, npcJobEvents, created)
@@ -34,6 +42,20 @@ func newWorld(roomID string, maps map[string]gameMap) *world {
 	created.defaultRoom = created.rooms[defaultMapID]
 	created.configureNPCRoutineAnchors()
 	return created
+}
+
+func (world *world) scheduleDayLength() time.Duration {
+	if world == nil || world.npcDayLength <= 0 {
+		return defaultNPCScheduleDayLength
+	}
+	return world.npcDayLength
+}
+
+func (room *room) scheduleDayLength() time.Duration {
+	if room == nil {
+		return defaultNPCScheduleDayLength
+	}
+	return room.world.scheduleDayLength()
 }
 
 func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resourceEvents chan resourceEvent, npcJobEvents chan npcJobProductionEvent, world *world) *room {
@@ -66,11 +88,15 @@ func newRoom(id string, gameMap gameMap, rewardEvents chan rewardEvent, resource
 }
 
 func (world *world) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {
+	world.joinWithInventory(client, claims, equipment, position, inventoryFromEquipment(equipment))
+}
+
+func (world *world) joinWithInventory(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse, inventory inventorySnapshot) {
 	target := world.rooms[claims.MapID]
 	if target == nil {
 		target = world.defaultRoom
 	}
-	target.join(client, claims, equipment, position)
+	target.joinWithInventory(client, claims, equipment, position, inventory)
 }
 
 func (room *room) run(ctx context.Context) {
@@ -93,11 +119,16 @@ func (room *room) run(ctx context.Context) {
 }
 
 func (room *room) join(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse) {
+	room.joinWithInventory(client, claims, equipment, position, inventoryFromEquipment(equipment))
+}
+
+func (room *room) joinWithInventory(client *client, claims sunnytownauth.Claims, equipment equipmentSnapshot, position studentPositionResponse, inventory inventorySnapshot) {
+	now := time.Now()
 	room.mu.Lock()
 	defer room.mu.Unlock()
 
 	if len(room.players) == 0 {
-		room.catchUpNPCsAfterNoPlayersLocked(time.Now())
+		room.catchUpNPCsAfterNoPlayersLocked(now)
 	}
 
 	spawn := room.spawnPointLocked()
@@ -118,11 +149,11 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		displayName: claims.DisplayName,
 		avatarID:    claims.AvatarID,
 		equipment:   equipment,
-		inventory:   inventoryFromEquipment(equipment),
+		inventory:   cloneInventory(inventory),
 		x:           x,
 		y:           y,
 		facing:      facing,
-		lastMoveAt:  time.Now(),
+		lastMoveAt:  now,
 		client:      client,
 	}
 	if player.displayName == "" {
@@ -143,7 +174,7 @@ func (room *room) join(client *client, claims sunnytownauth.Claims, equipment eq
 		MapID:         room.gameMap.ID,
 		Map:           &mapSnapshot,
 		Players:       room.snapshotsLocked(),
-		NPCs:          room.npcSnapshotsLocked(),
+		NPCs:          room.npcSnapshotsLocked(now),
 		Collectibles:  room.collectibleSnapshotsLocked(),
 		ResourceNodes: room.resourceNodeSnapshotsLocked(),
 		PlacedObjects: room.placedObjectSnapshotsLocked(),
@@ -237,7 +268,7 @@ func (world *world) transferPlayer(sourceMapID string, playerID string, usedPort
 		MapID:         target.gameMap.ID,
 		Map:           &mapSnapshot,
 		Players:       target.snapshotsLocked(),
-		NPCs:          target.npcSnapshotsLocked(),
+		NPCs:          target.npcSnapshotsLocked(now),
 		Collectibles:  target.collectibleSnapshotsLocked(),
 		ResourceNodes: target.resourceNodeSnapshotsLocked(),
 		PlacedObjects: target.placedObjectSnapshotsLocked(),

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	stmaps "hq/internal/sunnytown/maps"
+	stnavigation "hq/internal/sunnytown/navigation"
 )
 
 func TestDrivenNPCMovesAlongPath(t *testing.T) {
@@ -66,7 +67,7 @@ func TestSnapshotIncludesMovedDrivenNPCPosition(t *testing.T) {
 	room.step(0.5, time.Now())
 
 	room.mu.Lock()
-	snapshots := room.npcSnapshotsLocked()
+	snapshots := room.npcSnapshotsLocked(time.Now())
 	room.mu.Unlock()
 
 	if len(snapshots) != 1 {
@@ -74,6 +75,9 @@ func TestSnapshotIncludesMovedDrivenNPCPosition(t *testing.T) {
 	}
 	if snapshots[0].ID != driveControlledNPCKey || snapshots[0].X <= 64 || snapshots[0].Moving != true {
 		t.Fatalf("npc snapshot = %#v, want moved mayor snapshot", snapshots[0])
+	}
+	if snapshots[0].RoutineStatus != "traveling" {
+		t.Fatalf("routine status = %q, want traveling", snapshots[0].RoutineStatus)
 	}
 }
 
@@ -792,6 +796,121 @@ func TestTeacherSelectsAuthoredSchoolWorkLocation(t *testing.T) {
 	}
 }
 
+func TestCookieKeeperDayScheduleHoldsWorkAnchorWhenAlreadyThere(t *testing.T) {
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	world := newWorldWithNPCDayLength(defaultRoomID, maps, 8*time.Minute)
+	room := world.rooms["sunny-town-house-1"]
+	npc := room.liveNPCs["cookie-keeper"]
+	npc.drives.Hunger = 95
+	npc.drives.Energy = 95
+	npc.drives.Social = 95
+	npc.drives.Work = 95
+	now := npcScheduleTestBaseTime().Add(3 * time.Minute)
+
+	room.step(0.1, now)
+
+	if npc.activeDrive != npcDriveWork {
+		t.Fatalf("active drive = %q, want scheduled work", npc.activeDrive)
+	}
+	if npc.goal == nil || npc.goal.mapID != "sunny-town-house-1" || npc.goal.location.ID != "cookie-keeper-counter" || npc.goal.anchorKind != npcAnchorWork {
+		t.Fatalf("goal = %#v, want stationary counter work goal", npc.goal)
+	}
+	if npc.route != nil || npc.moving {
+		t.Fatalf("route = %#v moving=%v, want stationary work goal at counter", npc.route, npc.moving)
+	}
+
+	room.step(0.1, now.Add(time.Second))
+
+	if npc.goal == nil || npc.goal.location.ID != "cookie-keeper-counter" {
+		t.Fatalf("goal = %#v, want scheduled work goal to persist while day pressure is active", npc.goal)
+	}
+}
+
+func TestCookieKeeperDemoCadenceRoutesHomeThenBackToWork(t *testing.T) {
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	world := newWorldWithNPCDayLength(defaultRoomID, maps, 8*time.Minute)
+	house := world.rooms["sunny-town-house-1"]
+	keeper := house.liveNPCs["cookie-keeper"]
+	keeper.drives.Hunger = 95
+	keeper.drives.Energy = 95
+	keeper.drives.Social = 95
+	keeper.drives.Work = 95
+	night := npcScheduleTestBaseTime().Add(7 * time.Minute)
+
+	stepWorldForTest(world, 0.1, night)
+
+	if keeper.activeDrive != npcDriveEnergy {
+		t.Fatalf("active drive = %q, want scheduled home/rest", keeper.activeDrive)
+	}
+	if keeper.goal == nil || keeper.goal.mapID != "sunny-town-cookie-keeper-home" || keeper.goal.location.ID != "cookie-keeper-bed" || keeper.goal.anchorKind != npcAnchorHome {
+		t.Fatalf("goal = %#v, want owned Cookie Keeper bed", keeper.goal)
+	}
+	if keeper.route == nil || len(keeper.route.Steps) < 3 {
+		t.Fatalf("route = %#v, want cross-map route from work to home bed", keeper.route)
+	}
+
+	stepWorldForTest(world, 35, night.Add(time.Second))
+
+	home := world.rooms["sunny-town-cookie-keeper-home"]
+	keeper = home.liveNPCs["cookie-keeper"]
+	if keeper == nil {
+		t.Fatalf("keeper location after night route: house=%v town=%v home=%v, want home", house.liveNPCs["cookie-keeper"] != nil, world.rooms[defaultMapID].liveNPCs["cookie-keeper"] != nil, home.liveNPCs["cookie-keeper"] != nil)
+	}
+	if keeper.goal == nil || keeper.goal.location.ID != "cookie-keeper-bed" || keeper.route != nil {
+		t.Fatalf("keeper goal=%#v route=%#v, want arrived at bed", keeper.goal, keeper.route)
+	}
+	home.mu.Lock()
+	homeSnapshots := home.npcSnapshotsLocked(night.Add(36 * time.Second))
+	home.mu.Unlock()
+	if len(homeSnapshots) != 1 || homeSnapshots[0].RoutineStatus != "resting" {
+		t.Fatalf("home snapshots = %#v, want resting routine cue", homeSnapshots)
+	}
+	bed, ok := world.navigation.Location("sunny-town-cookie-keeper-home", "cookie-keeper-bed")
+	if !ok || !pointWithinLocation(stnavigation.Point{X: keeper.x, Y: keeper.y}, bed) {
+		t.Fatalf("keeper position = (%v,%v), want inside Cookie Keeper bed", keeper.x, keeper.y)
+	}
+
+	keeper.drives.Hunger = 95
+	keeper.drives.Energy = 95
+	keeper.drives.Social = 95
+	keeper.drives.Work = 95
+	day := npcScheduleTestBaseTime().Add(10 * time.Minute)
+	stepWorldForTest(world, 0.1, day)
+
+	if keeper.activeDrive != npcDriveWork {
+		t.Fatalf("active drive = %q, want scheduled work after day phase starts", keeper.activeDrive)
+	}
+	if keeper.goal == nil || keeper.goal.mapID != "sunny-town-house-1" || keeper.goal.location.ID != "cookie-keeper-counter" || keeper.goal.anchorKind != npcAnchorWork {
+		t.Fatalf("goal = %#v, want counter work goal from home", keeper.goal)
+	}
+	if keeper.route == nil || len(keeper.route.Steps) < 3 {
+		t.Fatalf("route = %#v, want cross-map route from home bed to work counter", keeper.route)
+	}
+
+	stepWorldForTest(world, 35, day.Add(time.Second))
+
+	keeper = house.liveNPCs["cookie-keeper"]
+	if keeper == nil {
+		t.Fatalf("keeper location after day route: house=%v town=%v home=%v, want house", house.liveNPCs["cookie-keeper"] != nil, world.rooms[defaultMapID].liveNPCs["cookie-keeper"] != nil, home.liveNPCs["cookie-keeper"] != nil)
+	}
+	counter, ok := world.navigation.Location("sunny-town-house-1", "cookie-keeper-counter")
+	if !ok || !pointWithinLocation(stnavigation.Point{X: keeper.x, Y: keeper.y}, counter) {
+		t.Fatalf("keeper position = (%v,%v), want inside Cookie Keeper counter", keeper.x, keeper.y)
+	}
+	house.mu.Lock()
+	workSnapshots := house.npcSnapshotsLocked(day.Add(36 * time.Second))
+	house.mu.Unlock()
+	if len(workSnapshots) != 1 || workSnapshots[0].RoutineStatus != "working" {
+		t.Fatalf("work snapshots = %#v, want working routine cue", workSnapshots)
+	}
+}
+
 func TestNPCTransfersAcrossPortalRoute(t *testing.T) {
 	town, house := driveNPCCrossMapTestMaps()
 	world := testWorld(town, house)
@@ -819,10 +938,10 @@ func TestNPCTransfersAcrossPortalRoute(t *testing.T) {
 	}
 
 	source.mu.Lock()
-	sourceSnapshots := source.npcSnapshotsLocked()
+	sourceSnapshots := source.npcSnapshotsLocked(now)
 	source.mu.Unlock()
 	target.mu.Lock()
-	targetSnapshots := target.npcSnapshotsLocked()
+	targetSnapshots := target.npcSnapshotsLocked(now)
 	target.mu.Unlock()
 	if len(sourceSnapshots) != 0 {
 		t.Fatalf("source snapshots = %#v, want no transferred npc", sourceSnapshots)
@@ -857,6 +976,24 @@ func TestNPCDoesNotBounceWhenLandingInsideTargetPortal(t *testing.T) {
 	}
 	if transferred.x <= 64 {
 		t.Fatalf("npc x = %v, want movement away from landing portal toward target", transferred.x)
+	}
+}
+
+func stepWorldForTest(world *world, dt float64, now time.Time) {
+	if world == nil || dt <= 0 {
+		return
+	}
+	remaining := dt
+	for remaining > 0 {
+		step := remaining
+		if step > 0.1 {
+			step = 0.1
+		}
+		for _, room := range world.rooms {
+			room.step(step, now)
+		}
+		remaining -= step
+		now = now.Add(time.Duration(step * float64(time.Second)))
 	}
 }
 

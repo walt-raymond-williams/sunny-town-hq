@@ -19,14 +19,16 @@ Current implemented baseline:
 - Same-map route segments use A* over a coarse map grid with static blocked rectangles.
 - NPC route planning can include active collision `worldObjects` from the NPC's current room as dynamic blocked rectangles.
 - Live NPC runtime state is initialized per room and broadcast through server-authoritative NPC snapshots.
+- Normal NPC snapshots may include optional `routineStatus` values (`traveling`, `resting`, `working`, `blocked`) so the frontend can render subtle routine cues without polling `/debug/npcs`.
 - NPCs have in-memory `hunger`, `energy`, `social`, and `work` drives.
 - Drives deplete over time and replenish at matching tagged locations.
 - NPCs choose the lowest below-threshold satisfiable drive, skip unrouteable drives, and route to matching locations.
 - NPC goals have focus windows, periodic reevaluation, emergency interruption, arrival grace, failure counts, and failed-target cooldowns.
 - NPCs can choose a low-priority `idle` fallback route to public/idle/wander/social locations when no urgent drive goal is available.
 - NPCs resolve runtime-only routine anchors for home/rest, work, food, and social/public targets from authored locations.
-- NPCs use deterministic UTC schedule phases (`morning`, `day`, `evening`, `night`) to apply selection-time drive pressure for strong routine anchors.
-- Schedule pressure is visible in `/debug/npcs`, and urgent raw needs still override scheduled behavior.
+- NPCs use a server-owned simulated day, configured by `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES`, to derive deterministic schedule phases (`morning`, `day`, `evening`, `night`) and apply selection-time drive pressure for strong routine anchors.
+- Schedule pressure can hold an NPC at an owned/role routine anchor without requiring a movement route; phase changes can then redirect the NPC after the normal focus/reevaluation window, while urgent raw needs still override scheduled behavior.
+- Schedule pressure, detailed routine status, route failure summaries, and NPC production blockers are visible in `/debug/npcs`.
 - Rooms that have become empty pause exact NPC path-following and apply a bounded coarse drive catch-up when a player returns.
 - ND-9 durability decision: do not persist raw NPC drive values, current map position, or movement-controller state yet; keep them Sunny Town runtime state until stable gameplay concepts require durability.
 - NPCs at eligible work anchors can emit durable, idempotent HQ-owned job production events without persisting raw movement-controller state.
@@ -63,6 +65,7 @@ Important current code touchpoints:
 - Cookie Shop chest inspection UI: `frontend/src/composables/useSunnyTownChestInteractions.ts`, `frontend/src/features/sunny-town/SunnyTownChestPanel.vue`
 - Movement tests: `internal/sunnytown/server/npc_movement_test.go`
 - Frontend live NPC consumption: `frontend/src/features/sunny-town/SunnyTownPage.vue`, `frontend/src/composables/useSunnyTownNpcInteractions.ts`, `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
+- Frontend NPC routine cues: `frontend/src/features/sunny-town/rendering/characterDrawing.ts`
 
 Verification for movement-drive work:
 
@@ -161,7 +164,10 @@ Implemented notes:
 - The endpoint requires `X-HQ-Service-Secret` when `SUNNY_TOWN_SERVICE_SECRET` is configured.
 - Debug output is deterministic: maps, NPCs, and failed targets are sorted.
 - Each NPC debug entry includes public identity/position, drives, active drive, goal location/tags, route step/path indexes, focus and reevaluation timestamps, arrival/failure state, and failed target retry times.
-- Normal websocket `hello`, `snapshot`, and `map_changed` payloads remain unchanged.
+- Each NPC debug entry includes a `routine` summary with status, active target key, scheduled-goal flag, route-blocked flag, and most recent failed target key.
+- Failed target entries split the target key into drive, map, and location fields so blocked route state is readable without parsing a compound key.
+- Production debug state includes local eligibility status/blocker plus the last HQ commit status, blocked reason, or commit error recorded by the production worker.
+- Normal websocket `hello`, `snapshot`, and `map_changed` NPC payloads include a narrow optional `routineStatus` cue for public routine readability; detailed drives, goals, schedules, failures, and production state remain limited to `/debug/npcs`.
 
 Acceptance criteria:
 
@@ -323,7 +329,8 @@ Implemented notes:
 - Anchors are resolved after all rooms/maps are initialized, so cross-map authored locations can be used.
 - Home, work, food, and social anchors are derived from authored map locations.
 - Resolution prefers `ownerNpcKey`, then role matches for work, then generic tagged locations with deterministic tie-breakers.
-- Anchor matches add a strong scoring bonus but do not replace generic candidate routing.
+- Anchor matches add a strong scoring bonus, enough for owned cross-map routine anchors to beat nearer generic matches, but do not replace generic candidate routing.
+- If an NPC is already standing in a strong owned/role routine anchor during a matching scheduled phase, the controller can assign a stationary goal there instead of falling through to idle fallback.
 - If an anchor target is missing or unreachable, route selection can still fall back to another scored matching location.
 - Goals selected from an anchor carry `anchorKind`, and `/debug/npcs` now includes each NPC's resolved anchors plus the active goal's anchor kind.
 - Tests cover checked-in map anchors, owner preference, role work anchors, anchor-preferred goal marking, blocked-anchor fallback, and debug anchor output.
@@ -365,20 +372,22 @@ Implementation notes:
 
 Implemented notes:
 
-- Added a deterministic runtime schedule phase helper with UTC-based bands:
-  - `morning`: 06:00-09:59
-  - `day`: 10:00-16:59
-  - `evening`: 17:00-20:59
-  - `night`: 21:00-05:59
+- Added a deterministic runtime schedule phase helper based on a server-owned simulated day length. `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES` defaults to `24`; demo runs can use `8`.
+  - `morning`: first 25 percent of the simulated day.
+  - `day`: next 35 percent.
+  - `evening`: next 20 percent.
+  - `night`: final 20 percent.
 - Schedule pressure is applied only during drive selection; raw drive values still deplete/replenish normally.
 - Day applies work pressure for NPCs with a strong work anchor.
 - Night applies energy/home pressure for NPCs with a strong home/rest anchor.
 - Evening applies social pressure for NPCs with a strong social anchor.
 - Morning applies lighter hunger pressure for NPCs with a strong food anchor.
 - "Strong" schedule anchors are owner- or role-derived anchors, not generic fallback anchors, so generic public/idle locations do not make unrelated tests or NPCs time-sensitive.
+- Scheduled goals remain active while their phase pressure is active, even after the raw drive is replenished. Once that pressure ends, normal reevaluation can pick the next scheduled or urgent goal.
+- Cookie Keeper uses the demo cadence to route between `cookie-keeper-counter` during day and `cookie-keeper-bed` at night through the existing town portals.
 - Emergency raw drive values still override schedule pressure. For example, urgent hunger can beat a daytime work schedule.
-- `GET /debug/npcs` now includes the current schedule phase and active schedule pressure entries with raw and selection-adjusted drive values.
-- Tests cover phase boundaries, daytime work pressure, nighttime home/rest pressure, urgent hunger override, and debug schedule output.
+- `GET /debug/npcs` now includes the current schedule phase, active schedule pressure entries with raw and selection-adjusted drive values, and a `routine.scheduled` flag when the current target is schedule-driven.
+- Tests cover phase boundaries, daytime work pressure, nighttime home/rest pressure, urgent hunger override, Cookie Keeper's home/work portal route, stationary scheduled anchors, and debug schedule output.
 
 Acceptance criteria:
 
@@ -493,7 +502,7 @@ Implemented notes:
   - NPC must have durable character identity from map data or HQ `npc-characters/ensure`.
   - Enough eligible elapsed time must accumulate before one idempotent event is queued.
 - Added bounded no-player catch-up production using the existing pause/catch-up path, without exact offline path simulation.
-- Added `/debug/npcs` production fields: eligibility, job key, output key, progress seconds, last event, and last production time.
+- Added `/debug/npcs` production fields: eligibility, job key, output key, progress seconds, last event, last production time, local status/blocker, and last HQ commit status/reason/error.
 - Added HQ-owned shop stock tables in migration `0009_shop_stock.sql`.
 - Cookie Keeper `shopkeeper_stock` events now atomically record the NPC production ledger and increment Cookie Keeper cookie stock through `internal/hq/inventory`.
 - Player purchases from `cookie-keeper-shop` now require durable shop stock and consume it in the purchase transaction before granting the cookie.

@@ -25,7 +25,7 @@ type Server struct {
 func New(cfg stconfig.Config, maps map[string]gameMap) *Server {
 	srv := &Server{
 		config: cfg,
-		world:  newWorld(defaultRoomID, maps),
+		world:  newWorldWithNPCDayLength(defaultRoomID, maps, cfg.NPCDayLength),
 		hq:     hqclient.New(cfg.HQInternalURL, cfg.ServiceSecret, 3*time.Second),
 	}
 	srv.upgrader = websocket.Upgrader{
@@ -173,6 +173,11 @@ func (srv *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("load sunny town equipment: %v", err)
 		equipment = equipmentSnapshot{}
 	}
+	inventory, err := srv.loadInitialToolInventory(r.Context(), claims.AppUserID)
+	if err != nil {
+		log.Printf("load sunny town tool inventory: %v", err)
+		inventory = inventorySnapshot{}
+	}
 
 	position, err := srv.hq.LoadStudentPosition(r.Context(), claims.AppUserID)
 	if err != nil {
@@ -186,11 +191,23 @@ func (srv *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("refresh sunny town npc characters: %v", err)
 	}
 
-	srv.world.join(client, claims, equipment, position)
+	srv.world.joinWithInventory(client, claims, equipment, position, inventory)
 	log.Printf("player joined room=%s map=%s player=%s", srv.world.roomID, claims.MapID, playerID)
 
 	go client.writePump()
 	client.readPump()
+}
+
+func (srv *Server) loadInitialToolInventory(ctx context.Context, appUserID int64) (inventorySnapshot, error) {
+	quantity, err := srv.hq.LoadStudentInventoryQuantity(ctx, appUserID, "pickaxe")
+	if err != nil {
+		return inventorySnapshot{}, err
+	}
+	inventory := inventorySnapshot{}
+	if quantity > 0 {
+		inventory["pickaxe"] = quantity
+	}
+	return inventory, nil
 }
 
 func LogRequests(next http.Handler) http.Handler {

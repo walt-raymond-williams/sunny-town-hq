@@ -199,7 +199,7 @@ func TestLiveNPCSnapshotUsesDurableIdentityWithoutMutatingMap(t *testing.T) {
 	room := world.rooms[defaultMapID]
 
 	room.mu.Lock()
-	snapshots := room.npcSnapshotsLocked()
+	snapshots := room.npcSnapshotsLocked(time.Now())
 	room.mu.Unlock()
 
 	if len(snapshots) != 1 {

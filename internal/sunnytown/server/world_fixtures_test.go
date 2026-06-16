@@ -43,6 +43,30 @@ func TestNewRoomInitializesMapFixturesAsWorldObjects(t *testing.T) {
 	}
 }
 
+func TestNewRoomInitializesBedFixturesAsWorldObjects(t *testing.T) {
+	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	room := newRoom("room-1", maps["sunny-town-cookie-keeper-home"], make(chan rewardEvent, 1), make(chan resourceEvent, 1), make(chan npcJobProductionEvent, 1), nil)
+	object := room.worldObjects[worldObjectKey(worldObjectSourceFixture, "cookie-keeper-bed-fixture")]
+	if object == nil {
+		t.Fatal("expected Cookie Keeper bed fixture world object")
+	}
+	if object.kind != worldObjectKindBed || object.locationID != "cookie-keeper-bed" || object.itemKey != "simple_bed" || object.storageRole != "" || object.shopID != "" {
+		t.Fatalf("bed fixture object = %#v, want visible bed tied to Cookie Keeper bed location without storage metadata", object)
+	}
+	if !object.active || !object.collision || !object.reservesPlacement || object.breakable {
+		t.Fatalf("bed fixture flags = active:%v collision:%v reserves:%v breakable:%v, want active blocking non-breakable bed", object.active, object.collision, object.reservesPlacement, object.breakable)
+	}
+
+	snapshot := object.worldObjectSnapshot()
+	if snapshot.Source != worldObjectSourceFixture || snapshot.Kind != worldObjectKindBed || snapshot.Name != "Cookie Keeper Bed" || snapshot.LocationID != "cookie-keeper-bed" || snapshot.ItemKey != "simple_bed" || snapshot.InteractionRadius != 56 {
+		t.Fatalf("bed fixture snapshot = %#v, want bed metadata", snapshot)
+	}
+}
+
 func TestValidatedContainerAccessUsesServerWorldStateAndAcceptedPosition(t *testing.T) {
 	maps, err := stmaps.LoadMaps(filepath.Join("..", "..", "..", "sunny-town", "maps"))
 	if err != nil {

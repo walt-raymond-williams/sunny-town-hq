@@ -104,17 +104,18 @@ type PlayerSnapshot struct {
 }
 
 type NPCSnapshot struct {
-	ID          string           `json:"id"`
-	CharacterID int64            `json:"characterId,omitempty"`
-	Name        string           `json:"name"`
-	X           float64          `json:"x"`
-	Y           float64          `json:"y"`
-	Facing      string           `json:"facing"`
-	Moving      bool             `json:"moving"`
-	SpriteKey   string           `json:"spriteKey"`
-	Dialogue    []string         `json:"dialogue"`
-	Shop        *stmaps.Shop     `json:"shop,omitempty"`
-	Activity    *stmaps.Activity `json:"activity,omitempty"`
+	ID            string           `json:"id"`
+	CharacterID   int64            `json:"characterId,omitempty"`
+	Name          string           `json:"name"`
+	X             float64          `json:"x"`
+	Y             float64          `json:"y"`
+	Facing        string           `json:"facing"`
+	Moving        bool             `json:"moving"`
+	SpriteKey     string           `json:"spriteKey"`
+	Dialogue      []string         `json:"dialogue"`
+	RoutineStatus string           `json:"routineStatus,omitempty"`
+	Shop          *stmaps.Shop     `json:"shop,omitempty"`
+	Activity      *stmaps.Activity `json:"activity,omitempty"`
 }
 
 type CollectibleSnapshot struct {

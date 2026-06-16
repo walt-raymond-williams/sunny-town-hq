@@ -58,6 +58,7 @@ export interface SunnyTownNpc {
   moving?: boolean
   spriteKey: string
   dialogue: string[]
+  routineStatus?: 'traveling' | 'resting' | 'working' | 'blocked'
   shop?: SunnyTownShop
   activity?: SunnyTownActivity
 }
@@ -108,7 +109,7 @@ export interface SunnyTownMap {
 export interface SunnyTownFixtureDefinition {
   id: string
   name: string
-  kind: 'chest'
+  kind: 'chest' | 'bed'
   x: number
   y: number
   width: number
@@ -166,7 +167,7 @@ export interface SunnyTownResourceNode {
 
 export interface SunnyTownWorldObject {
   id: string
-  kind: 'rock_node' | 'stone_block' | 'chest'
+  kind: 'rock_node' | 'stone_block' | 'chest' | 'bed'
   source: 'natural' | 'placed' | 'fixture'
   itemKey?: string
   resourceKind?: 'rock'

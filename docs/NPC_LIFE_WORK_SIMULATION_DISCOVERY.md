@@ -241,14 +241,154 @@ Recommended first implementation path:
 - Then add routine scheduling or drive pressure that strongly alternates home/rest and work.
 - Then add debug/inspectability polish.
 
+## Accepted Demo Loop Design
+
+This section closes GitHub issue #48 and fixes the concrete first-slice decisions before implementation agents edit maps or routine code.
+
+### First NPC And Anchors
+
+- First demo NPC: `cookie-keeper`.
+- Existing work anchor remains `sunny-town-house-1` location `cookie-keeper-counter`.
+- Cookie Keeper gets a new explicit home/rest anchor in a new home interior map.
+- The first durable assignment remains authored through map metadata, not a new HQ schema table. The bed/rest location uses `ownerNpcKey: "cookie-keeper"` so existing runtime anchor resolution can treat the usable bed as the strong home anchor.
+
+### Main-Town Home Entrance
+
+Use the unoccupied northwest building in `sunny-town-v1`.
+
+Current blocked building rectangle:
+
+```json
+{ "x": 160, "y": 128, "width": 224, "height": 160 }
+```
+
+Recommended doorway shape for the map-authoring issue:
+
+- Portal ID: `cookie-keeper-home-door`
+- Portal rectangle: `x: 240`, `y: 264`, `width: 64`, `height: 24`
+- Target map ID: `sunny-town-cookie-keeper-home`
+- Target coordinates: `targetX: 320`, `targetY: 416`, `targetFacing: "up"`
+- Split the existing blocked building rectangle into a body plus doorway shoulders:
+  - `{ "x": 160, "y": 128, "width": 224, "height": 136 }`
+  - `{ "x": 160, "y": 264, "width": 80, "height": 24 }`
+  - `{ "x": 304, "y": 264, "width": 80, "height": 24 }`
+
+This mirrors the existing south-house doorway pattern: the portal occupies a small open doorway gap while the building shoulders remain blocked.
+
+### New Interior Map
+
+Recommended new map:
+
+- Map ID: `sunny-town-cookie-keeper-home`
+- Display name: `Cookie Keeper Home`
+- Layout baseline: mirror the compact `sunny-town-house-1` dimensions and exit-door pattern first (`20x15`, `tileSize: 32`) so pathing behavior stays familiar.
+- Exit portal ID: `cookie-keeper-home-exit-door`
+- Exit portal rectangle: `x: 304`, `y: 448`, `width: 64`, `height: 32`
+- Exit target: `targetMapId: "sunny-town-v1"`, `targetX: 272`, `targetY: 320`, `targetFacing: "down"`
+- Spawn: `{ "x": 320, "y": 416 }`
+
+Recommended first locations:
+
+```json
+{
+  "id": "cookie-keeper-home",
+  "name": "Cookie Keeper Home",
+  "x": 224,
+  "y": 224,
+  "radius": 128,
+  "tags": ["home", "personal"]
+}
+```
+
+```json
+{
+  "id": "cookie-keeper-bed",
+  "name": "Cookie Keeper Bed",
+  "x": 160,
+  "y": 224,
+  "radius": 64,
+  "tags": ["rest", "home", "bed", "sleep", "personal"],
+  "ownerNpcKey": "cookie-keeper",
+  "capacity": 1
+}
+```
+
+Recommended first fixture:
+
+```json
+{
+  "id": "cookie-keeper-bed-fixture",
+  "name": "Cookie Keeper Bed",
+  "kind": "bed",
+  "x": 128,
+  "y": 96,
+  "width": 96,
+  "height": 64,
+  "interactionRadius": 56,
+  "collision": true,
+  "reservesPlacement": true,
+  "locationId": "cookie-keeper-bed",
+  "itemKey": "simple_bed",
+  "tags": ["furniture", "bed", "sleep", "rest", "placeable"]
+}
+```
+
+The current fixture validator only accepts `kind: "chest"`, so the map-authoring implementation must extend fixture validation and world-object initialization for `kind: "bed"` before adding this fixture to checked-in maps.
+
+### Bed Location Versus Fixture
+
+For the first slice, author both:
+
+- A `location` is the gameplay target used by NPC routing, drive replenishment, anchors, and debug output.
+- A `fixture` is the visible/interactable object that can later be created by player-placeable furniture.
+
+The authored bed fixture should reference the matching bed location through `locationId`. Future player placement can create an equivalent bed fixture and either create/register a matching runtime location or use a later route-target abstraction, but the first implementation should not force route selection to understand fixture-only targets.
+
+### Routine Model And Cadence
+
+Use drive-driven behavior with server-owned schedule pressure.
+
+- Existing drives remain the source of decisions.
+- Time of day may adjust drive selection pressure for strong anchors, as current code already does for work/rest/social/food phases.
+- Do not replace drives with a hard-coded schedule in the first demo loop.
+- Avoid rapid flipping through existing focus windows, reevaluation intervals, and failed-target cooldowns.
+
+Cadence should be server-owned runtime configuration:
+
+- Default/local-play target: `24` real minutes per simulated day.
+- Demo/dev target: `8` real minutes per simulated day.
+- Proposed config key: `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES`.
+- Clients must not control simulation time.
+- If config is absent, use the default `24` minute day.
+- Docker/dev compose may set the demo value after the first loop is stable enough for review.
+
+The implementation issue should adapt the current UTC-hour phase helper into a compressed Sunny Town simulation clock while preserving the existing phase semantics (`morning`, `day`, `evening`, `night`) and debug visibility.
+
+### Follow-Up Issues
+
+Create these child issues under epic #38:
+
+1. `Author Cookie Keeper home map and bed fixture`
+   - Add the new home map, portal pair, bed location, and visible bed fixture.
+   - Extend fixture validation/rendering for `kind: "bed"`.
+   - Add map validation and route tests proving Cookie Keeper can route between `cookie-keeper-bed` and `cookie-keeper-counter`.
+
+2. `Add configurable NPC day cadence`
+   - Add a server-owned compressed NPC day clock using `SUNNY_TOWN_NPC_DAY_LENGTH_MINUTES`.
+   - Keep the default at `24` minutes and document the `8` minute demo/dev setting.
+   - Preserve debug output for current phase and schedule pressure.
+
+3. `Tune Cookie Keeper home/work demo loop`
+   - Use existing runtime anchors and drive selection to make Cookie Keeper visibly travel between home/rest and work.
+   - Keep Cookie Keeper production tied to `cookie-keeper-counter`.
+   - Verify the loop avoids rapid flipping and remains server-authoritative.
+
+4. `Improve NPC routine debug output for demo review`
+   - Ensure `/debug/npcs` is enough to inspect Cookie Keeper's active goal, anchor kind, target map/location, phase, pressure, route state, and blocked/failure reason while he is traveling, resting, and working.
+
 ## Open Questions
 
-- Which unoccupied Sunny Town building should become Cookie Keeper's first authored home?
-- What should the new home interior map be named and how closely should it mirror `sunny-town-house-1`?
-- What bed fixture metadata is needed now so future player-placed beds can reuse the same concept?
-- Should the first routine be pure drive-driven, or a small hybrid where time of day changes drive pressure?
-- Should work/sleep state be visible in normal UI, debug-only UI, or just `/debug/npcs` for the first slice?
-- Should demo/dev cadence be hard-coded first or exposed through runtime config?
+- Should work/sleep state become visible in normal UI, debug-only UI, or just `/debug/npcs` after the first backend demo loop works?
 
 ## Suggested Next Document
 

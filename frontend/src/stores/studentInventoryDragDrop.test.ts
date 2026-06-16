@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStudentHotbarSlot } from '../api/hotbarApi'
 import { moveStudentInventoryStack } from '../api/inventoryApi'
-import type { InventoryItem, StudentInventorySlots } from '../types/inventory'
+import type { EquippedSlot, InventoryItem, StudentInventorySlots } from '../types/inventory'
 import { useStudentInventoryStore } from './studentInventory'
 
 vi.mock('../api/inventoryApi', () => ({
@@ -223,7 +223,7 @@ describe('student inventory drag/drop moves', () => {
     expect(store.draggedInventorySlotIndex).toBeNull()
   })
 
-  it('equips a compatible dragged inventory item through the provided equipment handler', async () => {
+  it('keeps tools assignable to the hotbar instead of the equipment rail', async () => {
     const store = useStudentInventoryStore()
     store.setInventorySlots({
       slotCount: 3,
@@ -234,14 +234,22 @@ describe('student inventory drag/drop moves', () => {
       ],
       items: [item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' })],
     })
-    const equip = vi.fn().mockResolvedValue(undefined)
+    vi.mocked(setStudentHotbarSlot).mockResolvedValueOnce({
+      slots: [
+        { slot: 1, item: item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' }) },
+        { slot: 2, item: null },
+        { slot: 3, item: null },
+        { slot: 4, item: null },
+        { slot: 5, item: null },
+      ],
+    })
 
     expect(store.startInventorySlotDrag(0)).toBe(true)
-    await expect(store.dropInventorySlotOnEquipment('tool', equip)).resolves.toBe(true)
+    await expect(store.dropInventorySlotOnHotbar(1)).resolves.toBe(true)
 
-    expect(equip).toHaveBeenCalledWith('tool', 'pickaxe')
-    expect(store.pendingEquipmentDropSlot).toBeNull()
-    expect(store.invalidEquipmentDropSlot).toBeNull()
+    expect(setStudentHotbarSlot).toHaveBeenCalledWith(1, 'pickaxe')
+    expect(store.hotbarSlots[0]?.item).toMatchObject({ key: 'pickaxe', quantity: 1 })
+    expect(store.pendingHotbarDropSlot).toBeNull()
     expect(store.draggedInventorySlotIndex).toBeNull()
   })
 
@@ -272,24 +280,29 @@ describe('student inventory drag/drop moves', () => {
     expect(store.invalidEquipmentDropSlot).toBe('gear')
   })
 
-  it('clears pending equipment state when equipment assignment fails', async () => {
+  it('filters legacy tool equipment out of the visible equipment slots', () => {
     const store = useStudentInventoryStore()
-    store.setInventorySlots({
-      slotCount: 3,
-      slots: [
-        { slotIndex: 0, item: item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' }) },
-        { slotIndex: 1, item: null },
-        { slotIndex: 2, item: null },
-      ],
-      items: [item({ key: 'pickaxe', name: 'Pickaxe', quantity: 1, equipSlot: 'tool', maxStack: 1, category: 'tool' })],
-    })
-    const equip = vi.fn().mockRejectedValue(new Error('equipment unavailable'))
+    const slots: EquippedSlot[] = [
+      { slot: 'gear', item: null },
+      { slot: 'accessory', item: null },
+      {
+        slot: 'tool',
+        item: {
+          key: 'pickaxe',
+          name: 'Pickaxe',
+          description: 'A sturdy pickaxe.',
+          equipSlot: 'tool',
+          visualKey: 'pickaxe',
+          iconKey: 'pickaxe',
+          maxStack: 1,
+          category: 'tool',
+        },
+      },
+    ]
 
-    expect(store.startInventorySlotDrag(0)).toBe(true)
-    await expect(store.dropInventorySlotOnEquipment('tool', equip)).resolves.toBe(false)
+    store.setEquipmentSlots(slots)
 
-    expect(store.pendingEquipmentDropSlot).toBeNull()
-    expect(store.draggedInventorySlotIndex).toBeNull()
-    expect(store.invalidEquipmentDropSlot).toBeNull()
+    expect(store.equipmentSlots.map((slot) => slot.slot)).toEqual(['gear', 'accessory'])
+    expect(store.equippedVisuals).toEqual({ gear: '', accessory: '' })
   })
 })

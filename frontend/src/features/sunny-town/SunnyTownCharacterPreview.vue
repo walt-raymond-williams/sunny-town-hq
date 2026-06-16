@@ -74,10 +74,6 @@ const miningProgress = computed(() => {
         aria-label="Equipped character preview"
       >
         <ellipse cx="64" cy="116" rx="36" ry="12" fill="rgba(0, 0, 0, 0.2)" />
-        <g v-if="props.equipment.tool === 'pickaxe'" class="sunny-town-character-preview__tool">
-          <line x1="86" y1="76" x2="102" y2="116" stroke="#7b4b24" stroke-width="8" stroke-linecap="round" />
-          <path d="M86 72 Q104 56 120 72" fill="none" stroke="#5f6b75" stroke-width="8" stroke-linecap="round" />
-        </g>
         <circle
           cx="64"
           cy="74"
