@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="620" viewBox="0 0 1120 620" role="img" aria-labelledby="title desc">
+  <title id="title">HQ architecture overview</title>
+  <desc id="desc">Browser frontend talks to HQ APIs and Sunny Town websocket. HQ owns durable PostgreSQL state and integrates with Keycloak and AI. Sunny Town owns realtime world state and calls HQ internal APIs.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #334155; stroke-width: 2; rx: 12; }
+      .service { fill: #e0f2fe; stroke: #0369a1; stroke-width: 2; rx: 10; }
+      .state { fill: #ecfdf5; stroke: #047857; stroke-width: 2; rx: 10; }
+      .auth { fill: #fef3c7; stroke: #b45309; stroke-width: 2; rx: 10; }
+      .ai { fill: #f3e8ff; stroke: #7e22ce; stroke-width: 2; rx: 10; }
+      .label { font: 700 24px Arial, sans-serif; fill: #0f172a; }
+      .sub { font: 16px Arial, sans-serif; fill: #334155; }
+      .small { font: 14px Arial, sans-serif; fill: #475569; }
+      .arrow { stroke: #334155; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .secret { stroke: #7e22ce; stroke-width: 3; fill: none; stroke-dasharray: 8 7; marker-end: url(#arrowPurple); }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155" />
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7e22ce" />
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1120" height="620" />
+
+  <rect class="panel" x="40" y="60" width="250" height="180" />
+  <text class="label" x="165" y="105" text-anchor="middle">Browser</text>
+  <text class="sub" x="165" y="140" text-anchor="middle">Vue 3 frontend</text>
+  <text class="small" x="165" y="170" text-anchor="middle">JSON APIs</text>
+  <text class="small" x="165" y="195" text-anchor="middle">Connect RPC</text>
+  <text class="small" x="165" y="220" text-anchor="middle">Sunny Town WebSocket</text>
+
+  <rect class="service" x="435" y="55" width="270" height="210" />
+  <text class="label" x="570" y="100" text-anchor="middle">HQ Service</text>
+  <text class="sub" x="570" y="136" text-anchor="middle">Static host and app APIs</text>
+  <text class="small" x="570" y="166" text-anchor="middle">Durable domain rules</text>
+  <text class="small" x="570" y="191" text-anchor="middle">Role enforcement</text>
+  <text class="small" x="570" y="216" text-anchor="middle">Internal service endpoints</text>
+
+  <rect class="service" x="435" y="355" width="270" height="205" />
+  <text class="label" x="570" y="400" text-anchor="middle">Sunny Town</text>
+  <text class="sub" x="570" y="436" text-anchor="middle">Realtime world service</text>
+  <text class="small" x="570" y="466" text-anchor="middle">Accepted movement</text>
+  <text class="small" x="570" y="491" text-anchor="middle">Map rooms and portals</text>
+  <text class="small" x="570" y="516" text-anchor="middle">Gameplay validation</text>
+
+  <rect class="state" x="820" y="55" width="240" height="170" />
+  <text class="label" x="940" y="100" text-anchor="middle">PostgreSQL</text>
+  <text class="sub" x="940" y="136" text-anchor="middle">Durable app state</text>
+  <text class="small" x="940" y="166" text-anchor="middle">Assignments, pet, inventory</text>
+  <text class="small" x="940" y="191" text-anchor="middle">Ledgers and progression</text>
+
+  <rect class="auth" x="820" y="265" width="240" height="130" />
+  <text class="label" x="940" y="310" text-anchor="middle">Keycloak</text>
+  <text class="sub" x="940" y="346" text-anchor="middle">Local auth realm</text>
+  <text class="small" x="940" y="372" text-anchor="middle">teacher / student roles</text>
+
+  <rect class="ai" x="820" y="435" width="240" height="125" />
+  <text class="label" x="940" y="480" text-anchor="middle">AI Service</text>
+  <text class="sub" x="940" y="516" text-anchor="middle">Fake provider by default</text>
+  <text class="small" x="940" y="542" text-anchor="middle">Service-auth callback path</text>
+
+  <path class="arrow" d="M 290 125 L 435 125" />
+  <text class="small" x="362" y="104" text-anchor="middle">HTTP APIs</text>
+
+  <path class="arrow" d="M 290 205 C 350 300, 360 425, 435 455" />
+  <text class="small" x="343" y="345" text-anchor="middle">WebSocket</text>
+
+  <path class="arrow" d="M 705 135 L 820 135" />
+  <text class="small" x="762" y="116" text-anchor="middle">SQL</text>
+
+  <path class="arrow" d="M 705 185 C 765 215, 780 285, 820 320" />
+  <text class="small" x="770" y="250" text-anchor="middle">JWT / JWKS</text>
+
+  <path class="secret" d="M 705 435 C 760 370, 765 230, 820 185" />
+  <text class="small" x="765" y="345" text-anchor="middle">X-HQ-Service-Secret</text>
+
+  <path class="secret" d="M 705 500 L 820 500" />
+  <text class="small" x="762" y="480" text-anchor="middle">service auth</text>
+</svg>

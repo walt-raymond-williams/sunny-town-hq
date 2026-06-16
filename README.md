@@ -14,6 +14,18 @@ The app is designed to run from a laptop on a home network. Teachers can create 
 - Sunny Town realtime WebSocket service with map rooms, portals, collectibles, NPCs, mining, placed blocks, and persisted return position.
 - PostgreSQL-backed durable state with idempotent reward and inventory ledgers.
 
+## Architecture Highlights
+
+![HQ architecture overview](docs/assets/demo/architecture-overview.svg)
+
+- HQ owns durable account, schoolwork, pet, wallet, inventory, equipment, map-object, NPC production, and progression state.
+- Sunny Town owns realtime world state: connected players, accepted movement, map membership, portals, resource nodes, and gameplay validation.
+- Browser and WebSocket messages are treated as requests. Gameplay effects are validated server-side against accepted position, ownership, active hotbar tools, and live world state.
+- Durable Sunny Town effects cross into HQ through service-authenticated internal APIs with `X-HQ-Service-Secret`.
+- Rewards, resource grants, shop stock production, and skill XP use idempotent ledgers so retries do not duplicate durable effects.
+- Docker Compose starts the full reviewable runtime: HQ, Sunny Town, AI fake provider, PostgreSQL, and Keycloak.
+- The repo keeps AI-assisted work reviewable through planning docs, GitHub issues, handoffs, verification commands, and current-state architecture docs.
+
 ## Stack
 
 - Backend: Go 1.22
@@ -72,7 +84,51 @@ Keycloak admin login:
 admin / admin
 ```
 
-Create users in the `hq` realm and assign the `student` and/or `teacher` realm roles. The frontend uses Keycloak login, and the Go backend validates bearer tokens and enforces roles server-side.
+Imported local demo users are available in a fresh Keycloak realm:
+
+```text
+Student: playwright-student / playwright
+Teacher: playwright-teacher / playwright
+```
+
+You can also create users in the `hq` realm and assign the `student` and/or `teacher` realm roles. The frontend uses Keycloak login, and the Go backend validates bearer tokens and enforces roles server-side.
+
+Important: use one consistent host for HQ and Keycloak. If you open HQ through `localhost`, keep the Keycloak issuer on `localhost`. If you open HQ through a LAN IP, set `HQ_PUBLIC_HOST` before starting Docker Compose as shown below.
+
+## Demo Path
+
+The strongest current demo is Sunny Town's Cookie Keeper life/work loop:
+
+```text
+student login
+  -> Sunny Town
+  -> full-viewport realtime world
+  -> hotbar-selected pickaxe, mining, inventory, and progression
+  -> Cookie Keeper traveling between home/rest and Cookie Shop work
+```
+
+Suggested reviewer flow:
+
+1. Start the stack with Docker Compose.
+2. Open `http://localhost:18080`.
+3. Log in as `playwright-student` / `playwright`.
+4. Enter Sunny Town from the student UI.
+5. Open the inventory/character panels and note that the selected hotbar item is the active tool for mining.
+6. Watch Cookie Keeper's routine cues:
+   - `>` traveling
+   - `W` working
+   - `Z` resting
+   - `!` blocked
+7. Inspect authoritative routine state when needed:
+
+   ```powershell
+   Invoke-WebRequest `
+     -UseBasicParsing `
+     -Headers @{ "X-HQ-Service-Secret" = "local-dev-service-secret" } `
+     http://127.0.0.1:18082/debug/npcs
+   ```
+
+8. Optionally log in as `playwright-teacher` / `playwright` to review the teacher workspace and schoolwork context.
 
 ## Local Network Use
 
@@ -90,6 +146,8 @@ http://<YOUR_LAN_IP>:18080
 ```
 
 Use one consistent host/IP for HQ and Keycloak. A token issued for `localhost` will not match a browser session opened through the laptop LAN IP.
+
+Keycloak imports the demo users only when the Keycloak database volume is initialized. If an older local volume already exists, create the users manually or reset the Keycloak volume using the workflow in [Current database](docs/current/DATABASE.md).
 
 ## Development
 
