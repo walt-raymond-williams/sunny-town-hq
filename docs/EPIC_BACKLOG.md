@@ -41,7 +41,12 @@ Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/39
 
 Goal: make the project easy to understand, run, review, and demo from the repository front door.
 
-Best first step: issue #59, `Plan demo polish and portfolio readiness roadmap`, consolidates existing demo-polish issues into a concrete demo path and asset plan.
+Discovery and roadmap:
+
+- `docs/DEMO_POLISH_PORTFOLIO_DISCOVERY.md`
+- `docs/DEMO_POLISH_PORTFOLIO_ROADMAP.md`
+
+Best next step: issue #7, `Add README architecture highlights and demo assets`, should use the roadmap to add the front-door demo path, first media assets, architecture highlights, demo-user notes, and local-network caveats. Keep issue #5, `Reduce frontend production bundle warnings`, as a follow-up demo polish task unless build warnings block README/media verification.
 
 ### #40 Epic: Player And NPC Progression
 
