@@ -99,6 +99,8 @@ Important: use one consistent host for HQ and Keycloak. If you open HQ through `
 
 The strongest current demo is Sunny Town's Cookie Keeper life/work loop:
 
+![Sunny Town overview](docs/assets/demo/sunny-town-overview.png)
+
 ```text
 student login
   -> Sunny Town
@@ -129,6 +131,12 @@ Suggested reviewer flow:
    ```
 
 8. Optionally log in as `playwright-teacher` / `playwright` to review the teacher workspace and schoolwork context.
+
+More demo views:
+
+![Inventory, hotbar, and character panel](docs/assets/demo/inventory-hotbar-character.png)
+
+![Cookie Keeper routine poster](docs/assets/demo/cookie-keeper-routine-poster.png)
 
 ## Local Network Use
 
