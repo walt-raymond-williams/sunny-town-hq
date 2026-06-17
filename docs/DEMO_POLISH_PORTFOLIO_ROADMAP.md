@@ -22,9 +22,10 @@ HQ learning app context
 ## Execution Order
 
 1. Reuse #7: update the README and add first demo assets.
-2. Add a small runtime/demo smoke issue if README verification reveals that demo users or local-network setup are still too easy to miss.
-3. Reuse #5: clean frontend production bundle warnings.
-4. Add optional Playwright/demo-readiness coverage after the README path is stable.
+2. Use #60: capture Sunny Town demo screenshots and routine media.
+3. Add a small runtime/demo smoke issue if README verification reveals that demo users or local-network setup are still too easy to miss.
+4. Reuse #5: clean frontend production bundle warnings.
+5. Add optional Playwright/demo-readiness coverage after the README path is stable.
 
 ## Child Issue Drafts
 
@@ -122,6 +123,41 @@ Manual browser verification:
 - Log out or use a separate browser context.
 - Use `playwright-teacher` / `playwright`.
 - Confirm the teacher workspace loads.
+
+### Issue: Capture Sunny Town Demo Screenshots And Routine Clip
+
+Existing issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/60
+
+Handoff: `docs/DEMO_POLISH_MEDIA_CAPTURE_HANDOFF.md`
+
+As a reviewer, I want polished Sunny Town screenshots or a short routine clip in the README so I can see the strongest demo story before running the app.
+
+Acceptance criteria:
+
+- Capture at least one polished Sunny Town overview screenshot with the full-viewport game surface and HUD visible.
+- Capture either an inventory/hotbar/character-panel screenshot or a short Cookie Keeper routine GIF/video poster.
+- Store committed assets under `docs/assets/demo/`.
+- Keep media small enough for the repo; use a poster screenshot plus external clip link if a GIF/video is too large.
+- Update `README.md` to reference the committed media.
+- Do not commit generated `web/` assets, local logs, raw recordings, or large binary exports.
+
+Implementation notes:
+
+- Use the #59/#7 demo path: log in as `playwright-student` / `playwright`, enter Sunny Town, show active hotbar tool/mining/inventory/progression, and capture Cookie Keeper routine cues where practical.
+- If using a LAN host, make sure `HQ_PUBLIC_HOST` and the browser URL match Keycloak issuer expectations.
+- Prefer PNG screenshots and an optional optimized routine GIF only if the size remains reasonable.
+
+Verification:
+
+```powershell
+git diff --check
+docker compose -f deploy/docker-compose.yml config
+```
+
+Manual:
+
+- Confirm README image links render.
+- Confirm captured app state is accurate.
 
 ### Reuse #5: Reduce Frontend Production Bundle Warnings
 
