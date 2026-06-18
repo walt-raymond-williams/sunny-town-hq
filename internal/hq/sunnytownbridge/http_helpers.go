@@ -1,6 +1,7 @@
 package sunnytownbridge
 
 import (
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"strconv"
@@ -9,8 +10,15 @@ import (
 	"hq/internal/hq/httpapi"
 )
 
+// authorized checks if the request is authenticated using a constant-time comparison
+// to prevent timing attacks, and explicitly rejects empty secrets to prevent accidental bypasses.
 func (handler HTTPHandler) authorized(w http.ResponseWriter, r *http.Request) bool {
-	if strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")) == handler.serviceSecret {
+	if len(handler.serviceSecret) == 0 {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "service authentication required"})
+		return false
+	}
+	provided := []byte(strings.TrimSpace(r.Header.Get("X-HQ-Service-Secret")))
+	if subtle.ConstantTimeCompare(provided, []byte(handler.serviceSecret)) == 1 {
 		return true
 	}
 	writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "service authentication required"})
