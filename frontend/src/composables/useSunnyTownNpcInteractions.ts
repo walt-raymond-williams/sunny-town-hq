@@ -1,4 +1,6 @@
 import { computed, ref, type Ref } from 'vue'
+import { getNextStudentAssignment, submitStudentAnswer as submitStudentAnswerRequest } from '../api/studentAssignmentsApi'
+import { getShopStock, purchaseShopItem as purchaseShopItemRequest } from '../api/shopApi'
 import type { Assignment } from '../types/assignment'
 import type { StudentInventory } from '../types/inventory'
 import type { SunnyTownNpc, SunnyTownPlayer } from '../types/sunnyTown'
@@ -254,8 +256,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     if (options.loadNextAssignment) {
       return options.loadNextAssignment()
     }
-    const assignmentsApi = await import('../api/studentAssignmentsApi')
-    return assignmentsApi.getNextStudentAssignment()
+    return getNextStudentAssignment()
   }
 
   async function submitAnswer(assignmentId: number, answer: string): Promise<void> {
@@ -263,16 +264,14 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
       await options.submitStudentAnswer(assignmentId, answer)
       return
     }
-    const assignmentsApi = await import('../api/studentAssignmentsApi')
-    await assignmentsApi.submitStudentAnswer(assignmentId, answer)
+    await submitStudentAnswerRequest(assignmentId, answer)
   }
 
   async function purchaseItem(purchase: ShopPurchaseRequest): Promise<ShopPurchaseResult> {
     if (options.purchaseShopItem) {
       return options.purchaseShopItem(purchase)
     }
-    const shopApi = await import('../api/shopApi')
-    return shopApi.purchaseShopItem(purchase)
+    return purchaseShopItemRequest(purchase)
   }
 
   async function refreshShopStock(shopId: string): Promise<void> {
@@ -285,8 +284,7 @@ export function useSunnyTownNpcInteractions(options: SunnyTownNpcInteractionOpti
     if (options.loadShopStock) {
       return options.loadShopStock(shopId)
     }
-    const shopApi = await import('../api/shopApi')
-    return shopApi.getShopStock(shopId)
+    return getShopStock(shopId)
   }
 
   return {

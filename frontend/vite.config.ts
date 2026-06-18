@@ -10,6 +10,28 @@ export default defineConfig({
   build: {
     outDir: '../web',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+          if (id.includes('/vuetify/')) {
+            return 'vendor-vuetify'
+          }
+          if (id.includes('/keycloak-js/')) {
+            return 'vendor-keycloak'
+          }
+          if (id.includes('/@connectrpc/') || id.includes('/@bufbuild/')) {
+            return 'vendor-connect'
+          }
+          if (id.includes('/vue/') || id.includes('/vue-router/') || id.includes('/pinia/')) {
+            return 'vendor-vue'
+          }
+          return 'vendor'
+        },
+      },
+    },
   },
   server: {
     proxy: {

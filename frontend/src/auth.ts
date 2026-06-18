@@ -53,6 +53,10 @@ function defaultKeycloakUrl(): string {
     return configured
   }
 
+  if (typeof window === 'undefined') {
+    return 'http://localhost:18081'
+  }
+
   return `${window.location.protocol}//${window.location.hostname}:18081`
 }
 
