@@ -71,6 +71,127 @@ HQ
 
 Vue should obtain the Sunny Town session and pass the session payload into Godot. Godot should not own Keycloak/HQ authentication in the first epic.
 
+## Architecture Decision (#62)
+
+Decision date: 2026-07-04.
+
+Godot Web export is the target for this epic. The scope remains web-only: desktop browsers and phone/mobile browsers served through the existing HQ web app. Standalone desktop, native mobile, Steam, app-store packaging, PWA/offline install behavior, and polished art production are not part of the first Godot Sunny Town slice.
+
+### Godot Project Location
+
+Place the committed Godot source project at:
+
+```text
+godot/sunny-town/
+```
+
+This keeps the Godot client separate from the existing Go `sunny-town/` realtime service and from the Vue `frontend/` app while still making ownership clear. The project should contain Godot source files, export presets, scripts, scenes, and committed first-party assets needed to reproduce the client. Do not place Godot source under `frontend/` or `sunny-town/`; those directories already have separate ownership boundaries.
+
+### Web Export Artifacts
+
+Treat Godot web export output as generated runtime assets, not source. The first implementation should export locally into an ignored generated path under the existing static host output:
+
+```text
+web/godot/sunny-town/
+```
+
+`web/` is already ignored and populated by `npm run build`, then copied into the HQ Docker image. A later build/runtime issue should decide the exact command wiring, but the artifact rule is fixed here: commit Godot source and export presets, do not commit generated `.wasm`, `.pck`, generated JavaScript glue, export HTML, or generated cache files unless a later release-packaging decision explicitly changes repo policy.
+
+During development, implementation agents may use a local generated export directory for smoke testing, but commits should stay limited to source, scripts, docs, and non-generated assets. Docker/HQ serving should continue to use the Go static host rooted at `web/`.
+
+### Vue Wrapper Route Shape
+
+Keep the existing canvas client available until cutover:
+
+```text
+/student/pet/sunny-town
+```
+
+During Godot implementation, add a separate Vue wrapper route for the embedded Godot client:
+
+```text
+/student/pet/sunny-town/godot
+```
+
+Also add an explicit canvas fallback/debug route when the Godot route lands:
+
+```text
+/student/pet/sunny-town/canvas
+```
+
+Before cutover, `/student/pet/sunny-town` may continue to resolve to the current canvas page. At cutover, `/student/pet/sunny-town` can become the Godot default only after the parity checklist and mobile smoke checks pass, while `/student/pet/sunny-town/canvas` remains available for regression/debug access. A query flag such as `?client=canvas` may be added as a convenience, but the durable fallback should be a route so it is bookmarkable and easy to document.
+
+The Vue Godot wrapper is responsible for route access checks, session creation, loading the Godot web export, displaying load/error/fallback controls, and navigating back to the normal student UI. It should not duplicate Sunny Town gameplay authority in Vue.
+
+### Vue-To-Godot Session Handoff
+
+Vue remains the owner of browser authentication for the first epic. The wrapper should call the existing authenticated endpoint:
+
+```text
+POST /api/student/sunny-town/session
+```
+
+The wrapper then passes the normalized session payload into Godot before Godot opens the Sunny Town WebSocket. The first-pass handoff should use a small browser bridge exposed by the wrapper, such as a page global or post-load JavaScript callback, containing only the Sunny Town join data Godot needs:
+
+- `roomId`
+- `mapId`
+- `characterId`
+- `avatarId`
+- `websocketUrl`
+- `joinToken`
+- `expiresAt`
+- initial wallet/inventory/hotbar summary when needed for first HUD state
+
+Godot should then connect to the existing Sunny Town WebSocket endpoint using the join token. Godot must not own Keycloak login, bearer-token refresh, student route guards, or direct HQ durable mutation calls in this epic. Browser and Godot messages remain requests; Sunny Town continues to validate realtime gameplay against accepted server position and owned hotbar-active tools, and HQ remains the durable owner for account, wallet, inventory, equipment, ledgers, map objects, containers, progression, and saved return position.
+
+### Canvas Fallback And Debug Client
+
+The current Vue/canvas implementation remains the reference client and debug fallback through this epic. Do not remove canvas rendering, current Vue Sunny Town composables, or current overlays until a later cutover issue proves Godot parity and the project owner approves removal.
+
+The fallback is required for:
+
+- comparing Godot behavior against the current movement, map, interaction, and inventory behavior;
+- recovering from Godot web export failures on mobile browsers;
+- debugging Sunny Town backend protocol regressions independently of Godot;
+- preserving a working Sunny Town route while the Godot client is incomplete.
+
+### Mobile Browser Constraints
+
+First-pass Godot export should optimize for compatibility rather than maximum performance. The initial target is a non-threaded Godot Web export using the Compatibility renderer where possible. Defer threaded exports, cross-origin isolation header requirements, PWA/offline install behavior, and service-worker export behavior until a measured performance need exists.
+
+Implementation and verification should assume:
+
+- Godot web exports require browser support for WebAssembly and WebGL 2.0.
+- Browser tab backgrounding may pause Godot processing, so reconnect/session behavior must tolerate visibility changes and mobile browser suspension.
+- Phone browsers have tighter memory, GPU, audio unlock, viewport, and touch-input constraints than desktop browsers.
+- The game surface must respect safe areas, orientation changes, and browser chrome resizing.
+- The first mobile verification target is a LAN phone browser against the Docker-served HQ runtime at `http://<LAN-IP>:18080`, using the same host/IP consistently for HQ and Keycloak.
+
+Reference: Godot's official web export documentation at `https://docs.godotengine.org/en/latest/tutorials/export/exporting_for_web.html`.
+
+### First-Pass UI Ownership
+
+Godot should own the in-game surface as soon as each feature lands:
+
+- world rendering;
+- local movement input and prediction;
+- remote player interpolation;
+- camera behavior;
+- touch movement/action controls;
+- proximity prompts;
+- lightweight HUD/status/toasts;
+- selected hotbar display;
+- simple equipment visuals.
+
+Vue may temporarily own complex overlays during migration through a narrow bridge:
+
+- shop purchase panels;
+- schoolwork/assignment panels;
+- chest/container transfer panels;
+- broader inventory/crafting/equipment management where the existing Vue implementation is still the source of parity.
+
+The bridge should be treated as migration scaffolding, not a new authority layer. Godot can request an overlay or action; Sunny Town and HQ must still validate access, proximity, inventory, wallet, equipment, and durable mutations according to the existing service boundaries.
+
 ## Behavior Parity Requirements
 
 The Godot client must account for these current behaviors before cutover:

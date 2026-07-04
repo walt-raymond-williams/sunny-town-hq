@@ -12,7 +12,7 @@ Recommended feature integration branch:
 codex/godot-sunny-town-dev
 ```
 
-Current status: branch not created by this planning pass.
+Current status: branch exists and tracks `origin/codex/godot-sunny-town-dev`.
 
 Workflow:
 
@@ -39,7 +39,7 @@ Use this loop when advancing the Godot Sunny Town backlog:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-07-04 after creating epic #61 and child issues #62 through #71.
+Snapshot refreshed: 2026-07-04 after completing the #62 architecture decision docs on the integration branch.
 
 ### Open
 
@@ -47,15 +47,10 @@ Snapshot refreshed: 2026-07-04 after creating epic #61 and child issues #62 thro
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/61
   Status: `status:ready`
 
-- #62 Decide Godot web integration architecture for Sunny Town
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/62
-  Status: `status:ready`
-  Handoff: `docs/GODOT_SUNNY_TOWN_ARCHITECTURE_DECISION_HANDOFF.md`
-
 - #63 Add minimal Godot web client skeleton for Sunny Town
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/63
-  Status: `status:blocked`
-  Blocked by: #62
+  Status: `status:blocked` until #62 is closed on GitHub, then next implementation task
+  Previously blocked by: #62
   Handoff: `docs/GODOT_SUNNY_TOWN_SKELETON_HANDOFF.md`
 
 - #64 Wire Godot web export into HQ build/runtime
@@ -106,28 +101,32 @@ Snapshot refreshed: 2026-07-04 after creating epic #61 and child issues #62 thro
   Blocked by: #70
   Handoff: `docs/GODOT_SUNNY_TOWN_CUTOVER_HANDOFF.md`
 
-### Closed
+### Closed / Complete On Integration Branch
 
-No Godot Sunny Town child issues are closed yet.
+- #62 Decide Godot web integration architecture for Sunny Town
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/62
+  Status: complete on `codex/godot-sunny-town-dev`; close after commit/push and verification comment
+  Decision: `docs/GODOT_SUNNY_TOWN_ROADMAP.md` section "Architecture Decision (#62)"
+  Handoff: `docs/GODOT_SUNNY_TOWN_ARCHITECTURE_DECISION_HANDOFF.md`
 
 ## Recommended Next Management Step
 
-Start issue #62:
+After #62 is closed, start issue #63:
 
 ```text
-Decide Godot web integration architecture for Sunny Town
+Add minimal Godot web client skeleton for Sunny Town
 ```
 
 Why:
 
-- It is the only unblocked child issue.
-- It turns this planning pass into an explicit architecture decision future implementation agents can follow.
-- It decides project location, export artifact ownership, Vue wrapper shape, session handoff, fallback route, and first mobile/browser constraints before code is added.
+- #62 documents the architecture decision future implementation agents should follow.
+- #63 is the first implementation story and is intentionally limited to the smallest embedded Godot project and placeholder route.
+- Later runtime, WebSocket, rendering, movement, mobile controls, interaction, HUD, and cutover work remains blocked until the skeleton exists.
 
 Handoff:
 
 ```text
-docs/GODOT_SUNNY_TOWN_ARCHITECTURE_DECISION_HANDOFF.md
+docs/GODOT_SUNNY_TOWN_SKELETON_HANDOFF.md
 ```
 
 ## Useful Commands
