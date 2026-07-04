@@ -19,6 +19,8 @@ Workflow:
 - Create or switch to `codex/godot-sunny-town-dev` before implementation begins.
 - Agents work child issues against the integration branch.
 - Issues may be closed once their work lands on the integration branch and verification is recorded.
+- Docker Desktop is not required for #64-#70 while the Godot web client is still on the integration branch, as long as equivalent non-Docker verification is recorded and each issue comment explicitly says Docker runtime smoke was deferred.
+- #71 is the hard Docker Desktop cutover gate. Do not close #71 until Docker Desktop is running, the Compose runtime has been rebuilt, both health endpoints return `ok`, and the Docker-served Godot route plus canvas fallback have been smoke-tested.
 - `main` remains stable until the integrated Godot client slice is ready for project-owner review.
 - A human should review the integrated feature before merging the integration branch into `main`.
 
@@ -49,50 +51,57 @@ Snapshot refreshed: 2026-07-04 after implementing the #63 Godot skeleton on the 
 
 - #64 Wire Godot web export into HQ build/runtime
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/64
-  Status: `status:blocked`; next recommended task after #63 closes
-  Blocked by: #63
+  Status: `status:ready`; next recommended task
+  Docker note: Docker runtime smoke may be deferred to #71 if Docker Desktop is unavailable.
   Handoff: `docs/GODOT_SUNNY_TOWN_BUILD_RUNTIME_HANDOFF.md`
 
 - #65 Connect Godot client to Sunny Town session and WebSocket
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/65
   Status: `status:blocked`
   Blocked by: #64
+  Docker note: Docker runtime smoke may be deferred to #71 if Docker Desktop is unavailable.
   Handoff: `docs/GODOT_SUNNY_TOWN_SESSION_WS_HANDOFF.md`
 
 - #66 Render current Sunny Town maps and world snapshots in Godot
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/66
   Status: `status:blocked`
   Blocked by: #65
+  Docker note: Docker runtime smoke may be deferred to #71 if Docker Desktop is unavailable.
   Handoff: `docs/GODOT_SUNNY_TOWN_RENDERING_PARITY_HANDOFF.md`
 
 - #67 Implement Godot movement, prediction, and remote interpolation
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/67
   Status: `status:blocked`
   Blocked by: #66
+  Docker note: Docker runtime smoke may be deferred to #71 if Docker Desktop is unavailable.
   Handoff: `docs/GODOT_SUNNY_TOWN_MOVEMENT_HANDOFF.md`
 
 - #68 Add phone browser controls for Godot Sunny Town
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/68
   Status: `status:blocked`
   Blocked by: #67
+  Docker note: Docker runtime smoke may be deferred to #71 if Docker Desktop is unavailable.
   Handoff: `docs/GODOT_SUNNY_TOWN_MOBILE_CONTROLS_HANDOFF.md`
 
 - #69 Port Sunny Town interactions to Godot with Vue overlay bridge
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/69
   Status: `status:blocked`
   Blocked by: #68
+  Docker note: Docker runtime smoke may be deferred to #71 if Docker Desktop is unavailable.
   Handoff: `docs/GODOT_SUNNY_TOWN_INTERACTIONS_HANDOFF.md`
 
 - #70 Add Godot HUD, hotbar, inventory summary, and equipment visuals
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/70
   Status: `status:blocked`
   Blocked by: #69
+  Docker note: Docker runtime smoke may be deferred to #71 if Docker Desktop is unavailable.
   Handoff: `docs/GODOT_SUNNY_TOWN_HUD_INVENTORY_HANDOFF.md`
 
 - #71 Prepare Godot Sunny Town cutover and fallback validation
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/71
   Status: `status:blocked`
   Blocked by: #70
+  Docker note: Docker Desktop is required before this issue can close.
   Handoff: `docs/GODOT_SUNNY_TOWN_CUTOVER_HANDOFF.md`
 
 ### Closed / Complete On Integration Branch
