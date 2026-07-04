@@ -115,9 +115,9 @@ Snapshot refreshed: 2026-07-04 after implementing the #63 Godot skeleton on the 
   Verification:
   - `cd frontend; npm run build` passed.
   - `git diff --check` passed.
-  - Local Vite/Playwright smoke with a temporary student token confirmed the Godot route renders its missing-export state and the canvas fallback route mounts the canvas.
+  - Godot 4.7 stable Web export passed with `godot --headless --path godot\sunny-town --export-release "Sunny Town Web" ..\..\web\godot\sunny-town\index.html`.
+  - Vite production-preview/Playwright smoke with a temporary student token confirmed the Godot route embeds the exported canvas and the canvas fallback route mounts the existing canvas client.
   - Docker runtime smoke was not run because Docker Desktop's Linux engine pipe was unavailable.
-  - Real Godot Web export smoke was not run because no Godot executable is installed on this machine.
   Handoff: `docs/GODOT_SUNNY_TOWN_SKELETON_HANDOFF.md`
 
 ## Recommended Next Management Step

@@ -9,7 +9,7 @@ The first scene is intentionally only a load marker. It does not connect to Sunn
 Use Godot 4 with the Compatibility renderer and a non-threaded Web export:
 
 ```powershell
-godot --headless --path godot\sunny-town --export-release "Sunny Town Web"
+godot --headless --path godot\sunny-town --export-release "Sunny Town Web" ..\..\web\godot\sunny-town\index.html
 ```
 
 The preset writes generated files to:
@@ -24,7 +24,7 @@ That output is generated runtime content and is ignored by git. Run the frontend
 cd frontend
 npm run build
 cd ..
-godot --headless --path godot\sunny-town --export-release "Sunny Town Web"
+godot --headless --path godot\sunny-town --export-release "Sunny Town Web" ..\..\web\godot\sunny-town\index.html
 ```
 
 Then serve HQ and open:

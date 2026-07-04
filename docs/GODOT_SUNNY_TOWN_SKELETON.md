@@ -19,7 +19,7 @@ Install Godot 4 with Web export templates, then run from the repository root:
 cd frontend
 npm run build
 cd ..
-godot --headless --path godot\sunny-town --export-release "Sunny Town Web"
+godot --headless --path godot\sunny-town --export-release "Sunny Town Web" ..\..\web\godot\sunny-town\index.html
 ```
 
 The frontend build clears and recreates `web/`, so export Godot after `npm run build` when manually smoke-testing the embedded route.
