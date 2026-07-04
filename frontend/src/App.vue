@@ -7,6 +7,11 @@ import { useStudentPetUi } from './composables/useStudentPetUi'
 
 const route = useRoute()
 const routeName = computed(() => route.name || 'splash')
+const isSunnyTownRoute = computed(() => (
+  routeName.value === 'sunny-town' ||
+  routeName.value === 'sunny-town-canvas' ||
+  routeName.value === 'sunny-town-godot'
+))
 const {
   handleFallingStarsComplete,
   handleFallingStarsQuit,
@@ -20,7 +25,7 @@ const {
     <v-main>
       <v-container
         class="app-container"
-        :class="{ 'app-container--sunny-town': routeName === 'sunny-town' }"
+        :class="{ 'app-container--sunny-town': isSunnyTownRoute }"
         fluid
       >
         <RouterView />

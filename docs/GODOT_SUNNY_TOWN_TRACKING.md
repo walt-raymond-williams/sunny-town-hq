@@ -39,7 +39,7 @@ Use this loop when advancing the Godot Sunny Town backlog:
 
 ## Current GitHub Issues
 
-Snapshot refreshed: 2026-07-04 after completing the #62 architecture decision docs on the integration branch.
+Snapshot refreshed: 2026-07-04 after implementing the #63 Godot skeleton on the integration branch.
 
 ### Open
 
@@ -47,15 +47,9 @@ Snapshot refreshed: 2026-07-04 after completing the #62 architecture decision do
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/61
   Status: `status:ready`
 
-- #63 Add minimal Godot web client skeleton for Sunny Town
-  https://github.com/walt-raymond-williams/sunny-town-hq/issues/63
-  Status: `status:blocked` until #62 is closed on GitHub, then next implementation task
-  Previously blocked by: #62
-  Handoff: `docs/GODOT_SUNNY_TOWN_SKELETON_HANDOFF.md`
-
 - #64 Wire Godot web export into HQ build/runtime
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/64
-  Status: `status:blocked`
+  Status: `status:blocked`; next recommended task after #63 closes
   Blocked by: #63
   Handoff: `docs/GODOT_SUNNY_TOWN_BUILD_RUNTIME_HANDOFF.md`
 
@@ -105,28 +99,45 @@ Snapshot refreshed: 2026-07-04 after completing the #62 architecture decision do
 
 - #62 Decide Godot web integration architecture for Sunny Town
   https://github.com/walt-raymond-williams/sunny-town-hq/issues/62
-  Status: complete on `codex/godot-sunny-town-dev`; close after commit/push and verification comment
+  Status: closed and complete on `codex/godot-sunny-town-dev`
   Decision: `docs/GODOT_SUNNY_TOWN_ROADMAP.md` section "Architecture Decision (#62)"
   Handoff: `docs/GODOT_SUNNY_TOWN_ARCHITECTURE_DECISION_HANDOFF.md`
 
+- #63 Add minimal Godot web client skeleton for Sunny Town
+  https://github.com/walt-raymond-williams/sunny-town-hq/issues/63
+  Status: complete on `codex/godot-sunny-town-dev`
+  Completed:
+  - Added minimal Godot source project at `godot/sunny-town/`.
+  - Added placeholder scene, script, icon, README, and Web export preset targeting ignored `web/godot/sunny-town/index.html`.
+  - Added Vue Godot wrapper route at `/student/pet/sunny-town/godot`.
+  - Added bookmarkable canvas fallback/debug route at `/student/pet/sunny-town/canvas`; `/student/pet/sunny-town` remains the current canvas client.
+  - Added export and smoke documentation in `docs/GODOT_SUNNY_TOWN_SKELETON.md`.
+  Verification:
+  - `cd frontend; npm run build` passed.
+  - `git diff --check` passed.
+  - Local Vite/Playwright smoke with a temporary student token confirmed the Godot route renders its missing-export state and the canvas fallback route mounts the canvas.
+  - Docker runtime smoke was not run because Docker Desktop's Linux engine pipe was unavailable.
+  - Real Godot Web export smoke was not run because no Godot executable is installed on this machine.
+  Handoff: `docs/GODOT_SUNNY_TOWN_SKELETON_HANDOFF.md`
+
 ## Recommended Next Management Step
 
-After #62 is closed, start issue #63:
+After #63 closes, start issue #64:
 
 ```text
-Add minimal Godot web client skeleton for Sunny Town
+Wire Godot web export into HQ build/runtime
 ```
 
 Why:
 
-- #62 documents the architecture decision future implementation agents should follow.
-- #63 is the first implementation story and is intentionally limited to the smallest embedded Godot project and placeholder route.
-- Later runtime, WebSocket, rendering, movement, mobile controls, interaction, HUD, and cutover work remains blocked until the skeleton exists.
+- #63 added the source skeleton, wrapper route, and canvas fallback route.
+- #64 should make the Godot Web export repeatable in local and Docker-served HQ runtime.
+- WebSocket, rendering, movement, mobile controls, interaction, HUD, and cutover work remains blocked until the build/runtime path is wired.
 
 Handoff:
 
 ```text
-docs/GODOT_SUNNY_TOWN_SKELETON_HANDOFF.md
+docs/GODOT_SUNNY_TOWN_BUILD_RUNTIME_HANDOFF.md
 ```
 
 ## Useful Commands

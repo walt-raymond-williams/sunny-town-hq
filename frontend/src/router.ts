@@ -17,6 +17,16 @@ export const routes = [
     component: () => import('./features/sunny-town/SunnyTownPage.vue'),
   },
   {
+    path: '/student/pet/sunny-town/canvas',
+    name: 'sunny-town-canvas',
+    component: () => import('./features/sunny-town/SunnyTownPage.vue'),
+  },
+  {
+    path: '/student/pet/sunny-town/godot',
+    name: 'sunny-town-godot',
+    component: () => import('./features/sunny-town/SunnyTownGodotPage.vue'),
+  },
+  {
     path: '/teacher/login',
     name: 'teacher-login',
     component: () => import('./pages/TeacherLoginPage.vue'),

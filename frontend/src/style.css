@@ -833,6 +833,45 @@ h2 {
   width: 100%;
 }
 
+.sunny-town-godot-page {
+  color: #ffffff;
+}
+
+.sunny-town-godot-stage {
+  background: #111820;
+}
+
+.sunny-town-godot-frame {
+  border: 0;
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.sunny-town-godot-placeholder {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(39, 116, 111, 0.24), rgba(23, 33, 43, 0.1)),
+    #17212b;
+  display: grid;
+  height: 100%;
+  justify-items: center;
+  padding: 24px;
+  text-align: center;
+  width: 100%;
+}
+
+.sunny-town-godot-placeholder h1 {
+  color: #ffffff;
+  font-size: 34px;
+  line-height: 1.1;
+}
+
+.sunny-town-godot-placeholder p {
+  color: rgba(255, 255, 255, 0.78);
+  margin: 10px 0 0;
+}
+
 .sunny-town-hotbar {
   align-items: center;
   bottom: 14px;
