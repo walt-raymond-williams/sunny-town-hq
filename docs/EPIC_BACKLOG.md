@@ -64,12 +64,39 @@ Goal: connect assignments, feedback, AI grading, rewards, and Sunny Town progres
 
 Best first step: discovery across assignment, grading, pet, inventory, reward, and progression systems.
 
+### #61 Epic: Godot Web Client For Sunny Town RPG Surface
+
+Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/61
+
+Goal: replace the prototype Vue/canvas Sunny Town RPG surface with a Godot-powered web client embedded in the existing HQ web app, while preserving HQ durable state ownership, Sunny Town realtime authority, the existing session/WebSocket model where practical, and the documentation-first GitHub issue workflow.
+
+Roadmap and tracking:
+
+- `docs/GODOT_SUNNY_TOWN_ROADMAP.md`
+- `docs/GODOT_SUNNY_TOWN_TRACKING.md`
+
+Child issues:
+
+- #62 Decide Godot web integration architecture for Sunny Town
+- #63 Add minimal Godot web client skeleton for Sunny Town
+- #64 Wire Godot web export into HQ build/runtime
+- #65 Connect Godot client to Sunny Town session and WebSocket
+- #66 Render current Sunny Town maps and world snapshots in Godot
+- #67 Implement Godot movement, prediction, and remote interpolation
+- #68 Add phone browser controls for Godot Sunny Town
+- #69 Port Sunny Town interactions to Godot with Vue overlay bridge
+- #70 Add Godot HUD, hotbar, inventory summary, and equipment visuals
+- #71 Prepare Godot Sunny Town cutover and fallback validation
+
+Best first step: start #62 using `docs/GODOT_SUNNY_TOWN_ARCHITECTURE_DECISION_HANDOFF.md`. Do not start implementation until #62 records the architecture decision for the Godot project location, export artifact handling, Vue wrapper, session handoff, fallback route, mobile constraints, and first-pass Godot/Vue UI ownership.
+
 ## Prioritization Note
 
-Recommended next epic: #38, NPC Life And Work Simulation.
+Recommended next epic: #61, Godot Web Client For Sunny Town RPG Surface.
 
 Why:
 
-- It builds directly on the inventory, storage, Cookie Shop, NPC movement, and production work already in flight.
-- It creates visible behavior quickly.
-- It gives the project a strong demo story: a town with agents whose routines respond to real state.
+- The project owner approved this plan and asked to create the GitHub issue sequence, roadmap, tracking doc, and handoffs.
+- The current canvas RPG surface is intentionally a prototype/debug renderer.
+- The backend/live-game foundation is already strong enough to support a client replacement without a backend rewrite.
+- The first child issue is planning-only and safely establishes the integration architecture before implementation starts.
