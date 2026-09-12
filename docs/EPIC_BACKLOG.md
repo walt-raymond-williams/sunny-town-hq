@@ -90,6 +90,30 @@ Child issues:
 
 Best first step: start #62 using `docs/GODOT_SUNNY_TOWN_ARCHITECTURE_DECISION_HANDOFF.md`. Do not start implementation until #62 records the architecture decision for the Godot project location, export artifact handling, Vue wrapper, session handoff, fallback route, mobile constraints, and first-pass Godot/Vue UI ownership.
 
+### #72 Epic: Migrate Local Runtime To Kubernetes And Helm
+
+Issue: https://github.com/walt-raymond-williams/sunny-town-hq/issues/72
+
+Goal: migrate the local project runtime from Docker Compose to Kubernetes with Helm charts so the repository becomes a hands-on Kubernetes learning project.
+
+Roadmap:
+
+- `docs/KUBERNETES_MIGRATION_ROADMAP.md`
+- `docs/KUBERNETES_MIGRATION_DISCOVERY.md`
+
+Child issues:
+
+- #73: Audit runtime and design Kubernetes/Helm migration plan.
+- #74: Add kind bootstrap, local image loading, and Helm chart skeleton.
+- #75: Deploy app Postgres and HQ through Helm.
+- #76: Deploy Sunny Town and AI through Helm.
+- #77: Deploy Keycloak and Keycloak Postgres through Helm.
+- #78: Add Kubernetes port-forward workflow and auth/WebSocket verification.
+- #79: Add Kubernetes Taskfile operations and current runtime docs.
+- #80: Evaluate ingress or Docker Desktop Kubernetes compatibility.
+
+Best next step: start #74, `Add kind bootstrap, local image loading, and Helm chart skeleton`. Keep Docker Compose as the preferred runtime until the Kubernetes path runs the full local stack end to end.
+
 ## Prioritization Note
 
 Recommended next epic: #61, Godot Web Client For Sunny Town RPG Surface.
